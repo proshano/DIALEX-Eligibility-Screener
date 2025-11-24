@@ -17,16 +17,17 @@
 // However, that function might be called multiple times, and on subsequent calls, we don't actually want it to instantiate a new instance of the Module
 // Instead, we want to return the previously loaded module
 
-// TODO: Make this not declare a global if used in the browser
-var initSqlJsPromise = undefined;
+const initSqlJs = (function () {
 
-var initSqlJs = function (moduleConfig) {
+    let initSqlJsPromise;
 
-    if (initSqlJsPromise){
-      return initSqlJsPromise;
-    }
-    // If we're here, we've never called this function before
-    initSqlJsPromise = new Promise(function (resolveModule, reject) {
+    return function initSqlJs(moduleConfig) {
+
+        if (initSqlJsPromise){
+          return initSqlJsPromise;
+        }
+        // If we're here, we've never called this function before
+        initSqlJsPromise = new Promise(function (resolveModule, reject) {
 
         // We are modularizing this manually because the current modularize setting in Emscripten has some issues:
         // https://github.com/kripken/emscripten/issues/5820
@@ -207,8 +208,9 @@ function gd(){function a(){if(!ed&&(ed=!0,e.calledRun=!0,!Ta)){e.noFSInit||ic||(
         return Module;
     }); // The end of the promise being returned
 
-  return initSqlJsPromise;
-} // The end of our initSqlJs function
+        return initSqlJsPromise;
+    }; // The end of our initSqlJs function
+})(); // Immediately invoked to avoid leaking globals
 
 // This bit below is copied almost exactly from what you get when you use the MODULARIZE=1 flag with emcc
 // However, we don't want to use the emcc modularization. See shell-pre.js
@@ -3027,8 +3029,31 @@ License: MIT
             if (!patient) return;
             if (!ensureEditablePatient(patient)) return;
             const trimmed = (value || '').trim();
-            patient.health_card = trimmed;
-            patient.hasHealthCard = trimmed.length > 0;
+            const normalized = normalizeHealthCardValue(trimmed);
+            if (db && normalized) {
+                const check = db.prepare('SELECT mrn, health_card FROM patient_assessments WHERE mrn != ?');
+                let conflictMrn = '';
+                try {
+                    while (check.step()) {
+                        const row = check.getAsObject();
+                        const existing = normalizeHealthCardValue(row.health_card || '');
+                        if (existing && existing === normalized) {
+                            conflictMrn = row.mrn || '';
+                            break;
+                        }
+                    }
+                } finally {
+                    check.free();
+                }
+                if (conflictMrn) {
+                    showRecordWarning('Another patient already uses this health card number.', 'error');
+                    renderPatientTable();
+                    return;
+                }
+            }
+            patient.health_card = normalized || '';
+            patient.health_card_province = inferProvinceFromHealthCard(normalized || '');
+            patient.hasHealthCard = patient.health_card.length > 0;
             persistPatient(patient);
             showRecordWarning('');
         }
