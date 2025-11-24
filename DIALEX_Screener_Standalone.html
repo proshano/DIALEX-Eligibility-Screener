@@ -1659,6 +1659,7 @@ License: MIT
         const supportsDirectoryPicker = typeof window.showDirectoryPicker === 'function';
         const supportsSaveFilePicker = typeof window.showSaveFilePicker === 'function';
         let saveDirectoryHandle = null;
+        let renderScheduled = false;
 
         const $ = (id) => document.getElementById(id);
         
@@ -2392,271 +2393,339 @@ License: MIT
         }
 
         function renderPatientTable() {
+            if (renderScheduled) return;
+            renderScheduled = true;
+            const schedule = window.requestAnimationFrame || function (cb) { return setTimeout(cb, 0); };
+            schedule(() => {
+                renderScheduled = false;
+                renderPatientTableNow();
+            });
+        }
+
+        function renderPatientTableNow() {
             const tbody = $('patient-table-body');
-            tbody.innerHTML = '';
+            const fragment = document.createDocumentFragment();
             const visible = patientsData
                 .filter(matchesActiveFilter)
                 .filter(matchesSearchTerm)
                 .sort(comparePatients);
 
             visible.forEach(patient => {
-                const row = document.createElement('tr');
-                row.id = `row-${patient._index}`;
-                row.className = patient.rowClass;
-                row.dataset.mrn = patient.mrn || '';
-
-                const firstEligibleDisplay = patient.first_ready_iso ? formatFriendlyDate(patient.first_ready_iso) : '-';
-                const dialysisUnitCanonical = getDialysisUnitCanonical(patient);
-                const dialysisUnitOptions = buildLocationOptionsHtml(dialysisUnitCanonical);
-                const inclusionLabelClass = patient.inclusionMet ? 'check-success font-medium' : '';
-                const noExclusionLabelClass = patient.hasAnyExclusion
-                    ? 'check-danger font-medium'
-                    : (patient.no_exclusions_confirmed ? 'check-success font-medium' : 'font-medium');
-                const isRandomized = !!patient.randomization_date;
-                const isLocked = !!patient.locked_at;
-                const ageValue = Number.isFinite(patient.age) ? patient.age : '';
-                const notificationDisplay = patient.notification_date || '';
-                const randomizationDisplay = patient.randomization_date || '';
-                const notificationFriendly = formatFriendlyDate(patient.notification_date);
-                const randomizationFriendly = formatFriendlyDate(patient.randomization_date);
-                const optOutStatus = patient.opt_out_status || OPT_OUT_STATUS.PENDING;
-                const optOutDateDisplay = patient.opt_out_date || '';
-                const optOutFriendly = formatFriendlyDate(patient.opt_out_date);
-                const hasEligibleDate = Boolean(patient.first_ready_iso);
-                const optOutSelectEnabled = hasEligibleDate || optOutStatus !== OPT_OUT_STATUS.PENDING || !!optOutDateDisplay;
-                const optOutDisabled = isLocked ? 'disabled' : (optOutSelectEnabled ? '' : 'disabled');
-                const optOutHelper = hasEligibleDate ? '' : '<div class="status-subtext">Calculate eligible date to enable opt-out status.</div>';
-                const optOutDateVisible = optOutStatus === OPT_OUT_STATUS.OPTED_OUT;
-                const optOutDateDisabled = isLocked ? 'disabled' : (optOutDateVisible && optOutSelectEnabled ? '' : 'disabled');
-                const optOutCopyDisabled = optOutDateDisplay && !optOutDateDisabled ? '' : 'disabled';
-                const allocationValue = patient.allocation || '';
-                const hasAllocation = allocationValue !== '';
-                const studyIdValue = patient.study_id || '';
-                const hasStudyId = Boolean(studyIdValue);
-                const optOutOptions = [
-                    { value: OPT_OUT_STATUS.PENDING, label: 'Pending' },
-                    { value: OPT_OUT_STATUS.DID_NOT, label: 'Did not opt out' },
-                    { value: OPT_OUT_STATUS.OPTED_OUT, label: 'Opted out' }
-                ].map(opt => `<option value="${opt.value}" ${opt.value === optOutStatus ? 'selected' : ''}>${opt.label}</option>`).join('');
-                const dialysisStartDisplay = patient.dialysis_start_date || '';
-                const dialysisStartFriendly = formatFriendlyDate(patient.dialysis_start_date);
-                const notifiedCopyButton = `<button class="copy-btn" ${patient.notification_date ? '' : 'disabled'} onclick="copyPatientField(${patient._index}, 'notification_date')">Copy date</button>`;
-                const dialysisConfirmControls = patient.dialysis_start_date ? '' : `
-                    <div class="patient-sub" style="margin-top:4px;">
-                        <button class="copy-btn" ${isLocked ? 'disabled' : ''} onclick="setDialysisDurationConfirmed(${patient._index}, ${patient.dialysis_duration_confirmed ? 0 : 1})">
-                            ${patient.dialysis_duration_confirmed ? 'Clear ≥90-day confirmation' : 'Confirm ≥90 days (date unknown)'}
-                        </button>
-                        ${patient.dialysis_duration_confirmed ? '<div class="status-subtext" style="margin-top:2px;">Use when exact start date is unavailable.</div>' : ''}
-                    </div>
-                `;
-                let eligibleMessage;
-                if (patient.first_ready_iso) {
-                    eligibleMessage = `<div id="first-eligible-${patient._index}" class="text-sm font-medium" style="color:var(--brand);">${firstEligibleDisplay}</div>`;
-                } else {
-                    const missing = [];
-                    if (!patient.dialysis_start_date && !patient.dialysis_duration_confirmed) missing.push('dialysis start date or ≥90 days confirmation');
-                    if (!patient.notification_date) missing.push('notification date');
-                    const missingText = missing.length ? missing.join(' and ') : 'required dates';
-                    eligibleMessage = `<div class="status-subtext">Set ${missingText}</div>`;
-                }
-                const randomizationAllowed = optOutStatus === OPT_OUT_STATUS.DID_NOT && hasEligibleDate;
-                const randomizationRowVisible = randomizationAllowed || isRandomized;
-                const randomizationRowStyle = randomizationRowVisible ? '' : 'display:none;';
-                const randomizationDateDisabled = isLocked ? 'disabled' : (randomizationAllowed ? '' : (isRandomized ? '' : 'disabled'));
-                const randomizationCopyDisabled = patient.randomization_date ? '' : 'disabled';
-                let randomizationHelper = '';
-                if (!randomizationRowVisible) {
-                    randomizationHelper = '<div class="status-subtext">Complete eligibility and opt-out steps to enter randomization.</div>';
-                } else if (randomizationAllowed && !hasStudyId) {
-                    randomizationHelper = '<div class="status-subtext">Enter the Study ID before recording randomization date.</div>';
-                }
-                const studyRowVisible = randomizationAllowed || isRandomized || hasStudyId;
-                const studyRowStyle = studyRowVisible ? '' : 'display:none;';
-                const studyDisabled = isLocked ? 'disabled' : (randomizationAllowed ? '' : (isRandomized || hasStudyId ? '' : 'disabled'));
-                const studyCopyDisabled = studyIdValue ? '' : 'disabled';
-                const studyHelper = (!hasStudyId && randomizationAllowed)
-                    ? '<div class="status-subtext">Enter Study ID (####-AAA-###) from REDCap before randomization.</div>'
-                    : '';
-                const allocationRowVisible = isRandomized && (hasStudyId || hasAllocation || patient.therapy_prescribed);
-                const allocationRowStyle = allocationRowVisible ? '' : 'display:none;';
-                const allocationDisabled = isLocked ? 'disabled' : ((isRandomized && hasStudyId) ? '' : 'disabled');
-                const therapyLabelClass = patient.therapy_prescribed ? 'check-success font-medium' : '';
-                const therapyAllowed = isRandomized && hasStudyId && hasAllocation;
-                const therapyDisabled = isLocked ? 'disabled' : (therapyAllowed ? '' : 'disabled');
-                let therapyHelperMessage = '';
-                if (!isRandomized) {
-                    therapyHelperMessage = 'Set randomization date first.';
-                } else if (!hasStudyId) {
-                    therapyHelperMessage = 'Enter Study ID before prescribing.';
-                } else if (!hasAllocation) {
-                    therapyHelperMessage = 'Select allocation before prescribing.';
-                }
-                const therapyHelper = allocationRowVisible && therapyHelperMessage ? `<div class="status-subtext">${therapyHelperMessage}</div>` : '';
-                const lockToggleDisabled = '';
-                const lockIndicator = patient.locked_at ? `<div class="status-subtext" style="color:var(--muted);">Locked ${formatDisplayDateTime(patient.locked_at)}</div>` : '';
-                const lockHelper = '<div class="status-subtext">Lock prevents editing fields above; notes remain editable.</div>';
-                const lockDisplay = lockIndicator || lockHelper;
-
-                row.innerHTML = `
-                    <td>
-                        <div class="patient-info-compact">
-                            <div class="patient-field">
-                                <label>Patient name</label>
-                                <div class="input-row">
-                                    <input type="text" class="table-input patient-name-input" placeholder="Enter patient name" value="${escapeHtml(patient.patient_name || '')}" ${isLocked ? 'disabled' : ''} onchange="updatePatientName(${patient._index}, this.value)">
-                                </div>
-                            </div>
-                            <div class="patient-meta-grid">
-                                <div class="patient-field">
-                                    <label>Age</label>
-                                    <div class="input-row">
-                                        <input type="number" min="0" class="table-input" placeholder="Enter age" value="${ageValue}" ${isLocked ? 'disabled' : ''} onchange="updatePatientAge(${patient._index}, this.value)">
-                                    </div>
-                                </div>
-                                <div class="patient-field">
-                                    <label>MRN</label>
-                                    <div class="input-row">
-                                        <input type="text" class="table-input" placeholder="Enter MRN" value="${escapeHtml(patient.mrn || '')}" ${isLocked ? 'disabled' : ''} onchange="updatePatientMrn(${patient._index}, this.value)">
-                                        <button class="copy-btn" ${patient.mrn ? '' : 'disabled'} onclick="copyPatientField(${patient._index}, 'mrn')">Copy MRN</button>
-                                    </div>
-                                </div>
-                                <div class="patient-field">
-                                    <label>HCN <span style="text-transform:none;">(${patient.health_card_province || '?'})</span></label>
-                                    <div class="input-row">
-                                        <input type="text" class="table-input" placeholder="Enter health card" value="${escapeHtml(patient.health_card || '')}" ${isLocked ? 'disabled' : ''} onchange="updatePatientHcn(${patient._index}, this.value)">
-                                        <button class="copy-btn" ${patient.health_card ? '' : 'disabled'} onclick="copyPatientField(${patient._index}, 'health_card')">Copy HCN</button>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="patient-field">
-                                <label>Dialysis unit at randomization</label>
-                                <div class="input-row">
-                                    <select class="table-input location-select" ${isLocked ? 'disabled' : ''} onchange="updateDialysisUnit(${patient._index}, this.value)">
-                                        ${dialysisUnitOptions}
-                                    </select>
-                                </div>
-                            </div>
-                            <div class="patient-field date-field">
-                                <div class="date-field-header">
-                                    <label>Dialysis start</label>
-                                    <span class="date-display ${dialysisStartFriendly ? 'has-value' : ''}">${dialysisStartFriendly || 'Not set'}</span>
-                                </div>
-                                <div class="date-input-row">
-                                    <input type="date" class="table-input inline-date" value="${dialysisStartDisplay}" placeholder="Select date" ${isLocked ? 'disabled' : ''} onchange="updateDialysisStartDate(${patient._index}, this.value)">
-                                    <button class="copy-btn" ${dialysisStartDisplay ? '' : 'disabled'} onclick="copyPatientField(${patient._index}, 'dialysis_start_date')">Copy date</button>
-                                </div>
-                            </div>
-                            ${dialysisConfirmControls}
-                        </div>
-                    </td>
-                    <td>
-                        <div class="checkbox-group">
-                            <div>
-                                <label class="master-check-label">
-                                    <input type="checkbox" ${patient.inclusionMet ? 'checked' : ''} ${isLocked ? 'disabled' : ''} onchange="toggleMasterInclusion(${patient._index}, this)">
-                                    <span class="${inclusionLabelClass}">All inclusion criteria met</span>
-                                </label>
-                                <div class="inline-criteria-list">
-                                    ${INCLUSION_KEYS.map(key => renderCheckbox(patient, key, isLocked)).join('')}
-                                </div>
-                            </div>
-                            <div style="margin-top:6px;">
-                                <label class="master-check-label">
-                                    <input type="checkbox" ${patient.no_exclusions_confirmed ? 'checked' : ''} ${isLocked ? 'disabled' : ''} onchange="toggleMasterExclusion(${patient._index}, this)">
-                                    <span class="${noExclusionLabelClass}">No exclusions</span>
-                                </label>
-                                <div class="inline-criteria-list">
-                                    ${EXCLUSION_KEYS.map(key => renderCheckbox(patient, key, isLocked)).join('')}
-                                </div>
-                            </div>
-                        </div>
-                    </td>
-                    <td>
-                        <div style="display:flex; flex-direction:column; gap:6px;">
-                            <div class="date-field">
-                                <div class="date-field-header">
-                                    <label class="patient-sub">Date notified:</label>
-                                    <span class="date-display ${notificationFriendly ? 'has-value' : ''}">${notificationFriendly || 'Not set'}</span>
-                                </div>
-                                <div class="date-input-row">
-                                    <input type="date" class="table-input inline-date" value="${notificationDisplay}" placeholder="Select date" ${isLocked ? 'disabled' : ''} oninput="updateInlineNotification(${patient._index}, this.value)">
-                                    ${notifiedCopyButton}
-                                </div>
-                            </div>
-                            <div id="first-eligible-wrap-${patient._index}">
-                                <label class="patient-sub">Eligible on:</label>
-                                ${eligibleMessage}
-                            </div>
-                            <div>
-                                <label class="patient-sub">Opt-out status:</label>
-                                <select class="table-input" onchange="updateOptOutStatus(${patient._index}, this.value)" ${optOutDisabled}>
-                                    ${optOutOptions}
-                                </select>
-                                ${optOutHelper}
-                            </div>
-                            <div style="display:${optOutDateVisible ? 'block' : 'none'};">
-                                <div class="date-field">
-                                    <div class="date-field-header">
-                                        <label class="patient-sub">Date opted out:</label>
-                                        <span class="date-display ${optOutFriendly ? 'has-value' : ''}">${optOutFriendly || 'Not set'}</span>
-                                    </div>
-                                    <div class="date-input-row">
-                                        <input type="date" class="table-input inline-date" value="${optOutDateDisplay}" placeholder="Select date" ${optOutDateDisabled} oninput="updateOptOutDate(${patient._index}, this.value)">
-                                        <button class="copy-btn" ${optOutCopyDisabled} onclick="copyPatientField(${patient._index}, 'opt_out_date')">Copy date</button>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="inline-field-row" style="${studyRowStyle}">
-                                <label class="patient-sub">Study ID:</label>
-                                <input type="text" class="table-input inline-select" value="${studyIdValue}" ${studyDisabled} placeholder="Enter study ID from REDCap" oninput="handleStudyIdInput(${patient._index}, this)" onchange="updateStudyId(${patient._index}, this.value)">
-                                <button class="copy-btn" ${studyCopyDisabled} onclick="copyPatientField(${patient._index}, 'study_id')">Copy</button>
-                            </div>
-                            ${studyHelper}
-                            ${randomizationHelper}
-                            <div class="date-field" style="${randomizationRowStyle}">
-                                <div class="date-field-header">
-                                    <label class="patient-sub">Date randomized:</label>
-                                    <span class="date-display ${randomizationFriendly ? 'has-value' : ''}">${randomizationFriendly || 'Not set'}</span>
-                                </div>
-                                <div class="date-input-row">
-                                    <input type="date" class="table-input inline-date" value="${randomizationDisplay}" placeholder="Select date" ${randomizationDateDisabled} oninput="updateInlineRandomizationDate(${patient._index}, this.value)">
-                                    <button class="copy-btn" ${randomizationCopyDisabled} onclick="copyPatientField(${patient._index}, 'randomization_date')">Copy date</button>
-                                </div>
-                            </div>
-                            <div class="inline-field-row" style="${allocationRowStyle}">
-                                <label class="patient-sub">Allocation:</label>
-                                <select class="table-input inline-select" ${allocationDisabled} onchange="updateAllocation(${patient._index}, this.value)">
-                                    <option value="" ${allocationValue === '' ? 'selected' : ''}>Select allocation</option>
-                                    <option value="conventional" ${allocationValue === 'conventional' ? 'selected' : ''}>Conventional high-flux HD</option>
-                                    <option value="elisio_hx" ${allocationValue === 'elisio_hx' ? 'selected' : ''}>Elisio-HX Expanded HD</option>
-                                </select>
-                                <label class="master-check-label" style="margin-left:8px; white-space:nowrap;">
-                                    <input type="checkbox" ${patient.therapy_prescribed ? 'checked' : ''} ${therapyDisabled} onchange="toggleTherapyPrescribed(${patient._index}, this)">
-                                    <span class="${therapyLabelClass}">Prescribed</span>
-                                </label>
-                            </div>
-                            ${therapyHelper}
-                            <div class="inline-field-row" style="align-items:center; gap:6px;">
-                                <span aria-hidden="true">🔒</span>
-                                <label class="patient-sub" style="margin:0;">Lock record:</label>
-                                <input type="checkbox" ${patient.locked_at ? 'checked' : ''} ${lockToggleDisabled} onchange="toggleRecordLocked(${patient._index}, this.checked)">
-                            </div>
-                            ${lockDisplay}
-                        </div>
-                    </td>
-                    <td>
-                        <textarea class="table-input" rows="3" placeholder="Notes..." onchange="updateInlineNotes(${patient._index}, this.value)">${patient.notes || ''}</textarea>
-                    </td>
-                `;
-
-                tbody.appendChild(row);
+                fragment.appendChild(buildPatientRow(patient));
             });
 
             if (visible.length === 0) {
                 const empty = document.createElement('tr');
                 empty.innerHTML = `<td colspan="4" style="text-align:center; padding:24px; color:var(--muted);">No patients match this view.</td>`;
-                tbody.appendChild(empty);
+                fragment.appendChild(empty);
             }
+
+            tbody.replaceChildren(fragment);
+        }
+
+        function renderPatientRow(index) {
+            const patient = patientsData[index];
+            if (!patient) return;
+            const tbody = $('patient-table-body');
+            const existing = document.getElementById(`row-${index}`);
+            const isVisible = matchesActiveFilter(patient) && matchesSearchTerm(patient);
+
+            if (!isVisible) {
+                if (existing) existing.remove();
+                if (!tbody.children.length) {
+                    const empty = document.createElement('tr');
+                    empty.innerHTML = `<td colspan="4" style="text-align:center; padding:24px; color:var(--muted);">No patients match this view.</td>`;
+                    tbody.appendChild(empty);
+                }
+                return;
+            }
+
+            if (existing) {
+                existing.remove();
+            }
+
+            const placeholder = tbody.querySelector('tr:not([data-index])');
+            if (placeholder) {
+                placeholder.remove();
+            }
+
+            insertRowSorted(tbody, buildPatientRow(patient), patient);
+        }
+
+        function insertRowSorted(tbody, row, patient) {
+            const siblings = Array.from(tbody.children);
+            for (const sibling of siblings) {
+                const idx = Number(sibling.dataset.index);
+                const other = patientsData[idx];
+                if (other && comparePatients(patient, other) < 0) {
+                    tbody.insertBefore(row, sibling);
+                    return;
+                }
+            }
+            tbody.appendChild(row);
+        }
+
+        function buildPatientRow(patient) {
+            const row = document.createElement('tr');
+            row.id = `row-${patient._index}`;
+            row.dataset.index = patient._index;
+            row.className = patient.rowClass;
+            row.dataset.mrn = patient.mrn || '';
+
+            const firstEligibleDisplay = patient.first_ready_iso ? formatFriendlyDate(patient.first_ready_iso) : '-';
+            const dialysisUnitCanonical = getDialysisUnitCanonical(patient);
+            const dialysisUnitOptions = buildLocationOptionsHtml(dialysisUnitCanonical);
+            const inclusionLabelClass = patient.inclusionMet ? 'check-success font-medium' : '';
+            const noExclusionLabelClass = patient.hasAnyExclusion
+                ? 'check-danger font-medium'
+                : (patient.no_exclusions_confirmed ? 'check-success font-medium' : 'font-medium');
+            const isRandomized = !!patient.randomization_date;
+            const isLocked = !!patient.locked_at;
+            const ageValue = Number.isFinite(patient.age) ? patient.age : '';
+            const notificationDisplay = patient.notification_date || '';
+            const randomizationDisplay = patient.randomization_date || '';
+            const notificationFriendly = formatFriendlyDate(patient.notification_date);
+            const randomizationFriendly = formatFriendlyDate(patient.randomization_date);
+            const optOutStatus = patient.opt_out_status || OPT_OUT_STATUS.PENDING;
+            const optOutDateDisplay = patient.opt_out_date || '';
+            const optOutFriendly = formatFriendlyDate(patient.opt_out_date);
+            const hasEligibleDate = Boolean(patient.first_ready_iso);
+            const optOutSelectEnabled = hasEligibleDate || optOutStatus !== OPT_OUT_STATUS.PENDING || !!optOutDateDisplay;
+            const optOutDisabled = isLocked ? 'disabled' : (optOutSelectEnabled ? '' : 'disabled');
+            const optOutHelper = hasEligibleDate ? '' : '<div class="status-subtext">Calculate eligible date to enable opt-out status.</div>';
+            const optOutDateVisible = optOutStatus === OPT_OUT_STATUS.OPTED_OUT;
+            const optOutDateDisabled = isLocked ? 'disabled' : (optOutDateVisible && optOutSelectEnabled ? '' : 'disabled');
+            const optOutCopyDisabled = optOutDateDisplay && !optOutDateDisabled ? '' : 'disabled';
+            const allocationValue = patient.allocation || '';
+            const hasAllocation = allocationValue !== '';
+            const studyIdValue = patient.study_id || '';
+            const hasStudyId = Boolean(studyIdValue);
+            const optOutOptions = [
+                { value: OPT_OUT_STATUS.PENDING, label: 'Pending' },
+                { value: OPT_OUT_STATUS.DID_NOT, label: 'Did not opt out' },
+                { value: OPT_OUT_STATUS.OPTED_OUT, label: 'Opted out' }
+            ].map(opt => `<option value="${opt.value}" ${opt.value === optOutStatus ? 'selected' : ''}>${opt.label}</option>`).join('');
+            const dialysisStartDisplay = patient.dialysis_start_date || '';
+            const dialysisStartFriendly = formatFriendlyDate(patient.dialysis_start_date);
+            const notifiedCopyButton = `<button class="copy-btn" ${patient.notification_date ? '' : 'disabled'} onclick="copyPatientField(${patient._index}, 'notification_date')">Copy date</button>`;
+            const dialysisConfirmControls = patient.dialysis_start_date ? '' : `
+                <div class="patient-sub" style="margin-top:4px;">
+                    <button class="copy-btn" ${isLocked ? 'disabled' : ''} onclick="setDialysisDurationConfirmed(${patient._index}, ${patient.dialysis_duration_confirmed ? 0 : 1})">
+                        ${patient.dialysis_duration_confirmed ? 'Clear ≥90-day confirmation' : 'Confirm ≥90 days (date unknown)'}
+                    </button>
+                    ${patient.dialysis_duration_confirmed ? '<div class="status-subtext" style="margin-top:2px;">Use when exact start date is unavailable.</div>' : ''}
+                </div>
+            `;
+            let eligibleMessage;
+            if (patient.first_ready_iso) {
+                eligibleMessage = `<div id="first-eligible-${patient._index}" class="text-sm font-medium" style="color:var(--brand);">${firstEligibleDisplay}</div>`;
+            } else {
+                const missing = [];
+                if (!patient.dialysis_start_date && !patient.dialysis_duration_confirmed) missing.push('dialysis start date or ≥90 days confirmation');
+                if (!patient.notification_date) missing.push('notification date');
+                const missingText = missing.length ? missing.join(' and ') : 'required dates';
+                eligibleMessage = `<div class="status-subtext">Set ${missingText}</div>`;
+            }
+            const randomizationAllowed = optOutStatus === OPT_OUT_STATUS.DID_NOT && hasEligibleDate;
+            const randomizationRowVisible = randomizationAllowed || isRandomized;
+            const randomizationRowStyle = randomizationRowVisible ? '' : 'display:none;';
+            const randomizationDateDisabled = isLocked ? 'disabled' : (randomizationAllowed ? '' : (isRandomized ? '' : 'disabled'));
+            const randomizationCopyDisabled = patient.randomization_date ? '' : 'disabled';
+            let randomizationHelper = '';
+            if (!randomizationRowVisible) {
+                randomizationHelper = '<div class="status-subtext">Complete eligibility and opt-out steps to enter randomization.</div>';
+            } else if (randomizationAllowed && !hasStudyId) {
+                randomizationHelper = '<div class="status-subtext">Enter the Study ID before recording randomization date.</div>';
+            }
+            const studyRowVisible = randomizationAllowed || isRandomized || hasStudyId;
+            const studyRowStyle = studyRowVisible ? '' : 'display:none;';
+            const studyDisabled = isLocked ? 'disabled' : (randomizationAllowed ? '' : (isRandomized || hasStudyId ? '' : 'disabled'));
+            const studyCopyDisabled = studyIdValue ? '' : 'disabled';
+            const studyHelper = (!hasStudyId && randomizationAllowed)
+                ? '<div class="status-subtext">Enter Study ID (####-AAA-###) from REDCap before randomization.</div>'
+                : '';
+            const allocationRowVisible = isRandomized && (hasStudyId || hasAllocation || patient.therapy_prescribed);
+            const allocationRowStyle = allocationRowVisible ? '' : 'display:none;';
+            const allocationDisabled = isLocked ? 'disabled' : ((isRandomized && hasStudyId) ? '' : 'disabled');
+            const therapyLabelClass = patient.therapy_prescribed ? 'check-success font-medium' : '';
+            const therapyAllowed = isRandomized && hasStudyId && hasAllocation;
+            const therapyDisabled = isLocked ? 'disabled' : (therapyAllowed ? '' : 'disabled');
+            let therapyHelperMessage = '';
+            if (!isRandomized) {
+                therapyHelperMessage = 'Set randomization date first.';
+            } else if (!hasStudyId) {
+                therapyHelperMessage = 'Enter Study ID before prescribing.';
+            } else if (!hasAllocation) {
+                therapyHelperMessage = 'Select allocation before prescribing.';
+            }
+            const therapyHelper = allocationRowVisible && therapyHelperMessage ? `<div class="status-subtext">${therapyHelperMessage}</div>` : '';
+            const lockToggleDisabled = '';
+            const lockIndicator = patient.locked_at ? `<div class="status-subtext" style="color:var(--muted);">Locked ${formatDisplayDateTime(patient.locked_at)}</div>` : '';
+            const lockHelper = '<div class="status-subtext">Lock prevents editing fields above; notes remain editable.</div>';
+            const lockDisplay = lockIndicator || lockHelper;
+
+            row.innerHTML = `
+                <td>
+                    <div class="patient-info-compact">
+                        <div class="patient-field">
+                            <label>Patient name</label>
+                            <div class="input-row">
+                                <input type="text" class="table-input patient-name-input" placeholder="Enter patient name" value="${escapeHtml(patient.patient_name || '')}" ${isLocked ? 'disabled' : ''} onchange="updatePatientName(${patient._index}, this.value)">
+                            </div>
+                        </div>
+                        <div class="patient-meta-grid">
+                            <div class="patient-field">
+                                <label>Age</label>
+                                <div class="input-row">
+                                    <input type="number" min="0" class="table-input" placeholder="Enter age" value="${ageValue}" ${isLocked ? 'disabled' : ''} onchange="updatePatientAge(${patient._index}, this.value)">
+                                </div>
+                            </div>
+                            <div class="patient-field">
+                                <label>MRN</label>
+                                <div class="input-row">
+                                    <input type="text" class="table-input" placeholder="Enter MRN" value="${escapeHtml(patient.mrn || '')}" ${isLocked ? 'disabled' : ''} onchange="updatePatientMrn(${patient._index}, this.value)">
+                                    <button class="copy-btn" ${patient.mrn ? '' : 'disabled'} onclick="copyPatientField(${patient._index}, 'mrn')">Copy MRN</button>
+                                </div>
+                            </div>
+                            <div class="patient-field">
+                                <label>HCN <span style="text-transform:none;">(${patient.health_card_province || '?'})</span></label>
+                                <div class="input-row">
+                                    <input type="text" class="table-input" placeholder="Enter health card" value="${escapeHtml(patient.health_card || '')}" ${isLocked ? 'disabled' : ''} onchange="updatePatientHcn(${patient._index}, this.value)">
+                                    <button class="copy-btn" ${patient.health_card ? '' : 'disabled'} onclick="copyPatientField(${patient._index}, 'health_card')">Copy HCN</button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="patient-field">
+                            <label>Dialysis unit at randomization</label>
+                            <div class="input-row">
+                                <select class="table-input location-select" ${isLocked ? 'disabled' : ''} onchange="updateDialysisUnit(${patient._index}, this.value)">
+                                    ${dialysisUnitOptions}
+                                </select>
+                            </div>
+                        </div>
+                        <div class="patient-field date-field">
+                            <div class="date-field-header">
+                                <label>Dialysis start</label>
+                                <span class="date-display ${dialysisStartFriendly ? 'has-value' : ''}">${dialysisStartFriendly || 'Not set'}</span>
+                            </div>
+                            <div class="date-input-row">
+                                <input type="date" class="table-input inline-date" value="${dialysisStartDisplay}" placeholder="Select date" ${isLocked ? 'disabled' : ''} onchange="updateDialysisStartDate(${patient._index}, this.value)">
+                                <button class="copy-btn" ${dialysisStartDisplay ? '' : 'disabled'} onclick="copyPatientField(${patient._index}, 'dialysis_start_date')">Copy date</button>
+                            </div>
+                        </div>
+                        ${dialysisConfirmControls}
+                    </div>
+                </td>
+                <td>
+                    <div class="checkbox-group">
+                        <div>
+                            <label class="master-check-label">
+                                <input type="checkbox" ${patient.inclusionMet ? 'checked' : ''} ${isLocked ? 'disabled' : ''} onchange="toggleMasterInclusion(${patient._index}, this)">
+                                <span class="${inclusionLabelClass}">All inclusion criteria met</span>
+                            </label>
+                            <div class="inline-criteria-list">
+                                ${INCLUSION_KEYS.map(key => renderCheckbox(patient, key, isLocked)).join('')}
+                            </div>
+                        </div>
+                        <div style="margin-top:6px;">
+                            <label class="master-check-label">
+                                <input type="checkbox" ${patient.no_exclusions_confirmed ? 'checked' : ''} ${isLocked ? 'disabled' : ''} onchange="toggleMasterExclusion(${patient._index}, this)">
+                                <span class="${noExclusionLabelClass}">No exclusions</span>
+                            </label>
+                            <div class="inline-criteria-list">
+                                ${EXCLUSION_KEYS.map(key => renderCheckbox(patient, key, isLocked)).join('')}
+                            </div>
+                        </div>
+                    </div>
+                </td>
+                <td>
+                    <div style="display:flex; flex-direction:column; gap:6px;">
+                        <div class="date-field">
+                            <div class="date-field-header">
+                                <label class="patient-sub">Date notified:</label>
+                                <span class="date-display ${notificationFriendly ? 'has-value' : ''}">${notificationFriendly || 'Not set'}</span>
+                            </div>
+                            <div class="date-input-row">
+                                <input type="date" class="table-input inline-date" value="${notificationDisplay}" placeholder="Select date" ${isLocked ? 'disabled' : ''} oninput="updateInlineNotification(${patient._index}, this.value)">
+                                ${notifiedCopyButton}
+                            </div>
+                        </div>
+                        <div id="first-eligible-wrap-${patient._index}">
+                            <label class="patient-sub">Eligible on:</label>
+                            ${eligibleMessage}
+                        </div>
+                        <div>
+                            <label class="patient-sub">Opt-out status:</label>
+                            <select class="table-input" onchange="updateOptOutStatus(${patient._index}, this.value)" ${optOutDisabled}>
+                                ${optOutOptions}
+                            </select>
+                            ${optOutHelper}
+                        </div>
+                        <div style="display:${optOutDateVisible ? 'block' : 'none'};">
+                            <div class="date-field">
+                                <div class="date-field-header">
+                                    <label class="patient-sub">Date opted out:</label>
+                                    <span class="date-display ${optOutFriendly ? 'has-value' : ''}">${optOutFriendly || 'Not set'}</span>
+                                </div>
+                                <div class="date-input-row">
+                                    <input type="date" class="table-input inline-date" value="${optOutDateDisplay}" placeholder="Select date" ${optOutDateDisabled} oninput="updateOptOutDate(${patient._index}, this.value)">
+                                    <button class="copy-btn" ${optOutCopyDisabled} onclick="copyPatientField(${patient._index}, 'opt_out_date')">Copy date</button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="inline-field-row" style="${studyRowStyle}">
+                            <label class="patient-sub">Study ID:</label>
+                            <input type="text" class="table-input inline-select" value="${studyIdValue}" ${studyDisabled} placeholder="Enter study ID from REDCap" oninput="handleStudyIdInput(${patient._index}, this)" onchange="updateStudyId(${patient._index}, this.value)">
+                            <button class="copy-btn" ${studyCopyDisabled} onclick="copyPatientField(${patient._index}, 'study_id')">Copy</button>
+                        </div>
+                        ${studyHelper}
+                        ${randomizationHelper}
+                        <div class="date-field" style="${randomizationRowStyle}">
+                            <div class="date-field-header">
+                                <label class="patient-sub">Date randomized:</label>
+                                <span class="date-display ${randomizationFriendly ? 'has-value' : ''}">${randomizationFriendly || 'Not set'}</span>
+                            </div>
+                            <div class="date-input-row">
+                                <input type="date" class="table-input inline-date" value="${randomizationDisplay}" placeholder="Select date" ${randomizationDateDisabled} oninput="updateInlineRandomizationDate(${patient._index}, this.value)">
+                                <button class="copy-btn" ${randomizationCopyDisabled} onclick="copyPatientField(${patient._index}, 'randomization_date')">Copy date</button>
+                            </div>
+                        </div>
+                        <div class="inline-field-row" style="${allocationRowStyle}">
+                            <label class="patient-sub">Allocation:</label>
+                            <select class="table-input inline-select" ${allocationDisabled} onchange="updateAllocation(${patient._index}, this.value)">
+                                <option value="" ${allocationValue === '' ? 'selected' : ''}>Select allocation</option>
+                                <option value="conventional" ${allocationValue === 'conventional' ? 'selected' : ''}>Conventional high-flux HD</option>
+                                <option value="elisio_hx" ${allocationValue === 'elisio_hx' ? 'selected' : ''}>Elisio-HX Expanded HD</option>
+                            </select>
+                            <label class="master-check-label" style="margin-left:8px; white-space:nowrap;">
+                                <input type="checkbox" ${patient.therapy_prescribed ? 'checked' : ''} ${therapyDisabled} onchange="toggleTherapyPrescribed(${patient._index}, this)">
+                                <span class="${therapyLabelClass}">Prescribed</span>
+                            </label>
+                        </div>
+                        ${therapyHelper}
+                        <div class="inline-field-row" style="align-items:center; gap:6px;">
+                            <span aria-hidden="true">🔒</span>
+                            <label class="patient-sub" style="margin:0;">Lock record:</label>
+                            <input type="checkbox" ${patient.locked_at ? 'checked' : ''} ${lockToggleDisabled} onchange="toggleRecordLocked(${patient._index}, this.checked)">
+                        </div>
+                        ${lockDisplay}
+                    </div>
+                </td>
+                <td>
+                    <textarea class="table-input" rows="3" placeholder="Notes..." onchange="updateInlineNotes(${patient._index}, this.value)">${patient.notes || ''}</textarea>
+                </td>
+            `;
+
+            return row;
+        }
+
+        function refreshPatientRow(patient) {
+            if (!patient) return patient;
+            const normalized = normalizePatientRow(patient, patient._index);
+            patientsData[patient._index] = normalized;
+            renderPatientRow(normalized._index);
+            updateFilterCounts();
+            return normalized;
         }
 
         function matchesActiveFilter(patient) {
@@ -2775,7 +2844,8 @@ License: MIT
                 return;
             }
             INCLUSION_KEYS.forEach(key => patient[key] = 0);
-            persistPatient(patient);
+            persistPatient(patient, false);
+            refreshPatientRow(patient);
             showRecordWarning('');
         }
 
@@ -2797,7 +2867,8 @@ License: MIT
             } else {
                 patient.no_exclusions_confirmed = 0;
             }
-            persistPatient(patient);
+            persistPatient(patient, false);
+            refreshPatientRow(patient);
             showRecordWarning('');
         }
 
@@ -2809,7 +2880,8 @@ License: MIT
             if (EXCLUSION_KEYS.includes(key) && checked) {
                 patient.no_exclusions_confirmed = 0;
             }
-            persistPatient(patient);
+            persistPatient(patient, false);
+            refreshPatientRow(patient);
             showRecordWarning('');
         }
 
@@ -2850,7 +2922,8 @@ License: MIT
                 patient.enrollment_status = (patient.noExclusions && patient.inclusionMet && patient.no_exclusions_confirmed && patient.hasHealthCard) ? 'eligible' : 'pending';
             }
             showRecordWarning('');
-            persistPatient(patient);
+            persistPatient(patient, false);
+            refreshPatientRow(patient);
         }
 
         function updateOptOutStatus(index, value) {
@@ -2883,7 +2956,8 @@ License: MIT
                 patient.enrollment_status = (patient.noExclusions && patient.inclusionMet && patient.no_exclusions_confirmed && patient.hasHealthCard) ? 'eligible' : 'pending';
             }
             showRecordWarning('');
-            persistPatient(patient);
+            persistPatient(patient, false);
+            refreshPatientRow(patient);
         }
 
         function updateOptOutDate(index, value) {
@@ -2901,7 +2975,8 @@ License: MIT
             const dateVal = (value || '').trim();
             if (!dateVal) {
                 patient.opt_out_date = '';
-                persistPatient(patient);
+                persistPatient(patient, false);
+                refreshPatientRow(patient);
                 return;
             }
             const normalized = normalizeISODateString(dateVal);
@@ -2921,7 +2996,8 @@ License: MIT
             patient.did_not_opt_out = 0;
             patient.opt_out_date = normalized;
             showRecordWarning('');
-            persistPatient(patient);
+            persistPatient(patient, false);
+            refreshPatientRow(patient);
         }
 
         function updateDialysisUnit(index, value) {
@@ -2944,7 +3020,8 @@ License: MIT
             }
             showRecordWarning('');
             patient.location_at_randomization = canonical;
-            persistPatient(patient);
+            persistPatient(patient, false);
+            refreshPatientRow(patient);
         }
 
         function updatePatientName(index, value) {
@@ -2958,7 +3035,8 @@ License: MIT
                 return;
             }
             patient.patient_name = trimmed;
-            persistPatient(patient);
+            persistPatient(patient, false);
+            refreshPatientRow(patient);
             showRecordWarning('');
         }
 
@@ -2969,7 +3047,8 @@ License: MIT
             const entry = (value ?? '').toString().trim();
             if (!entry) {
                 patient.age = null;
-                persistPatient(patient);
+                persistPatient(patient, false);
+                refreshPatientRow(patient);
                 showRecordWarning('');
                 return;
             }
@@ -2980,7 +3059,8 @@ License: MIT
                 return;
             }
             patient.age = Math.round(age);
-            persistPatient(patient);
+            persistPatient(patient, false);
+            refreshPatientRow(patient);
             showRecordWarning('');
         }
 
@@ -3020,7 +3100,8 @@ License: MIT
                 }
             }
             patient.mrn = trimmed;
-            persistPatient(patient);
+            persistPatient(patient, false);
+            refreshPatientRow(patient);
             showRecordWarning('');
         }
 
@@ -3054,7 +3135,8 @@ License: MIT
             patient.health_card = normalized || '';
             patient.health_card_province = inferProvinceFromHealthCard(normalized || '');
             patient.hasHealthCard = patient.health_card.length > 0;
-            persistPatient(patient);
+            persistPatient(patient, false);
+            refreshPatientRow(patient);
             showRecordWarning('');
         }
 
@@ -3063,11 +3145,7 @@ License: MIT
             if (!patient) return;
             patient.notes = value;
             persistPatient(patient, false);
-            patient.bucketFlags = computeBucketFlags(patient);
-            patient.primaryBucket = patient.bucketFlags.primary;
-            patient.derivedStatus = patient.primaryBucket;
-            patient.rowClass = rowClassFromStatus(patient);
-            updateFilterCounts();
+            refreshPatientRow(patient);
         }
 
         function updateInlineRandomizationDate(index, value) {
@@ -3082,7 +3160,8 @@ License: MIT
                 patient.allocation = '';
                 patient.study_id = '';
                 showRecordWarning('');
-                persistPatient(patient);
+                persistPatient(patient, false);
+                refreshPatientRow(patient);
                 return;
             }
             if (!patient.notification_date) {
@@ -3144,7 +3223,8 @@ License: MIT
                 patient.location_at_randomization = getCanonicalLocationValue(patient.location);
             }
             showRecordWarning('');
-            persistPatient(patient);
+            persistPatient(patient, false);
+            refreshPatientRow(patient);
         }
 
         function updateDialysisStartDate(index, value) {
@@ -3164,7 +3244,8 @@ License: MIT
                 patient.dialysis_start_date = normalized;
                 patient.dialysis_duration_confirmed = 0;
             }
-            persistPatient(patient);
+            persistPatient(patient, false);
+            refreshPatientRow(patient);
         }
 
         function setDialysisDurationConfirmed(index, flag) {
@@ -3173,7 +3254,8 @@ License: MIT
             if (!ensureEditablePatient(patient)) return;
             if (patient.dialysis_start_date) return;
             patient.dialysis_duration_confirmed = flag ? 1 : 0;
-            persistPatient(patient);
+            persistPatient(patient, false);
+            refreshPatientRow(patient);
         }
 
         function toggleTherapyPrescribed(index, checkbox) {
@@ -3199,7 +3281,8 @@ License: MIT
                 return;
             }
             patient.therapy_prescribed = checkbox.checked ? 1 : 0;
-            persistPatient(patient);
+            persistPatient(patient, false);
+            refreshPatientRow(patient);
         }
 
         function updateAllocation(index, value) {
@@ -3220,7 +3303,8 @@ License: MIT
             if (!patient.allocation) {
                 patient.therapy_prescribed = 0;
             }
-            persistPatient(patient);
+            persistPatient(patient, false);
+            refreshPatientRow(patient);
         }
 
         function updateStudyId(index, value) {
@@ -3240,7 +3324,8 @@ License: MIT
                 patient.allocation = '';
                 patient.therapy_prescribed = 0;
                 showRecordWarning('');
-                persistPatient(patient);
+                persistPatient(patient, false);
+                refreshPatientRow(patient);
                 return;
             }
             const normalized = normalizeStudyIdValue(raw);
@@ -3264,7 +3349,8 @@ License: MIT
             }
             showRecordWarning('');
             patient.study_id = normalized;
-            persistPatient(patient);
+            persistPatient(patient, false);
+            refreshPatientRow(patient);
         }
 
         function toggleDialysisDurationConfirmed() {}
@@ -3279,7 +3365,8 @@ License: MIT
                 patient.locked_at = '';
                 showStatus('Record unlocked.', 'status');
             }
-            persistPatient(patient);
+            persistPatient(patient, false);
+            refreshPatientRow(patient);
         }
 
         function copyPatientField(index, field) {
