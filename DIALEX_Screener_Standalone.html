@@ -1426,36 +1426,24 @@ License: MIT
         const DIAB_TYPE1_HEADER = "Diabetes Type I?";
         const DIAB_TYPE2_HEADER = "Diabetes Type II?";
 
-        const VALID_MODALITY_CODES = ['111', '112', '121', '122', '211', '214', '221', '224', '311', '312', '321', '322'];
+        const VALID_MODALITY_CODES = ['111', '121', '211', '221', '311', '321'];
         
         const VALID_MODALITIES = {
             '111': 'Acute Care Hospital - Conventional HD - Total Care',
-            '112': 'Acute Care Hospital - Conventional HD - Limited Self Care',
             '121': 'Acute Care Hospital - Short Daily HD - Total Care',
-            '122': 'Acute Care Hospital - Short Daily HD - Limited Self Care',
             '211': 'Chronic Care Hospital - Conventional - Total Care',
-            '214': 'Chronic Care Hospital - Conventional HD - Assistance',
             '221': 'Chronic Care Hospital - Short Daily HD - Total Care',
-            '224': 'Chronic Care Hospital - Short Daily HD - Assistance',
             '311': 'Community Centre - Conventional HD - Total Care',
-            '312': 'Community Centre - Conventional HD - Limited Self Care',
-            '321': 'Community Centre - Short Daily HD - Total Care',
-            '322': 'Community Centre - Short Daily HD - Limited Self Care'
+            '321': 'Community Centre - Short Daily HD - Total Care'
         };
 
         const DISPLAY_MODALITIES = {
             'Acute Care Hospital - Conventional HD - Total Care': 'Conventional HD',
-            'Acute Care Hospital - Conventional HD - Limited Self Care': 'Conventional HD',
             'Acute Care Hospital - Short Daily HD - Total Care': 'Short Daily HD',
-            'Acute Care Hospital - Short Daily HD - Limited Self Care': 'Short Daily HD',
             'Chronic Care Hospital - Conventional - Total Care': 'Conventional HD',
-            'Chronic Care Hospital - Conventional HD - Assistance': 'Conventional HD',
             'Chronic Care Hospital - Short Daily HD - Total Care': 'Short Daily HD',
-            'Chronic Care Hospital - Short Daily HD - Assistance': 'Short Daily HD',
             'Community Centre - Conventional HD - Total Care': 'Conventional HD',
-            'Community Centre - Conventional HD - Limited Self Care': 'Conventional HD',
             'Community Centre - Short Daily HD - Total Care': 'Short Daily HD',
-            'Community Centre - Short Daily HD - Limited Self Care': 'Short Daily HD'
         };
 
         const DISPLAY_TO_PREFERRED_CODE = (() => {
