@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -238,24 +238,43 @@ License: MIT
 </script>
     <style>
         :root {
-            --bg: #0b0b0f;
-            --card: #15161d;
-            --text: #fcfcd4;
-            --muted: #a2a38a;
-            --border: #272830;
-            --brand: #e8ff3f;
-            --brand-600: #cbe02a;
-            --brand-700: #a5b41f;
-            --success: #b7ff6a;
+            --radius: 12px;
+            --shadow: 0 10px 30px rgba(0,0,0,0.45);
+            --success: #8be67a;
             --warning: #ffd049;
             --danger: #ff6c5b;
-            --ring: rgba(232, 255, 63, 0.35);
-            --shadow: 0 10px 30px rgba(0,0,0,0.45);
-            --radius: 12px;
+            --ring: rgba(35, 122, 193, 0.25);
             --primary-btn-text: #050505;
+        }
+
+        [data-theme="dark"] {
+            color-scheme: dark;
+            --bg: #0b1421;
+            --card: #0f1a2b;
+            --text: #e7ecf5;
+            --muted: #9fb3c9;
+            --border: #1d2b3f;
+            --brand: #237ac1;
+            --brand-600: #1c639a;
+            --brand-700: #13466d;
             --input-disabled: #1f2230;
-            --table-header-bg: #1f2130;
-            --table-header-hover: #25283a;
+            --table-header-bg: #15263a;
+            --table-header-hover: #1b3048;
+        }
+
+        [data-theme="light"] {
+            color-scheme: light;
+            --bg: #f2f5f8;
+            --card: #f9fbfd;
+            --text: #091c2c;
+            --muted: #3d5b75;
+            --border: #d8eaf9;
+            --brand: #237ac1;
+            --brand-600: #1c639a;
+            --brand-700: #13466d;
+            --input-disabled: #dfe8f3;
+            --table-header-bg: #d8eaf9;
+            --table-header-hover: #c7def3;
         }
 
         * {
@@ -286,6 +305,43 @@ License: MIT
             border-radius: var(--radius);
             border: 1px solid var(--border);
             margin-bottom: 22px;
+        }
+        .meta-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            align-items: center;
+            margin-top: 10px;
+        }
+        .meta-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 10px;
+            border-radius: 10px;
+            border: 1px solid var(--border);
+            background: color-mix(in srgb, var(--card) 85%, var(--border) 15%);
+            color: var(--muted);
+            font-size: 13px;
+            width: fit-content;
+        }
+        .owner-pill {
+            color: var(--text);
+        }
+        .theme-toggle {
+            cursor: pointer;
+            background: var(--brand);
+            color: var(--primary-btn-text);
+            border-color: var(--brand-600);
+            transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+        }
+        .theme-toggle[aria-pressed="false"] {
+            background: color-mix(in srgb, var(--card) 85%, var(--border) 15%);
+            color: var(--text);
+        }
+        .theme-toggle:hover {
+            background: var(--brand-600);
+            color: var(--primary-btn-text);
         }
 
         #assessment-controls.header {
@@ -701,20 +757,37 @@ License: MIT
             background: var(--card);
             color: var(--text);
             border: 1px solid var(--border);
-            padding: 15px;
             border-radius: 8px;
             margin-bottom: 20px;
+            overflow: hidden;
         }
 
-        .instructions h3 {
-            margin-bottom: 10px;
+        .instructions-header {
+            padding: 12px 16px;
+            background: var(--table-header-bg);
+            border-bottom: 1px solid var(--border);
+            font-weight: 600;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+            -webkit-user-select: none;
+            user-select: none;
         }
 
-        .instructions ol {
+        .instructions-content {
+            padding: 15px;
+            display: none;
+            background: var(--card);
+        }
+
+        .instructions-content.open { display: block; }
+
+        .instructions-content ol {
             padding-left: 25px;
         }
 
-        .instructions li {
+        .instructions-content li {
             margin-bottom: 8px;
         }
 
@@ -893,16 +966,38 @@ License: MIT
             padding: 2px 8px;
             font-size: 11px;
             border-radius: 999px;
-            border: 1px solid var(--border);
-            background: color-mix(in srgb, var(--border) 40%, var(--card));
-            color: var(--brand-700);
+            border: 1px solid color-mix(in srgb, var(--brand) 30%, var(--border));
+            background: color-mix(in srgb, var(--brand) 22%, var(--card));
+            color: var(--text);
             cursor: pointer;
             box-shadow: none;
         }
         .copy-btn:hover {
-            background: color-mix(in srgb, var(--brand) 18%, var(--card));
+            background: color-mix(in srgb, var(--brand) 32%, var(--card));
         }
         .copy-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        .copy-btn-stacked {
+            padding: 2px 6px;
+            font-size: 10px;
+            border-radius: 4px;
+            border: 1px solid color-mix(in srgb, var(--brand) 30%, var(--border));
+            background: color-mix(in srgb, var(--brand) 22%, var(--card));
+            color: var(--text);
+            cursor: pointer;
+            box-shadow: none;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            line-height: 1.2;
+            min-width: 45px;
+        }
+        .copy-btn-stacked:hover {
+            background: color-mix(in srgb, var(--brand) 32%, var(--card));
+        }
+        .copy-btn-stacked:disabled {
             opacity: 0.6;
             cursor: not-allowed;
         }
@@ -1049,10 +1144,13 @@ License: MIT
         .patient-info-compact {
             display: flex;
             flex-direction: column;
-            gap: 2px;
+            gap: 0px;
         }
         .patient-field {
-            margin-top: 8px;
+            margin-top: 4px;
+        }
+        .patient-field:first-child {
+            margin-top: 0;
         }
         .patient-field label {
             font-size: 11px;
@@ -1062,9 +1160,10 @@ License: MIT
             display: flex;
             justify-content: space-between;
             align-items: center;
+            margin-bottom: 2px;
         }
         .patient-field .input-row {
-            margin-top: 4px;
+            margin-top: 0px;
             display: flex;
             align-items: center;
             gap: 8px;
@@ -1076,16 +1175,241 @@ License: MIT
         .patient-field .copy-btn {
             margin-left: 0;
         }
+        .patient-name-age-row {
+            display: flex;
+            gap: 10px;
+            margin-top: 0px;
+        }
+        .patient-name-age-row .patient-field:first-child {
+            flex: 1;
+            margin-top: 0;
+        }
+        .patient-name-age-row .patient-field:last-child {
+            width: 90px;
+            flex-shrink: 0;
+            margin-top: 0;
+        }
+        .patient-mrn-hcn-row {
+            display: flex;
+            gap: 6px;
+            margin-top: 4px;
+            align-items: flex-end;
+        }
+        .patient-mrn-hcn-row .patient-field {
+            margin-top: 0;
+        }
+        .patient-mrn-hcn-row .patient-field .input-row {
+            gap: 4px;
+        }
+        .patient-mrn-hcn-row .mrn-field {
+            width: 140px;
+            flex-shrink: 0;
+        }
+        .patient-mrn-hcn-row .hcn-field {
+            width: 160px;
+            flex-shrink: 0;
+        }
+        .patient-mrn-hcn-row .province-field {
+            width: 90px;
+            flex-shrink: 0;
+        }
         .patient-meta-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-            gap: 12px;
-            margin-top: 10px;
+            gap: 10px;
+            margin-top: 4px;
+        }
+        .patient-row-collapsed td {
+            padding: 8px 12px !important;
+        }
+        .patient-row-expanded {
+            background: color-mix(in srgb, var(--brand) 5%, var(--card));
+        }
+        .expand-indicator {
+            width: 24px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            border-radius: 4px;
+            transition: all 0.2s ease;
+            flex-shrink: 0;
+        }
+        .expand-indicator:hover {
+            background: color-mix(in srgb, var(--brand) 15%, var(--card));
+        }
+        .expand-indicator svg {
+            width: 16px;
+            height: 16px;
+            transition: transform 0.2s ease;
+        }
+        .expand-indicator.expanded svg {
+            transform: rotate(90deg);
+        }
+        .expand-indicator.right {
+            margin-left: auto;
+        }
+        .expand-indicator.right svg {
+            transform: rotate(180deg);
+        }
+        .expand-indicator.right.expanded svg {
+            transform: rotate(90deg);
+        }
+        .patient-collapsed-summary {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            flex-wrap: nowrap;
+        }
+        .patient-collapsed-summary .compact-field {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+        .patient-collapsed-summary .compact-field label {
+            font-size: 9px;
+            letter-spacing: 0.3px;
+            color: var(--muted);
+            text-transform: uppercase;
+        }
+        .patient-collapsed-summary .compact-field input,
+        .patient-collapsed-summary .compact-field select {
+            font-size: 13px;
+            padding: 4px 6px;
+        }
+        .patient-collapsed-summary .compact-name {
+            width: 230px;
+            flex-shrink: 0;
+        }
+        .patient-collapsed-summary .compact-age {
+            width: 45px;
+            flex-shrink: 0;
+        }
+        .patient-collapsed-summary .compact-age input {
+            max-width: 45px;
+            min-width: 0;
+            width: 45px;
+            box-sizing: border-box;
+            appearance: textfield;
+            -moz-appearance: textfield;
+        }
+        .patient-collapsed-summary .compact-age input::-webkit-inner-spin-button,
+        .patient-collapsed-summary .compact-age input::-webkit-outer-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+        .patient-collapsed-summary .compact-mrn {
+            width: 150px;
+            flex-shrink: 0;
+        }
+        .patient-collapsed-summary .compact-hcn {
+            width: 160px;
+            flex-shrink: 0;
+        }
+        .patient-collapsed-summary .compact-province {
+            width: 90px;
+            flex-shrink: 0;
+        }
+        .patient-collapsed-summary .compact-dialysis {
+            width: 200px;
+            flex-shrink: 0;
+        }
+        .patient-collapsed-summary .compact-start {
+            width: 140px;
+            flex-shrink: 0;
+        }
+        .patient-collapsed-summary .compact-field .input-with-copy {
+            display: flex;
+            gap: 3px;
+            align-items: center;
+        }
+        .patient-collapsed-summary .copy-btn-mini {
+            padding: 3px 6px;
+            font-size: 11px;
+            border-radius: 3px;
+            border: 1px solid color-mix(in srgb, var(--brand) 30%, var(--border));
+            background: color-mix(in srgb, var(--brand) 22%, var(--card));
+            color: var(--text);
+            cursor: pointer;
+            white-space: nowrap;
+        }
+        .patient-collapsed-summary .copy-btn-mini:hover {
+            background: color-mix(in srgb, var(--brand) 32%, var(--card));
+        }
+        .patient-collapsed-summary .copy-btn-mini:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        .status-badge {
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 600;
+            white-space: nowrap;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+        }
+        .status-badge.status-missing {
+            background: #ff6b6b22;
+            color: #ff6b6b;
+            border: 1px solid #ff6b6b44;
+        }
+        .status-badge.status-pending {
+            background: #ffa50022;
+            color: #ffa500;
+            border: 1px solid #ffa50044;
+        }
+        .status-badge.status-ready-notify {
+            background: #4caf5022;
+            color: #4caf50;
+            border: 1px solid #4caf5044;
+        }
+        .status-badge.status-waiting {
+            background: #2196f322;
+            color: #2196f3;
+            border: 1px solid #2196f344;
+        }
+        .status-badge.status-ready-randomize {
+            background: #9c27b022;
+            color: #9c27b0;
+            border: 1px solid #9c27b044;
+        }
+        .status-badge.status-randomized-np {
+            background: #00bcd422;
+            color: #00bcd4;
+            border: 1px solid #00bcd444;
+        }
+        .status-badge.status-randomized-rx {
+            background: #4caf5022;
+            color: #4caf50;
+            border: 1px solid #4caf5044;
+        }
+        .status-badge.status-ineligible {
+            background: #f4433622;
+            color: #f44336;
+            border: 1px solid #f4433644;
+        }
+        .status-badge.status-opted-out {
+            background: #9e9e9e22;
+            color: #9e9e9e;
+            border: 1px solid #9e9e9e44;
+        }
+        .patient-expanded-details {
+            padding: 12px;
+        }
+        .patient-expanded-details td {
+            padding: 0 !important;
+        }
+        .patient-expanded-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr 1fr;
+            gap: 16px;
         }
         .date-field {
             display: flex;
             flex-direction: column;
-            gap: 4px;
+            gap: 2px;
         }
         .date-field-header {
             display: flex;
@@ -1125,6 +1449,11 @@ License: MIT
     <div id="toast-root" class="toast-container" aria-live="polite" aria-atomic="true"></div>
         <div class="header">
             <h1>DIALEX eligibility, notification, and randomization tracker</h1>
+            <div class="meta-row">
+                <div class="meta-pill version-pill" aria-label="Version date">Version: 2025-12-01</div>
+                <div class="meta-pill owner-pill" aria-label="Ownership">Copyright 2025 DIALEX trial project office</div>
+                <button id="theme-toggle" class="meta-pill theme-toggle" onclick="toggleTheme()" aria-pressed="true" type="button">Dark theme</button>
+            </div>
             
             <div class="section-header">Database controls</div>
             <div class="database-controls">
@@ -1151,64 +1480,69 @@ License: MIT
             </div>
         </div>
         
-        <div class="instructions">
-            <h3>How to use this tool</h3>
-            <ol>
-                <li>Start by clicking "Create new database" or "Load database" (if continuing previous work).</li>
-                <li>Use "Save database" to generate encrypted, timestamped backups as you work. Each save keeps a unique timestamped file to provide redundancy if an older copy is lost or corrupted. Always pay attention to the timestamp in the file name and load the most recent version unless you intentionally need to roll back.</li>
-                <li>Import the Registration Data Extract CSV for automated pre-screening; this is the preferred method because it is the fastest way to add many patients at once and imports health card numbers directly to mimimize the chance for errors. Valid health card numbers are required to follow patient outcomes in this trial. If needed, you can also add individual patients manually by clicking "Add individual patient".</li>
-                <li>For each patient, assess eligibility using the eligibility criteria. You will find pre-populated answers. The pre-populated answers are not guaranteed to be correct as they rely on data maintained by your program for the Ontario Renal Reporting System. Many of the exclusion criteria require knowledge of the patient beyond this database. To proceed to notification and randomization, a patient must meet all inclusion criteria and none of the exclusion criteria.</li>
-                <li>You must confirm that the patient has met all inclusion criteria and none of the exclusion criteria before proceeding to notification and randomization. The tool requires that you check the "No exclusions" checkbox before proceeding to notification and randomization.</li>
-                <li>For eligible patients, track notification and opt-out periods before randomization. The tool requires that you enter a notification date before proceeding to randomization.</li>
-                <li>You can enter randomization date and studyID after the patient is randomized. This can be found in REDCap once you complete randomization there.</li>
-                <li>You can lock patient records to prevent accidental changes and unlock them later when needed.</li>
-            </ol>
-            
-            
+            <div class="instructions">
+                <div class="instructions-header" onclick="toggleInstructions()">
+                    <span>How to use this tool</span>
+                    <span id="instructions-chevron" style="transform: rotate(0deg);">▼</span>
+                </div>
+                <div id="instructions-content" class="instructions-content">
+                <ol>
+                    <li>Start by clicking "Create new database" or "Load database" (if continuing previous work).</li>
+                    <li>Use "Save database" to generate encrypted, timestamped backups as you work. Each save keeps a unique timestamped file to provide redundancy if an older copy is lost or corrupted. Always pay attention to the timestamp in the file name and load the most recent version unless you intentionally need to roll back.</li>
+                    <li>Import the Registration Data Extract CSV for automated pre-screening; this is the preferred method because it is the fastest way to add many patients at once and imports health card numbers directly to mimimize the chance for errors. Valid health card numbers are required to follow patient outcomes in this trial. If needed, you can also add individual patients manually by clicking "Add individual patient".</li>
+                    <li>For each patient, assess eligibility using the eligibility criteria. You will find pre-populated answers. The pre-populated answers are not guaranteed to be correct as they rely on data maintained by your program for the Ontario Renal Reporting System. Many of the exclusion criteria require knowledge of the patient beyond this database. To proceed to notification and randomization, a patient must meet all inclusion criteria and none of the exclusion criteria.</li>
+                    <li>You must confirm that the patient has met all inclusion criteria and none of the exclusion criteria before proceeding to notification and randomization. The tool requires that you check the "No exclusions" checkbox before proceeding to notification and randomization.</li>
+                    <li>For eligible patients, track notification and opt-out periods before randomization. The tool requires that you enter a notification date before proceeding to randomization.</li>
+                    <li>You can enter randomization date and studyID after the patient is randomized. This can be found in REDCap once you complete randomization there.</li>
+                    <li>You can lock patient records to prevent accidental changes and unlock them later when needed.</li>
+                </ol>
                 
-                <div id="prescreen-results" class="hidden" style="margin-top: 12px;">
-                    <h3>Pre-screening results</h3>
-                    <div class="stats-container">
-                        <div class="stat-card">
-                            <div>Total Patients</div>
-                            <div class="stat-number" id="ps-total">0</div>
+                
+                    
+                    <div id="prescreen-results" class="hidden" style="margin-top: 12px;">
+                        <h3>Pre-screening results</h3>
+                        <div class="stats-container">
+                            <div class="stat-card">
+                                <div>Total Patients</div>
+                                <div class="stat-number" id="ps-total">0</div>
+                            </div>
+                            <div class="stat-card">
+                                <div>Potentially Eligible</div>
+                                <div class="stat-number" id="ps-eligible">0</div>
+                            </div>
+                            <div class="stat-card">
+                                <div>Ineligible</div>
+                                <div class="stat-number" id="ps-ineligible">0</div>
+                            </div>
+                            <div class="stat-card">
+                                <div>Age < 45</div>
+                                <div class="stat-number" id="ps-age-under45">0</div>
+                            </div>
+                            <div class="stat-card">
+                                <div>45–59 w/o Diabetes</div>
+                                <div class="stat-number" id="ps-age45-59-nodm">0</div>
+                            </div>
+                            <div class="stat-card">
+                                <div>< 90 Days on Dialysis</div>
+                                <div class="stat-number" id="ps-days-under">0</div>
+                            </div>
+                            <div class="stat-card">
+                                <div>Invalid Modality</div>
+                                <div class="stat-number" id="ps-invalid-modality">0</div>
+                            </div>
+                            <div class="stat-card">
+                                <div>Missing Health Card</div>
+                                <div class="stat-number" id="ps-missing-hcn">0</div>
+                            </div>
+                            <div class="stat-card">
+                                <div>Invalid/Missing Dates</div>
+                                <div class="stat-number" id="ps-invalid-dates">0</div>
+                            </div>
                         </div>
-                        <div class="stat-card">
-                            <div>Potentially Eligible</div>
-                            <div class="stat-number" id="ps-eligible">0</div>
+                        <div class="tabs" id="ps-tabs" style="display:none;"></div>
+                        <div id="ps-tabpanels" style="display:none;">
+                            <div id="ps-panel-ineligible" class="tab-panel" style="display:none;"></div>
                         </div>
-                        <div class="stat-card">
-                            <div>Ineligible</div>
-                            <div class="stat-number" id="ps-ineligible">0</div>
-                        </div>
-                        <div class="stat-card">
-                            <div>Age < 45</div>
-                            <div class="stat-number" id="ps-age-under45">0</div>
-                        </div>
-                        <div class="stat-card">
-                            <div>45–59 w/o Diabetes</div>
-                            <div class="stat-number" id="ps-age45-59-nodm">0</div>
-                        </div>
-                        <div class="stat-card">
-                            <div>< 90 Days on Dialysis</div>
-                            <div class="stat-number" id="ps-days-under">0</div>
-                        </div>
-                        <div class="stat-card">
-                            <div>Invalid Modality</div>
-                            <div class="stat-number" id="ps-invalid-modality">0</div>
-                        </div>
-                        <div class="stat-card">
-                            <div>Missing Health Card</div>
-                            <div class="stat-number" id="ps-missing-hcn">0</div>
-                        </div>
-                        <div class="stat-card">
-                            <div>Invalid/Missing Dates</div>
-                            <div class="stat-number" id="ps-invalid-dates">0</div>
-                        </div>
-                    </div>
-                    <div class="tabs" id="ps-tabs" style="display:none;"></div>
-                    <div id="ps-tabpanels" style="display:none;">
-                        <div id="ps-panel-ineligible" class="tab-panel" style="display:none;"></div>
                     </div>
             </div>
         </div>
@@ -1216,9 +1550,9 @@ License: MIT
         <div class="criteria-reference-card">
             <div class="criteria-header" onclick="toggleCriteriaReference()">
                 <span>Eligibility criteria</span>
-                <span id="criteria-chevron" style="transform: rotate(180deg);">▼</span>
+                <span id="criteria-chevron" style="transform: rotate(0deg);">▼</span>
             </div>
-            <div id="criteria-content" class="criteria-content open">
+            <div id="criteria-content" class="criteria-content">
                 <div class="criteria-grid">
                     <div>
                         <h4 style="color:var(--brand); margin-bottom:8px;">Inclusion criteria (all must be met)</h4>
@@ -1300,16 +1634,7 @@ License: MIT
             <table>
                 <thead>
                     <tr>
-                        <col style="width: 28%;"> <!-- Patient Info -->
-                        <col style="width: 26%;"> <!-- Eligibility -->
-                        <col style="width: 28%;"> <!-- Notification -->
-                        <col style="width: 18%;"> <!-- Notes -->
-                    </tr>
-                    <tr>
-                        <th id="sort-name">Patient details</th>
-                        <th>Eligibility assessment</th>
-                        <th>Notification and randomization</th>
-                        <th>Notes</th>
+                        <th id="sort-name" colspan="4">Patients (click arrows to expand/collapse rows)</th>
                     </tr>
                 </thead>
                 <tbody id="patient-table-body">
@@ -1689,6 +2014,48 @@ License: MIT
         let renderScheduled = false;
 
         const $ = (id) => document.getElementById(id);
+        const THEME_STORAGE_KEY = 'dialex-theme';
+        const DEFAULT_THEME = 'dark';
+
+        function getSavedTheme() {
+            try {
+                return localStorage.getItem(THEME_STORAGE_KEY);
+            } catch (error) {
+                console.warn('Unable to read theme preference', error);
+                return null;
+            }
+        }
+
+        function applyTheme(theme) {
+            const next = theme === 'light' ? 'light' : 'dark';
+            document.documentElement.setAttribute('data-theme', next);
+            const toggle = $('theme-toggle');
+            if (toggle) {
+                toggle.textContent = next === 'dark' ? 'Dark theme' : 'Light theme';
+                toggle.setAttribute('aria-pressed', next === 'dark' ? 'true' : 'false');
+            }
+        }
+
+        function toggleTheme() {
+            const current = document.documentElement.getAttribute('data-theme') || DEFAULT_THEME;
+            const next = current === 'dark' ? 'light' : 'dark';
+            applyTheme(next);
+            try {
+                localStorage.setItem(THEME_STORAGE_KEY, next);
+            } catch (error) {
+                console.warn('Unable to store theme preference', error);
+            }
+        }
+
+        function initTheme() {
+            const saved = getSavedTheme();
+            applyTheme(saved || DEFAULT_THEME);
+        }
+
+        initTheme();
+        document.addEventListener('DOMContentLoaded', () => {
+            applyTheme(document.documentElement.getAttribute('data-theme') || DEFAULT_THEME);
+        });
         
         
         initSqlJs().then(function(SQL_) {
@@ -1936,6 +2303,14 @@ License: MIT
         function toggleCriteriaReference() {
             const content = $('criteria-content');
             const chevron = $('criteria-chevron');
+            content.classList.toggle('open');
+            chevron.style.transform = content.classList.contains('open') ? 'rotate(180deg)' : 'rotate(0deg)';
+        }
+        
+        function toggleInstructions() {
+            const content = $('instructions-content');
+            const chevron = $('instructions-chevron');
+            if (!content || !chevron) return;
             content.classList.toggle('open');
             chevron.style.transform = content.classList.contains('open') ? 'rotate(180deg)' : 'rotate(0deg)';
         }
@@ -2346,6 +2721,7 @@ License: MIT
             const hcnFormatError = validateHealthCardFormat(patient.health_card.trim(), provinceForHcn || '');
             patient.incl_health_card = patient.hasHealthCard && !hcnFormatError ? 1 : 0;
             patient.health_card_province = provinceForHcn || '';
+            recalcDialysisInclusion(patient);
             patient.inclusionMet = INCLUSION_KEYS.every(key => patient[key] === 1);
             patient.bucketFlags = computeBucketFlags(patient);
             patient.primaryBucket = patient.bucketFlags.primary;
@@ -2404,7 +2780,8 @@ License: MIT
         function buildProvinceOptions(selected = '') {
             return Object.entries(PROVINCE_LABELS).map(([code, label]) => {
                 const isSelected = code === selected ? 'selected' : '';
-                return `<option value="${code}" ${isSelected}>${label}</option>`;
+                const displayText = code === '' ? 'Province' : code;
+                return `<option value="${code}" ${isSelected}>${displayText}</option>`;
             }).join('');
         }
 
@@ -2617,7 +2994,11 @@ License: MIT
             const isVisible = matchesActiveFilter(patient) && matchesSearchTerm(patient);
 
             if (!isVisible) {
-                if (existing) existing.remove();
+                if (existing) {
+                    existing.remove();
+                    const existingDetails = document.getElementById(`row-details-${index}`);
+                    if (existingDetails) existingDetails.remove();
+                }
                 if (!tbody.children.length) {
                     const empty = document.createElement('tr');
                     empty.innerHTML = `<td colspan="4" style="text-align:center; padding:24px; color:var(--muted);">No patients match this view.</td>`;
@@ -2628,6 +3009,8 @@ License: MIT
 
             if (existing) {
                 existing.remove();
+                const existingDetails = document.getElementById(`row-details-${index}`);
+                if (existingDetails) existingDetails.remove();
             }
 
             const placeholder = tbody.querySelector('tr:not([data-index])');
@@ -2651,11 +3034,175 @@ License: MIT
             tbody.appendChild(row);
         }
 
+        let expandedPatientIndex = null;
+
+        function getStatusBadgeHtml(patient) {
+            const flags = patient.bucketFlags || computeBucketFlags(patient);
+            const primary = flags.primary;
+            const statusLabels = {
+                missing: 'Missing',
+                pending: 'Pending',
+                ready_notify: 'Ready to Notify',
+                waiting: 'Waiting',
+                ready_randomize: 'Ready to Randomize',
+                randomized_np: 'Randomized (Not Prescribed)',
+                randomized_rx: 'Randomized (Prescribed)',
+                ineligible: 'Ineligible',
+                opted_out: 'Opted Out'
+            };
+            let label = statusLabels[primary] || 'All';
+            const statusClass = `status-${primary.replace(/_/g, '-')}`;
+
+            // Add allocation info for randomized patients
+            if ((primary === 'randomized_np' || primary === 'randomized_rx') && patient.allocation) {
+                const allocationLabels = {
+                    'conventional': 'Conventional',
+                    'elisio_hx': 'Elisio-HX'
+                };
+                const allocationLabel = allocationLabels[patient.allocation] || patient.allocation;
+                label += ` - ${allocationLabel}`;
+            }
+
+            return `<div class="status-badge ${statusClass}">${label}</div>`;
+        }
+
+        function togglePatientRow(index) {
+            const previous = expandedPatientIndex;
+            if (previous !== null) {
+                collapsePatientDetailsRow(previous);
+            }
+
+            if (previous === index) {
+                expandedPatientIndex = null;
+                return;
+            }
+
+            expandedPatientIndex = index;
+            expandPatientDetailsRow(index);
+        }
+
+        // Expand/collapse helpers keep DOM work minimal for large tables.
+        function collapsePatientDetailsRow(index) {
+            if (index == null) return;
+            const detailsRow = document.getElementById(`row-details-${index}`);
+            if (detailsRow) {
+                detailsRow.remove();
+            }
+            const summaryRow = document.getElementById(`row-${index}`);
+            if (summaryRow) {
+                summaryRow.querySelectorAll('.expand-indicator').forEach(indicator => indicator.classList.remove('expanded'));
+            }
+        }
+
+        function expandPatientDetailsRow(index) {
+            const patient = patientsData[index];
+            if (!patient) return;
+            const summaryRow = document.getElementById(`row-${index}`);
+            if (!summaryRow) {
+                renderPatientTable();
+                return;
+            }
+            summaryRow.querySelectorAll('.expand-indicator').forEach(indicator => indicator.classList.add('expanded'));
+            const existingDetails = document.getElementById(`row-details-${index}`);
+            if (existingDetails) {
+                existingDetails.remove();
+            }
+            const detailsRow = buildPatientDetailsRow(patient);
+            summaryRow.after(detailsRow);
+        }
+
         function buildPatientRow(patient) {
+            const isExpanded = expandedPatientIndex === patient._index;
+            const fragment = document.createDocumentFragment();
+
+            // Always create the summary row
+            const summaryRow = buildPatientSummaryRow(patient, isExpanded);
+            fragment.appendChild(summaryRow);
+
+            // If expanded, add the details row below it
+            if (isExpanded) {
+                const detailsRow = buildPatientDetailsRow(patient);
+                fragment.appendChild(detailsRow);
+            }
+
+            return fragment;
+        }
+
+        function buildPatientSummaryRow(patient, isExpanded) {
             const row = document.createElement('tr');
             row.id = `row-${patient._index}`;
             row.dataset.index = patient._index;
-            row.className = patient.rowClass;
+            row.className = `${patient.rowClass} patient-row-collapsed`;
+            row.dataset.mrn = patient.mrn || '';
+
+            const isLocked = !!patient.locked_at;
+            const ageValue = Number.isFinite(patient.age) ? patient.age : '';
+            const dialysisUnitCanonical = getDialysisUnitCanonical(patient);
+            const dialysisUnitOptions = buildLocationOptionsHtml(dialysisUnitCanonical);
+            const provinceOptions = buildProvinceOptions(patient.health_card_province || '');
+            const statusBadge = getStatusBadgeHtml(patient);
+            const expandedClass = isExpanded ? 'expanded' : '';
+
+            row.innerHTML = `
+                <td colspan="4">
+                    <div class="patient-collapsed-summary">
+                        <div class="expand-indicator ${expandedClass}" onclick="togglePatientRow(${patient._index})">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="9 18 15 12 9 6"></polyline>
+                            </svg>
+                        </div>
+                        <div class="compact-field compact-name">
+                            <label>Name</label>
+                            <input type="text" class="table-input" placeholder="Patient name" value="${escapeHtml(patient.patient_name || '')}" ${isLocked ? 'disabled' : ''} onchange="updatePatientName(${patient._index}, this.value)">
+                        </div>
+                        <div class="compact-field compact-age">
+                            <label>Age</label>
+                            <input type="number" min="0" class="table-input" placeholder="Age" value="${ageValue}" ${isLocked ? 'disabled' : ''} onchange="updatePatientAge(${patient._index}, this.value)">
+                        </div>
+                        <div class="compact-field compact-mrn">
+                            <label>MRN</label>
+                            <div class="input-with-copy">
+                                <input type="text" class="table-input" placeholder="MRN" value="${escapeHtml(patient.mrn || '')}" ${isLocked ? 'disabled' : ''} onchange="updatePatientMrn(${patient._index}, this.value)">
+                                <button class="copy-btn-mini" ${patient.mrn ? '' : 'disabled'} onclick="copyPatientField(${patient._index}, 'mrn')">Copy</button>
+                            </div>
+                        </div>
+                        <div class="compact-field compact-hcn">
+                            <label>HCN</label>
+                            <div class="input-with-copy">
+                                <input type="text" class="table-input" placeholder="HCN" value="${escapeHtml(patient.health_card || '')}" ${isLocked ? 'disabled' : ''} onchange="updatePatientHcn(${patient._index}, this.value)">
+                                <button class="copy-btn-mini" ${patient.health_card ? '' : 'disabled'} onclick="copyPatientField(${patient._index}, 'health_card')">Copy</button>
+                            </div>
+                        </div>
+                        <div class="compact-field compact-province">
+                            <label>HCN Province</label>
+                            <select class="table-input" ${isLocked ? 'disabled' : ''} onchange="updateHealthCardProvince(${patient._index}, this.value)">
+                                ${provinceOptions}
+                            </select>
+                        </div>
+                        <div class="compact-field compact-dialysis">
+                            <label>Dialysis Unit</label>
+                            <select class="table-input" ${isLocked ? 'disabled' : ''} onchange="updateDialysisUnit(${patient._index}, this.value)">
+                                ${dialysisUnitOptions}
+                            </select>
+                        </div>
+                        ${statusBadge}
+                        <div class="expand-indicator right ${expandedClass}" onclick="togglePatientRow(${patient._index})">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="9 18 15 12 9 6"></polyline>
+                            </svg>
+                        </div>
+                    </div>
+                </td>
+            `;
+
+            return row;
+        }
+
+        function buildPatientDetailsRow(patient) {
+            const row = document.createElement('tr');
+            row.id = `row-details-${patient._index}`;
+            row.dataset.index = patient._index;
+            row.className = `${patient.rowClass} patient-row-expanded patient-expanded-details`;
             row.dataset.mrn = patient.mrn || '';
 
             const firstEligibleDisplay = patient.first_ready_iso ? formatFriendlyDate(patient.first_ready_iso) : '-';
@@ -2753,66 +3300,11 @@ License: MIT
             const lockIndicator = patient.locked_at ? `<div class="status-subtext" style="color:var(--muted);">Locked ${formatDisplayDateTime(patient.locked_at)}</div>` : '';
             const lockHelper = '<div class="status-subtext">Lock prevents editing fields above; notes remain editable.</div>';
             const lockDisplay = lockIndicator || lockHelper;
-            const provinceOptions = buildProvinceOptions(patient.health_card_province || '');
-
             row.innerHTML = `
-                <td>
-                    <div class="patient-info-compact">
-                        <div class="patient-field">
-                            <label>Patient name</label>
-                            <div class="input-row">
-                                <input type="text" class="table-input patient-name-input" placeholder="Enter patient name" value="${escapeHtml(patient.patient_name || '')}" ${isLocked ? 'disabled' : ''} onchange="updatePatientName(${patient._index}, this.value)">
-                            </div>
-                        </div>
-                        <div class="patient-meta-grid">
-                            <div class="patient-field">
-                                <label>Age</label>
-                                <div class="input-row">
-                                    <input type="number" min="0" class="table-input" placeholder="Enter age" value="${ageValue}" ${isLocked ? 'disabled' : ''} onchange="updatePatientAge(${patient._index}, this.value)">
-                                </div>
-                            </div>
-                            <div class="patient-field">
-                                <label>MRN</label>
-                                <div class="input-row">
-                                    <input type="text" class="table-input" placeholder="Enter MRN" value="${escapeHtml(patient.mrn || '')}" ${isLocked ? 'disabled' : ''} onchange="updatePatientMrn(${patient._index}, this.value)">
-                                    <button class="copy-btn" ${patient.mrn ? '' : 'disabled'} onclick="copyPatientField(${patient._index}, 'mrn')">Copy MRN</button>
-                                </div>
-                            </div>
-                            <div class="patient-field">
-                                <label>HCN and corresponding province/territory</label>
-                                <div class="input-row" style="gap:8px; align-items:flex-end;">
-                                    <input type="text" class="table-input" style="max-width:180px;" placeholder="Enter health card number" value="${escapeHtml(patient.health_card || '')}" ${isLocked ? 'disabled' : ''} onchange="updatePatientHcn(${patient._index}, this.value)">
-                                    <select class="table-input" style="flex:1; min-width:140px; max-width:160px;" aria-label="Corresponding province or territory" ${isLocked ? 'disabled' : ''} onchange="updateHealthCardProvince(${patient._index}, this.value)">
-                                        ${provinceOptions}
-                                    </select>
-                                    <button class="copy-btn" ${patient.health_card ? '' : 'disabled'} onclick="copyPatientField(${patient._index}, 'health_card')">Copy HCN</button>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="patient-field">
-                            <label>Dialysis unit at randomization</label>
-                            <div class="input-row">
-                                <select class="table-input location-select" ${isLocked ? 'disabled' : ''} onchange="updateDialysisUnit(${patient._index}, this.value)">
-                                    ${dialysisUnitOptions}
-                                </select>
-                            </div>
-                        </div>
-                        <div class="patient-field date-field">
-                            <div class="date-field-header">
-                                <label>Dialysis start</label>
-                                <span class="date-display ${dialysisStartFriendly ? 'has-value' : ''}">${dialysisStartFriendly || 'Not set'}</span>
-                            </div>
-                            <div class="date-input-row">
-                                <input type="date" class="table-input inline-date" value="${dialysisStartDisplay}" placeholder="Select date" ${isLocked ? 'disabled' : ''} onchange="updateDialysisStartDate(${patient._index}, this.value)">
-                                <button class="copy-btn" ${dialysisStartDisplay ? '' : 'disabled'} onclick="copyPatientField(${patient._index}, 'dialysis_start_date')">Copy date</button>
-                            </div>
-                        </div>
-                        ${dialysisConfirmControls}
-                    </div>
-                </td>
-                <td>
-                    <div class="checkbox-group">
+                <td colspan="4" style="padding: 0 !important;">
+                    <div class="patient-expanded-grid">
                         <div>
+                            <div class="checkbox-group">
                             <label class="master-check-label">
                                 <input type="checkbox" ${patient.inclusionMet ? 'checked' : ''} ${isLocked ? 'disabled' : ''} onchange="toggleMasterInclusion(${patient._index}, this)">
                                 <span class="${inclusionLabelClass}">All inclusion criteria met</span>
@@ -2820,20 +3312,31 @@ License: MIT
                             <div class="inline-criteria-list">
                                 ${INCLUSION_KEYS.map(key => renderCheckbox(patient, key, isLocked)).join('')}
                             </div>
+                            <div class="date-field" style="margin-top: 10px;">
+                                <div class="date-field-header">
+                                    <label class="patient-sub">Dialysis start date:</label>
+                                    <span class="date-display ${dialysisStartFriendly ? 'has-value' : ''}">${dialysisStartFriendly || 'Not set'}</span>
+                                </div>
+                                <div class="date-input-row">
+                                    <input type="date" class="table-input inline-date" value="${dialysisStartDisplay}" ${isLocked ? 'disabled' : ''} onchange="updateDialysisStartDate(${patient._index}, this.value)">
+                                </div>
+                            </div>
+                            ${dialysisConfirmControls}
                         </div>
-                        <div style="margin-top:6px;">
-                            <label class="master-check-label">
-                                <input type="checkbox" ${patient.no_exclusions_confirmed ? 'checked' : ''} ${isLocked ? 'disabled' : ''} onchange="toggleMasterExclusion(${patient._index}, this)">
-                                <span class="${noExclusionLabelClass}">No exclusions</span>
-                            </label>
-                            <div class="inline-criteria-list">
-                                ${EXCLUSION_KEYS.map(key => renderCheckbox(patient, key, isLocked)).join('')}
+                    </div>
+                    <div>
+                            <div class="checkbox-group">
+                                <label class="master-check-label">
+                                    <input type="checkbox" ${patient.no_exclusions_confirmed ? 'checked' : ''} ${isLocked ? 'disabled' : ''} onchange="toggleMasterExclusion(${patient._index}, this)">
+                                    <span class="${noExclusionLabelClass}">No exclusions</span>
+                                </label>
+                                <div class="inline-criteria-list">
+                                    ${EXCLUSION_KEYS.map(key => renderCheckbox(patient, key, isLocked)).join('')}
+                                </div>
+                                ${missingMessage}
                             </div>
                         </div>
-                        ${missingMessage}
-                    </div>
-                </td>
-                <td>
+                        <div>
                     <div style="display:flex; flex-direction:column; gap:6px;">
                         <div class="date-field">
                             <div class="date-field-header">
@@ -2905,9 +3408,11 @@ License: MIT
                         </div>
                         ${lockDisplay}
                     </div>
-                </td>
-                <td>
-                    <textarea class="table-input" rows="3" placeholder="Notes..." onchange="updateInlineNotes(${patient._index}, this.value)">${patient.notes || ''}</textarea>
+                        </div>
+                        <div>
+                            <textarea class="table-input" rows="3" placeholder="Notes..." onchange="updateInlineNotes(${patient._index}, this.value)">${patient.notes || ''}</textarea>
+                        </div>
+                    </div>
                 </td>
             `;
 
@@ -3038,10 +3543,9 @@ License: MIT
                 showRecordWarning('');
                 return;
             }
-            INCLUSION_KEYS.forEach(key => patient[key] = 0);
-            persistPatient(patient, false);
-            refreshPatientRow(patient);
-            showRecordWarning('');
+            // Prevent unchecking - user must uncheck individual criteria instead
+            checkbox.checked = true;
+            showRecordWarning('To uncheck "All inclusion criteria met", uncheck at least one criterion below.', 'error');
         }
 
         function toggleMasterExclusion(index, checkbox) {
@@ -3266,6 +3770,7 @@ License: MIT
             const entry = (value ?? '').toString().trim();
             if (!entry) {
                 patient.age = null;
+                patient.incl_age = 0;
                 persistPatient(patient, false);
                 refreshPatientRow(patient);
                 showRecordWarning('');
@@ -3278,6 +3783,16 @@ License: MIT
                 return;
             }
             patient.age = Math.round(age);
+
+            // Automatically update incl_age based on age criteria
+            // Age ≥60 or 45-59 with history of diabetes
+            const meetsAgeCriteria = age >= 60 || (age >= 45 && age < 60 && patient.diabetes_known === 1);
+            if (meetsAgeCriteria) {
+                patient.incl_age = 1;
+            } else {
+                patient.incl_age = 0;
+            }
+
             persistPatient(patient, false);
             refreshPatientRow(patient);
             showRecordWarning('');
@@ -3490,6 +4005,7 @@ License: MIT
             const raw = (value || '').trim();
             if (!raw) {
                 patient.dialysis_start_date = '';
+                patient.dialysis_duration_confirmed = 0;
             } else {
                 const normalized = normalizeISODateString(raw);
                 if (!normalized) {
@@ -3509,6 +4025,7 @@ License: MIT
                 patient.dialysis_start_date = normalized;
                 patient.dialysis_duration_confirmed = 0;
             }
+            recalcDialysisInclusion(patient);
             persistPatient(patient, false);
             refreshPatientRow(patient);
         }
@@ -3519,6 +4036,7 @@ License: MIT
             if (!ensureEditablePatient(patient)) return;
             if (patient.dialysis_start_date) return;
             patient.dialysis_duration_confirmed = flag ? 1 : 0;
+            recalcDialysisInclusion(patient);
             persistPatient(patient, false);
             refreshPatientRow(patient);
         }
@@ -3786,7 +4304,7 @@ License: MIT
             const tempMrn = generateTemporaryMrn();
             const patient = createBlankPatientRecord(tempMrn);
             persistPatient(patient);
-            showRecordWarning('Blank patient row added (listed under "Missing Data" until required fields are completed). Enter the patient name, MRN, health card number, and dialysis details directly in the table.', 'status');
+            showRecordWarning('Blank patient row added (listed under "Missing Data" until required fields are completed). Enter the patient details directly in the table.', 'status');
             showStatus('Blank patient row added', 'success');
             focusPatientRow(tempMrn);
         }
@@ -4287,6 +4805,13 @@ License: MIT
             if (Object.values(OPT_OUT_STATUS).includes(value)) return value;
             if (legacyDidNotOptOut) return OPT_OUT_STATUS.DID_NOT;
             return OPT_OUT_STATUS.PENDING;
+        }
+
+        function recalcDialysisInclusion(patient) {
+            if (!patient) return;
+            patient.incl_dialysis_90d = patient.dialysis_duration_confirmed
+                ? 1
+                : meetsDialysisDays(patient.dialysis_start_date);
         }
 
         function meetsDialysisDays(dialysisStartIso) {
