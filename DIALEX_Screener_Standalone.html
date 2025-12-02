@@ -1223,10 +1223,14 @@ License: MIT
                     <div>
                         <h4 style="color:var(--brand); margin-bottom:8px;">Inclusion criteria (all must be met)</h4>
                         <ul class="criteria-list">
-                            <li>Age ≥60 years OR age 45-59 with diabetes (Type 1 or 2)</li>
+                            <li>
+                                Age ≥60 years OR age 45-59 with history of diabetes (Type 1 or 2)
+                                <br>
+                                <small style="color: var(--muted); display:block; margin-top:4px;">Patients who have had diabetes in the past but who are currently not using any diabetes medication and have normal glycemic control are considered to have a history of diabetes and meet this criterion.</small>
+                            </li>
                             <li>Receiving any form of dialysis regularly for previous 90 days (at randomization)</li>
                             <li>Currently receiving HD in-centre (main or satellite unit)</li>
-                            <li>Valid provincial/territorial health insurance card</li>
+                            <li>Valid provincial/territorial health insurance card number</li>
                         </ul>
                     </div>
                     <div>
@@ -1243,15 +1247,25 @@ License: MIT
                             <li>
                                 Anticipated to discontinue in-centre HD in next 3 months
                                 <br>
-                                <small style="color: var(--muted);">For any reason (e.g., transplantation, palliation, recovery, change to home HD or PD).</small>
+                                <small style="color: var(--muted);">For any reason (examples: transplantation, palliation, recovery, change to home HD or PD).</small>
                             </li>
                             <li>Anticipated severe non-adherence to treatment</li>
                             <li>
                                 Overriding clinical preference for expanded HD
                                 <br>
-                                <small style="color: var(--muted);">e.g. using Theranova dialyzer.</small>
+                                <small style="color: var(--muted);">Examples: already using ELISIO-HX or Theranova dialyzer outside of the study.</small>
                             </li>
-                            <li>Other medical, psychosocial, or logistical reason</li>
+                            <li>
+                                Other medical, psychosocial, or logistical reason
+                                <br>
+                                <small style="color: var(--muted); display:block; margin-top:4px;">
+                                    Examples:
+                                    <ul style="margin:4px 0 0 16px; padding-left:16px; color: var(--muted);">
+                                        <li>ELISIO-HX should not be used for isolated ultrafiltration (isoUF). For patients who need isoUF as part of regular HD (e.g., part isoUF and part HD), do not randomize unless planning to provide separate HD sessions from isoUF sessions so a conventional dialyzer is used for the entire isoUF session and ELISIO-HX is used for the entire HD session.</li>
+                                        <li>Concern that the patient lacks capacity to understand the notification handout and opt-out of enrollment while no substitute decision maker is available.</li>
+                                    </ul>
+                                </small>
+                            </li>
                             <li>Enrolled in conflicting clinical trial</li>
                             <li>Previously enrolled in DIALEX</li>
                             <li>Declined participation</li>
@@ -1413,11 +1427,28 @@ License: MIT
         const STUDY_ID_REGEX = /^\d{4}-[A-Z]{3}-\d{3}$/;
         const READ_ONLY_MESSAGE = 'Record is locked; only notes remain editable.';
         const TEMP_MRN_PREFIX = '__pending_patient__';
+        const PROVINCE_LABELS = {
+            '': 'Select province/territory',
+            AB: 'Alberta',
+            BC: 'British Columbia',
+            MB: 'Manitoba',
+            NB: 'New Brunswick',
+            NL: 'Newfoundland and Labrador',
+            NS: 'Nova Scotia',
+            NT: 'Northwest Territories',
+            NU: 'Nunavut',
+            ON: 'Ontario',
+            PE: 'Prince Edward Island',
+            QC: 'Quebec',
+            SK: 'Saskatchewan',
+            YT: 'Yukon'
+        };
 
         const HEADERS_LINE_INDEX = 1;
         const FIRST_DATA_LINE_INDEX = 2;
         const LOCATION_HEADER = "Location";
         const LAST_HCN_HEADER = "Last Known Health Card Number";
+        const HCN_PROVINCE_HEADER = "Province of Healthcard No.";
         const MRN_HEADER = "MRN";
         const HCN_HEADER = "Healthcard Number";
         const BIRTH_DATE_HEADER = "Patient Date of Birth DD/MM/YYYY";
@@ -1461,7 +1492,7 @@ License: MIT
             "ALL": "STEVENSON MEMORIAL (ALLISTON)",
             "ALS": "ADAM LINTON DIALYSIS UNIT",
             "AMG": "ALEXANDRA MARINE AND GENERAL HOSPITAL - GODERICH",
-            "BCC": "BRUYERE CC INC.SAINT-VINCENT",
+            "BCC": "BRUYERE CC INC.-SAINT-VINCENT",
             "BDC": "BURLINGTON DIALYSIS CENTER",
             "BDD": "BELLEVILLE DIALYSIS CLINIC",
             "BGH": "THE BRANT COMMUNITY HEALTHCARE SYSTEM",
@@ -1469,8 +1500,14 @@ License: MIT
             "BIC": "TORONTO REHAB BICKLE CENTRE",
             "BMH": "BRAMPTON CIVIC HOSPITAL",
             "BPH": "BRIDGEPOINT HEALTH",
+            "BRK": "BLANCHE RIVER - KIRKLAND",
+            "BRO": "BROCKVILLE DIALYSIS CLINIC",
+            "BSH": "BRIGHTSHORES HEALTH SYSTEM",
+            "CDC": "CORNWALL DIALYSIS CLINIC",
             "CGH": "CORNWALL GENERAL",
             "CHA": "CHATHAM - KENT HEALTH ALLIANCE",
+            "CMH": "CAMBRIDGE MEMORIAL HOSPITAL",
+            "CNC": "CHURCH NEPHROLOGY CENTRE",
             "CNI": "SUNNYBROOK SATELLITE",
             "COB": "NORTHUMBERLAND HILLS",
             "COL": "COLLINGWOOD GENERAL & MARINE",
@@ -1479,7 +1516,6 @@ License: MIT
             "CVH": "TRILLIUM HEALTH PARTNERS - CREDIT VALLEY HOSPITAL",
             "ESH": "ERIE SHORES HEALTHCARE",
             "ETG": "ETOBICOKE GENERAL HOSPITAL",
-            "GBH": "GREY-BRUCE HEALTH SERVICES - OWEN SOUND",
             "GFS": "FREEPORT SITE",
             "GGH": "GUELPH GENERAL HOSPITAL",
             "GRH": "GRAND RIVER HOSPITAL CORPORATION",
@@ -1489,27 +1525,27 @@ License: MIT
             "HHG": "HAMILTON GENERAL HOSPITAL",
             "HOM": "HOPITAL MONTFORT",
             "HPH": "HURON PERTH HOSPS PARTNERSHIP (STRATFORD)",
-            "HRH": "HUMBER RIVER HOSPITAL",
+            "HRH": "HUMBER RIVER HEALTH",
             "HSN": "HEALTH SCIENCES NORTH",
             "HSU": "SCARBOROUGH HD SATELLITE UNIT",
             "HWH": "HEADWATERS HEALTH CARE",
             "JBH": "JOSEPH BRANT HOSPITAL",
-            "JGE": "ST. JOSEPH'S GENERAL HOSPITAL (ELLIOT LAKE)",
+            "JGE": "ST. JOSEPH'S GENERAL HOSPITAL (ELLIOTT LAKE)",
             "JHH": "ST. JOSEPH'S HEALTHCARE - HAMILTON",
             "JUH": "JURAVINSKI HOSPITAL",
             "KCC": "KIDNEY CARE CENTRE",
-            "KDH": "KIRKLAND AND DISTRICT HOSPITAL (KIRKLAND LAKE)",
             "KGH": "KINGSTON GENERAL",
-            "LHC": "LAKERIDGE HEALTH CORPORATION",
+            "LHO": "LAKERIDGE HEALTH OSHAWA",
             "LHS": "LONDON HEALTH SCIENCES CENTRE",
+            "LHW": "LAKERIDGE HEALTH WHITBY",
             "LIN": "ROSS MEMORIAL HOSPITAL (LINDSAY)",
             "LWD": "LAKE OF THE WOODS DISTRICT HOSPITAL",
             "MAH": "MACKENZIE HEALTH",
+            "MCH": "MCMASTER CHILDREN'S HOSPITAL",
             "MFS": "MOOSE FACTORY SATELLITE - KINGSTON HEALTH SCIENCES CENTRE",
             "MGH": "MICHAEL GARRON HOSPITAL",
             "MHC": "MANITOULIN HEALTH CENTRE (LITTLE CURRENT)",
             "MNH": "MOUNT SINAI HOSPITAL",
-            "MSH": "MARKHAM STOUFFVILLE HOSPITAL",
             "MVH": "CORTELLUCCI VAUGHAN HOSPITAL",
             "NBH": "NORTH BAY REGIONAL HEALTH CENTRE",
             "NDC": "NAPANEE SATELLITE DIALYSIS UNIT",
@@ -1520,12 +1556,14 @@ License: MIT
             "NWS": "WELLAND SITE",
             "NYG": "NORTH YORK GENERAL",
             "OAK": "OAK RIDGES SATELLITE",
+            "ODC": "OTTAWA DIALYSIS CLINIC",
             "OHI": "OTTAWA HEART INSTITUTE",
-            "OSM": "ORILLIA SOLDIERS' MEMORIAL HOSPITAL",
+            "OSM": "ORILLIA SOLDIERS’ MEMORIAL HOSPITAL",
             "OTM": "HALTON HEALTHCARE SERVICES",
+            "OVH": "OAK VALLEY HEALTH",
             "PET": "PETERBOROUGH REGIONAL HEALTH CENTRE",
-            "PGH": "PEMBROKE GENERAL HOSPITAL",
-            "PGG": "PENETANG GENERAL HOSPITAL",
+            "PGG": "PEMBROKE GENERAL HOSPITAL",
+            "PGH": "PENETANG GENERAL HOSPITAL",
             "PMC": "PEEL MEMORIAL CENTRE",
             "PRH": "PRINCESS MARGARET HOSPITAL",
             "PRO": "PROVIDENCE HEALTHCARE",
@@ -1540,13 +1578,14 @@ License: MIT
             "SBK": "SUNNYBROOK HEALTH SCIENCES CENTRE",
             "SGH": "SCARBOROUGH GENERAL SITE",
             "SHK": "SENSENBRENNER HOSPITAL (KAPUSKASING)",
-            "SJH": "ST.JOSEPH'S HEALTH CENTRE TORONTO",
+            "SJH": "ST. JOSEPH’S HEALTH CENTRE TORONTO",
+            "SJR": "ST.JOHN'S REHAB",
             "SMB": "ST. FRANCIS MEMORIAL HOSPITAL (BARRY'S BAY)",
             "SMG": "ST. MARY'S GENERAL HOSPITAL",
             "SMH": "ST. MICHAEL'S HOSPITAL",
             "SOS": "OHSWEKEN - SIX NATIONS",
             "SSC": "STONEY CREEK",
-            "STH": "SOUTHLAKE REGIONAL",
+            "STH": "SOUTHLAKE HOSPITAL",
             "TBH": "THUNDER BAY REGIONAL HEALTH SCIENCES CENTRE",
             "TCS": "CIVIC SITE",
             "TDH": "TIMMINS AND DISTRICT HOSPITAL",
@@ -1925,6 +1964,7 @@ License: MIT
                     location_at_randomization TEXT,
                     health_card TEXT,
                     health_card_province TEXT,
+                    birth_date TEXT,
                     dialysis_start_date TEXT,
                     notification_date TEXT,
                     opt_out_status TEXT DEFAULT 'pending',
@@ -1938,6 +1978,7 @@ License: MIT
                     dialysis_duration_confirmed INTEGER DEFAULT 0,
                     study_id TEXT,
                     locked_at TEXT,
+                    diabetes_known INTEGER DEFAULT 0,
                     incl_age INTEGER DEFAULT 0,
                     incl_dialysis_90d INTEGER DEFAULT 0,
                     incl_incentre_hd INTEGER DEFAULT 0,
@@ -1994,6 +2035,13 @@ License: MIT
                 }
             }
             try {
+                db.run(`ALTER TABLE patient_assessments ADD COLUMN birth_date TEXT`);
+            } catch (error) {
+                if (!/duplicate column/i.test((error && error.message) || '')) {
+                    console.warn('Unable to add birth_date column', error);
+                }
+            }
+            try {
                 db.run(`ALTER TABLE patient_assessments ADD COLUMN dialysis_duration_confirmed INTEGER DEFAULT 0`);
             } catch (error) {
                 if (!/duplicate column/i.test((error && error.message) || '')) {
@@ -2033,6 +2081,13 @@ License: MIT
             } catch (error) {
                 if (!/duplicate column/i.test((error && error.message) || '')) {
                     console.warn('Unable to add locked_at column', error);
+                }
+            }
+            try {
+                db.run(`ALTER TABLE patient_assessments ADD COLUMN diabetes_known INTEGER DEFAULT 0`);
+            } catch (error) {
+                if (!/duplicate column/i.test((error && error.message) || '')) {
+                    console.warn('Unable to add diabetes_known column', error);
                 }
             }
             try {
@@ -2249,6 +2304,7 @@ License: MIT
             patient.study_id = normalizeStudyIdValue(row.study_id);
             patient.locked_at = row.locked_at || '';
             patient.locked_at = row.locked_at || '';
+            patient.diabetes_known = Number(row.diabetes_known) ? 1 : 0;
             patient.location = patient.location || '';
             patient.location_at_notification = patient.location_at_notification || '';
             patient.location_at_randomization = patient.location_at_randomization || '';
@@ -2256,6 +2312,15 @@ License: MIT
             patient.did_not_opt_out = optStatus === OPT_OUT_STATUS.DID_NOT ? 1 : 0;
             patient.dialysis_duration_confirmed = Number(patient.dialysis_duration_confirmed) ? 1 : 0;
             patient.no_exclusions_confirmed = Number(row.no_exclusions_confirmed) ? 1 : 0;
+            patient.birth_date = normalizeISODateString(row.birth_date || '');
+            const parsedAge = (patient.age === '' || patient.age === null || patient.age === undefined)
+                ? NaN
+                : Number(patient.age);
+            patient.age = Number.isFinite(parsedAge) ? parsedAge : null;
+            if (!patient.age && patient.birth_date) {
+                const parsedBirth = parseISODate(patient.birth_date);
+                patient.age = calculateAgeFromDate(parsedBirth);
+            }
             patient.randomization_date = normalizeISODateString(patient.randomization_date || '');
             patient.notification_date = normalizeISODateString(patient.notification_date || '');
             patient.dialysis_start_date = normalizeISODateString(patient.dialysis_start_date || '');
@@ -2264,16 +2329,24 @@ License: MIT
             }
             patient._index = index;
             patient.health_card = patient.health_card || '';
+            const provinceForHcn = patient.health_card_province || '';
             const locationInfo = getMostRecentLocationInfo(patient);
             patient.mostRecentLocationValue = locationInfo.value;
             patient.mostRecentLocationSource = locationInfo.source;
             patient.mostRecentLocationDisplay = formatLocationDisplay(locationInfo.value);
             patient.first_ready_date = computeFirstEligibleDate(patient);
             patient.first_ready_iso = patient.first_ready_date ? formatISODate(patient.first_ready_date) : '';
-            patient.inclusionMet = INCLUSION_KEYS.every(key => patient[key] === 1);
             patient.noExclusions = !legacyDeclined && EXCLUSION_KEYS.every(key => patient[key] === 0);
             patient.hasAnyExclusion = !patient.noExclusions;
+            const needsDiabetesInfo = Number.isFinite(patient.age) && patient.age >= 45 && patient.age < 60;
+            if (needsDiabetesInfo && patient.incl_age === 1) {
+                patient.diabetes_known = 1;
+            }
             patient.hasHealthCard = patient.health_card.trim().length > 0;
+            const hcnFormatError = validateHealthCardFormat(patient.health_card.trim(), provinceForHcn || '');
+            patient.incl_health_card = patient.hasHealthCard && !hcnFormatError ? 1 : 0;
+            patient.health_card_province = provinceForHcn || '';
+            patient.inclusionMet = INCLUSION_KEYS.every(key => patient[key] === 1);
             patient.bucketFlags = computeBucketFlags(patient);
             patient.primaryBucket = patient.bucketFlags.primary;
             patient.derivedStatus = patient.primaryBucket;
@@ -2304,6 +2377,125 @@ License: MIT
             'pending'
         ];
 
+        function computeMissingEligibilityReasons(patient = {}) {
+            const reasons = [];
+            const hasMrn = Boolean((patient.mrn || '').trim()) && !isTemporaryMrn(patient.mrn);
+            const hasHealthCard = Boolean((patient.health_card || '').trim());
+            const hcnProvince = (patient.health_card_province || '').trim();
+            const locationValue = getCanonicalLocationValue(patient.location_at_randomization || patient.location || '');
+            const hasDialysisUnit = Boolean(normalizeLocationValue(locationValue));
+            const hasDialysisHistory = Boolean(patient.dialysis_start_date) || Boolean(patient.dialysis_duration_confirmed);
+            const ageValue = typeof patient.age === 'number' ? patient.age : null;
+            const needsDiabetesInfo = ageValue !== null && ageValue >= 45 && ageValue < 60;
+            const diabetesKnown = Number(patient.diabetes_known) ? 1 : 0;
+            const missingDiabetes = needsDiabetesInfo && !diabetesKnown;
+
+            if (!hasMrn) reasons.push('MRN missing');
+            if (!hasHealthCard) reasons.push('Health card number missing');
+            if (hasHealthCard && !hcnProvince) reasons.push('HCN province/territory missing');
+            const hcnFormatError = hasHealthCard ? validateHealthCardFormat(patient.health_card, hcnProvince || '') : '';
+            if (hcnFormatError) reasons.push(hcnFormatError);
+            if (!hasDialysisUnit) reasons.push('Dialysis unit at randomization missing');
+            if (!hasDialysisHistory) reasons.push('Dialysis start date or ≥90-day confirmation missing');
+            if (missingDiabetes) reasons.push('Diabetes status needed for age 45-59');
+            return reasons;
+        }
+
+        function buildProvinceOptions(selected = '') {
+            return Object.entries(PROVINCE_LABELS).map(([code, label]) => {
+                const isSelected = code === selected ? 'selected' : '';
+                return `<option value="${code}" ${isSelected}>${label}</option>`;
+            }).join('');
+        }
+
+        function mod10Check(value) {
+            let sum = 0;
+            const parity = value.length % 2;
+            for (let i = 0; i < value.length; i++) {
+                let digit = parseInt(value.charAt(i), 10);
+                if (Number.isNaN(digit)) return false;
+                if (i % 2 === parity) {
+                    digit *= 2;
+                    if (digit > 9) {
+                        digit -= 9;
+                    }
+                }
+                sum += digit;
+            }
+            return (sum % 10) === 0;
+        }
+
+        function validateHealthCardFormat(hcn, province) {
+            if (!hcn) return '';
+            if (!province) return 'Select province/territory to validate HCN.';
+            const len = hcn.length;
+            const isNumeric = /^[0-9]+$/.test(hcn);
+            switch (province) {
+                case 'AB':
+                case 'NB':
+                case 'SK':
+                case 'YT':
+                    if (!(isNumeric && len === 9)) {
+                        return `${PROVINCE_LABELS[province]} HCN must be 9 digits.`;
+                    }
+                    break;
+                case 'BC':
+                case 'NS':
+                    if (!(isNumeric && len === 10)) {
+                        return `${PROVINCE_LABELS[province]} HCN must be 10 digits.`;
+                    }
+                    break;
+                case 'ON':
+                    if (!(isNumeric && len === 10)) {
+                        return 'Ontario HCN must be 10 digits.';
+                    }
+                    if (!mod10Check(hcn)) {
+                        return 'Ontario HCN failed validity check.';
+                    }
+                    break;
+                case 'MB':
+                    if (!(isNumeric && (len === 6 || len === 9))) {
+                        return 'Manitoba HCN must be 6 or 9 digits.';
+                    }
+                    break;
+                case 'NL':
+                    if (!(isNumeric && len === 12)) {
+                        return 'Newfoundland and Labrador HCN must be 12 digits.';
+                    }
+                    break;
+                case 'NT':
+                    if (!(/^[NDMT][0-9]{7}$/.test(hcn))) {
+                        return 'Northwest Territories HCN must start with N, D, M, or T followed by 7 digits (8 characters total).';
+                    }
+                    break;
+                case 'NU':
+                    if (!(isNumeric && len === 9)) {
+                        return 'Nunavut HCN must be 9 digits.';
+                    }
+                    break;
+                case 'PE':
+                    if (!(isNumeric && len === 8)) {
+                        return 'Prince Edward Island HCN must be 8 digits.';
+                    }
+                    break;
+                case 'QC':
+                    if (!(/^[A-Z]{4}[0-9]{8}$/.test(hcn))) {
+                        return 'Quebec HCN must be 12 characters: 4 letters followed by 8 digits.';
+                    }
+                    break;
+                default:
+                    return 'Select a valid province/territory to validate HCN.';
+            }
+            return '';
+        }
+
+        function isHealthCardValid(patient) {
+            if (!patient) return false;
+            const province = patient.health_card_province || inferProvinceFromHealthCard(patient.health_card || '');
+            const error = validateHealthCardFormat(patient.health_card || '', province || '');
+            return !error;
+        }
+
         function computeBucketFlags(patient = {}) {
             const flags = {
                 missing: false,
@@ -2323,10 +2515,16 @@ License: MIT
             }
             const hasMrn = Boolean((patient.mrn || '').trim()) && !isTemporaryMrn(patient.mrn);
             const hasHealthCard = Boolean((patient.health_card || '').trim());
+            const hcnProvince = (patient.health_card_province || '').trim();
             const locationValue = getCanonicalLocationValue(patient.location_at_randomization || patient.location || '');
             const hasDialysisUnit = Boolean(normalizeLocationValue(locationValue));
             const hasDialysisHistory = Boolean(patient.dialysis_start_date) || Boolean(patient.dialysis_duration_confirmed);
-            flags.missing = !hasMrn || !hasHealthCard || !hasDialysisUnit || !hasDialysisHistory;
+            const ageValue = typeof patient.age === 'number' ? patient.age : null;
+            const needsDiabetesInfo = ageValue !== null && ageValue >= 45 && ageValue < 60;
+            const diabetesKnown = Number(patient.diabetes_known) ? 1 : 0;
+            const missingDiabetes = needsDiabetesInfo && !diabetesKnown;
+            const hcnFormatError = hasHealthCard ? validateHealthCardFormat(patient.health_card, hcnProvince || '') : '';
+            flags.missing = !hasMrn || !hasHealthCard || !hcnProvince || !!hcnFormatError || !hasDialysisUnit || !hasDialysisHistory || missingDiabetes;
 
             const isOptedOutStatus = patient.opt_out_status === OPT_OUT_STATUS.OPTED_OUT;
             const hasOptOutDate = Boolean(patient.opt_out_date);
@@ -2504,6 +2702,10 @@ License: MIT
                     ${patient.dialysis_duration_confirmed ? '<div class="status-subtext" style="margin-top:2px;">Use when exact start date is unavailable.</div>' : ''}
                 </div>
             `;
+            const missingReasons = computeMissingEligibilityReasons(patient);
+            const missingMessage = missingReasons.length
+                ? `<div class="status-subtext" style="color:#ffcc66; font-weight:700; margin-top:10px;">Missing: ${missingReasons.join('; ')}</div>`
+                : '';
             let eligibleMessage;
             if (patient.first_ready_iso) {
                 eligibleMessage = `<div id="first-eligible-${patient._index}" class="text-sm font-medium" style="color:var(--brand);">${firstEligibleDisplay}</div>`;
@@ -2551,6 +2753,7 @@ License: MIT
             const lockIndicator = patient.locked_at ? `<div class="status-subtext" style="color:var(--muted);">Locked ${formatDisplayDateTime(patient.locked_at)}</div>` : '';
             const lockHelper = '<div class="status-subtext">Lock prevents editing fields above; notes remain editable.</div>';
             const lockDisplay = lockIndicator || lockHelper;
+            const provinceOptions = buildProvinceOptions(patient.health_card_province || '');
 
             row.innerHTML = `
                 <td>
@@ -2576,9 +2779,12 @@ License: MIT
                                 </div>
                             </div>
                             <div class="patient-field">
-                                <label>HCN <span style="text-transform:none;">(${patient.health_card_province || '?'})</span></label>
-                                <div class="input-row">
-                                    <input type="text" class="table-input" placeholder="Enter health card" value="${escapeHtml(patient.health_card || '')}" ${isLocked ? 'disabled' : ''} onchange="updatePatientHcn(${patient._index}, this.value)">
+                                <label>HCN and corresponding province/territory</label>
+                                <div class="input-row" style="gap:8px; align-items:flex-end;">
+                                    <input type="text" class="table-input" style="max-width:180px;" placeholder="Enter health card number" value="${escapeHtml(patient.health_card || '')}" ${isLocked ? 'disabled' : ''} onchange="updatePatientHcn(${patient._index}, this.value)">
+                                    <select class="table-input" style="flex:1; min-width:140px; max-width:160px;" aria-label="Corresponding province or territory" ${isLocked ? 'disabled' : ''} onchange="updateHealthCardProvince(${patient._index}, this.value)">
+                                        ${provinceOptions}
+                                    </select>
                                     <button class="copy-btn" ${patient.health_card ? '' : 'disabled'} onclick="copyPatientField(${patient._index}, 'health_card')">Copy HCN</button>
                                 </div>
                             </div>
@@ -2624,6 +2830,7 @@ License: MIT
                                 ${EXCLUSION_KEYS.map(key => renderCheckbox(patient, key, isLocked)).join('')}
                             </div>
                         </div>
+                        ${missingMessage}
                     </div>
                 </td>
                 <td>
@@ -2800,10 +3007,10 @@ License: MIT
 
         function labelForKey(key) {
             const labels = {
-                incl_age: 'Age ≥60 or 45-59 with diabetes',
+                incl_age: 'Age ≥60 or 45-59 with history of diabetes',
                 incl_dialysis_90d: '≥90 days of dialysis at randomization',
                 incl_incentre_hd: 'Receiving in-centre HD',
-                incl_health_card: 'Valid provincial/territorial health card',
+                incl_health_card: 'Valid provincial/territorial health card number',
                 excl_hd_less3: 'Prescribed HD less than 3 times per week',
                 excl_intolerance: 'Known/anticipated intolerance to Nipro Elisio HX',
                 excl_hdf_planned: 'Planned hemodiafiltration',
@@ -2865,6 +3072,30 @@ License: MIT
             if (!patient) return;
             if (!ensureEditablePatient(patient)) return;
             patient[key] = checked ? 1 : 0;
+            if (key === 'incl_health_card') {
+                if (!patient.health_card || !patient.health_card.trim()) {
+                    patient[key] = 0;
+                    showRecordWarning('Enter a health card number before marking it as valid.', 'error');
+                    persistPatient(patient, false);
+                    refreshPatientRow(patient);
+                    return;
+                }
+                const province = patient.health_card_province || inferProvinceFromHealthCard(patient.health_card || '');
+                const formatError = validateHealthCardFormat(patient.health_card, province || '');
+                if (formatError) {
+                    patient[key] = 0;
+                    showRecordWarning(formatError, 'error');
+                    persistPatient(patient, false);
+                    refreshPatientRow(patient);
+                    return;
+                }
+            }
+            if (key === 'incl_age') {
+                const ageValue = typeof patient.age === 'number' ? patient.age : Number(patient.age);
+                if (Number.isFinite(ageValue) && ageValue >= 45 && ageValue < 60) {
+                    patient.diabetes_known = 1;
+                }
+            }
             if (EXCLUSION_KEYS.includes(key) && checked) {
                 patient.no_exclusions_confirmed = 0;
             }
@@ -3099,6 +3330,7 @@ License: MIT
             if (!ensureEditablePatient(patient)) return;
             const trimmed = (value || '').trim();
             const normalized = normalizeHealthCardValue(trimmed);
+            const provinceCode = patient.health_card_province || '';
             if (db && normalized) {
                 const check = db.prepare('SELECT mrn, health_card FROM patient_assessments WHERE mrn != ?');
                 let conflictMrn = '';
@@ -3121,8 +3353,44 @@ License: MIT
                 }
             }
             patient.health_card = normalized || '';
-            patient.health_card_province = inferProvinceFromHealthCard(normalized || '');
+            const inferredProvince = provinceCode || inferProvinceFromHealthCard(normalized || '');
+            if (inferredProvince) {
+                patient.health_card_province = inferredProvince;
+            }
             patient.hasHealthCard = patient.health_card.length > 0;
+            const formatError = validateHealthCardFormat(patient.health_card, patient.health_card_province || '');
+            patient.incl_health_card = patient.hasHealthCard && !formatError ? 1 : 0;
+            persistPatient(patient, false);
+            refreshPatientRow(patient);
+            if (formatError) {
+                showRecordWarning(formatError, 'error');
+            } else {
+                showRecordWarning('');
+            }
+        }
+
+        function updateHealthCardProvince(index, value) {
+            const patient = patientsData[index];
+            if (!patient) return;
+            if (!ensureEditablePatient(patient)) return;
+            const code = (value || '').trim().toUpperCase();
+            if (code && !PROVINCE_LABELS[code]) {
+                showRecordWarning('Select a valid province/territory code.', 'error');
+                renderPatientTable();
+                return;
+            }
+            patient.health_card_province = code;
+            if (patient.health_card) {
+                const formatError = validateHealthCardFormat(patient.health_card, code);
+                if (formatError) {
+                    patient.incl_health_card = 0;
+                    showRecordWarning(formatError, 'error');
+                    persistPatient(patient, false);
+                    refreshPatientRow(patient);
+                    return;
+                }
+            }
+            patient.incl_health_card = patient.health_card && !validateHealthCardFormat(patient.health_card, code) ? 1 : 0;
             persistPatient(patient, false);
             refreshPatientRow(patient);
             showRecordWarning('');
@@ -3228,6 +3496,15 @@ License: MIT
                     showRecordWarning('Enter dialysis start date as YYYY-MM-DD (or MM/DD/YYYY).', 'error');
                     renderPatientTable();
                     return;
+                }
+                if (patient.birth_date) {
+                    const birth = parseISODate(patient.birth_date);
+                    const start = parseISODate(normalized);
+                    if (birth && start && start.getTime() <= birth.getTime()) {
+                        showRecordWarning('Dialysis start date must be after birth date.', 'error');
+                        renderPatientTable();
+                        return;
+                    }
                 }
                 patient.dialysis_start_date = normalized;
                 patient.dialysis_duration_confirmed = 0;
@@ -3377,16 +3654,16 @@ License: MIT
         function persistPatient(patient, refresh = true) {
             if (!db) return;
             try {
-                const baseColumns = 22;
+                const baseColumns = 24;
                 const basePlaceholders = Array(baseColumns).fill('?').join(', ');
                 const criteriaPlaceholders = Array(INCLUSION_KEYS.length + EXCLUSION_KEYS.length).fill('?').join(', ');
                 const stmt = db.prepare(`
                     INSERT OR REPLACE INTO patient_assessments (
                         mrn, patient_name, age, location, location_at_notification, location_at_randomization,
-                        health_card, health_card_province,
+                        health_card, health_card_province, birth_date,
                         dialysis_start_date, notification_date, opt_out_status, opt_out_date, randomization_date, allocation,
                         notes, enrollment_status, therapy_prescribed,
-                        did_not_opt_out, dialysis_duration_confirmed, study_id, locked_at, no_exclusions_confirmed,
+                        did_not_opt_out, dialysis_duration_confirmed, study_id, locked_at, diabetes_known, no_exclusions_confirmed,
                         ${INCLUSION_KEYS.concat(EXCLUSION_KEYS).join(', ')},
                         updated_at
                     ) VALUES (
@@ -3402,6 +3679,7 @@ License: MIT
                     patient.location_at_randomization || '',
                     patient.health_card || '',
                     patient.health_card_province || '',
+                    patient.birth_date || '',
                     patient.dialysis_start_date || '',
                     patient.notification_date || '',
                     patient.opt_out_status || OPT_OUT_STATUS.PENDING,
@@ -3415,6 +3693,7 @@ License: MIT
                     patient.dialysis_duration_confirmed || 0,
                     patient.study_id || '',
                     patient.locked_at || '',
+                    patient.diabetes_known || 0,
                     patient.no_exclusions_confirmed || 0,
                     ...INCLUSION_KEYS.map(key => patient[key] || 0),
                     ...EXCLUSION_KEYS.map(key => patient[key] || 0)
@@ -3455,6 +3734,7 @@ License: MIT
                 location_at_randomization: '',
                 health_card: '',
                 health_card_province: '',
+                birth_date: '',
                 dialysis_start_date: '',
                 notification_date: '',
                 randomization_date: '',
@@ -3468,6 +3748,7 @@ License: MIT
                 did_not_opt_out: 0,
                 dialysis_duration_confirmed: 0,
                 locked_at: '',
+                diabetes_known: 0,
                 no_exclusions_confirmed: 0
             };
             INCLUSION_KEYS.concat(EXCLUSION_KEYS).forEach(key => {
@@ -3505,7 +3786,7 @@ License: MIT
             const tempMrn = generateTemporaryMrn();
             const patient = createBlankPatientRecord(tempMrn);
             persistPatient(patient);
-            showRecordWarning('Blank patient row added (listed under "Missing Data" until required fields are completed). Enter the patient name, MRN, health card, and dialysis details directly in the table.', 'status');
+            showRecordWarning('Blank patient row added (listed under "Missing Data" until required fields are completed). Enter the patient name, MRN, health card number, and dialysis details directly in the table.', 'status');
             showStatus('Blank patient row added', 'success');
             focusPatientRow(tempMrn);
         }
@@ -3562,13 +3843,13 @@ License: MIT
         const stmt = db.prepare(`
                 INSERT OR REPLACE INTO patient_assessments (
                     mrn, patient_name, age, location, location_at_notification, location_at_randomization,
-                    health_card, health_card_province,
+                    health_card, health_card_province, birth_date,
                     dialysis_start_date, notification_date, opt_out_status, opt_out_date, randomization_date, allocation,
-                study_id, notes, enrollment_status, therapy_prescribed, did_not_opt_out, dialysis_duration_confirmed, locked_at, no_exclusions_confirmed,
+                    study_id, notes, enrollment_status, therapy_prescribed, did_not_opt_out, dialysis_duration_confirmed, locked_at, diabetes_known, no_exclusions_confirmed,
                     ${INCLUSION_KEYS.concat(EXCLUSION_KEYS).join(', ')},
                     created_at, updated_at
                 ) VALUES (
-                ${Array(22).fill('?').join(', ')},
+                ${Array(24).fill('?').join(', ')},
                     ${Array(INCLUSION_KEYS.length + EXCLUSION_KEYS.length).fill('?').join(', ')},
                     datetime('now'), datetime('now')
                 )
@@ -3583,6 +3864,7 @@ License: MIT
                 const locationName = LOCATION_CODES[locationCode] || locationCode || '';
                 const locationDisplay = locationCode && locationName ? `${locationCode}: ${locationName}` : locationName || locationCode;
                 const healthCard = getField(original, [LAST_HCN_HEADER, 'Latest Known HCN', HCN_HEADER]) || '';
+                const healthCardProvince = getField(original, [HCN_PROVINCE_HEADER]) || '';
                 const normalizedHealthCard = normalizeHealthCardValue(healthCard);
                 let duplicateReason = '';
                 if (seenMrns.has(mrn)) {
@@ -3594,7 +3876,7 @@ License: MIT
                     duplicates.push({ mrn, healthCard, reason: duplicateReason });
                     return;
                 }
-                const province = inferProvinceFromHealthCard(healthCard);
+                const province = healthCardProvince;
                 let modalityCode = getField(original, [MODALITY_HEADER, 'Current Modality', 'Latest Modality']) || '';
                 if (!VALID_MODALITY_CODES.includes(modalityCode) && DISPLAY_TO_PREFERRED_CODE[modalityCode]) {
                     modalityCode = DISPLAY_TO_PREFERRED_CODE[modalityCode];
@@ -3603,11 +3885,21 @@ License: MIT
                 const birthDate = parseLegacyDate(getField(original, [BIRTH_DATE_HEADER]));
                 const age = birthDate ? calculateAgeFromDate(birthDate) : null;
                 const dialysisStartIso = normalizeLegacyDate(getField(original, [START_DATE_HEADER]));
-                const hasDiabetes = parseBoolean(getField(original, [DIAB_TYPE1_HEADER])) ||
-                                    parseBoolean(getField(original, [DIAB_TYPE2_HEADER]));
+                let startIsoValid = dialysisStartIso;
+                if (birthDate && dialysisStartIso) {
+                    const startDate = parseISODate(dialysisStartIso);
+                    if (startDate && startDate.getTime() <= birthDate.getTime()) {
+                        startIsoValid = '';
+                    }
+                }
+                const diabetesType1 = getField(original, [DIAB_TYPE1_HEADER]);
+                const diabetesType2 = getField(original, [DIAB_TYPE2_HEADER]);
+                const hasDiabetesData = Boolean(diabetesType1 || diabetesType2);
+                const hasDiabetes = parseBoolean(diabetesType1) || parseBoolean(diabetesType2);
+                const diabetesKnown = hasDiabetesData ? 1 : 0;
                 const inclusionValues = [
                     computeInclusionAge(age, hasDiabetes),
-                    dialysisStartIso ? meetsDialysisDays(dialysisStartIso) : 0,
+                    startIsoValid ? meetsDialysisDays(startIsoValid) : 0,
                     hasValidModality ? 1 : 0,
                     healthCard ? 1 : 0
                 ];
@@ -3621,7 +3913,8 @@ License: MIT
                     '',                                // location_at_randomization
                     healthCard,                        // health_card
                     province,                          // health_card_province
-                    dialysisStartIso || '',            // dialysis_start_date
+                    birthDate ? formatISODate(birthDate) : '', // birth_date
+                    startIsoValid || '',               // dialysis_start_date
                     '',                                // notification_date
                     OPT_OUT_STATUS.PENDING,            // opt_out_status
                     '',                                // opt_out_date
@@ -3633,8 +3926,9 @@ License: MIT
                     0,                                 // therapy_prescribed
                     0,                                 // did_not_opt_out
                     0,                                 // dialysis_duration_confirmed
-                '',                                // locked_at
-                0                                  // no_exclusions_confirmed
+                    '',                                // locked_at
+                    diabetesKnown,                     // diabetes_known
+                    0                                  // no_exclusions_confirmed
                 ].concat(inclusionValues, exclusionValues);
                 try {
                     stmt.run(values);
@@ -3746,13 +4040,7 @@ License: MIT
         }
 
         function inferProvinceFromHealthCard(value) {
-            const cleaned = normalizeHealthCardValue(value);
-            if (!cleaned) return '';
-            if (/^\d{10}$/.test(cleaned)) return 'ON';
-            if (/^\d{9}$/.test(cleaned)) return 'AB';
-            if (/^[A-Z]{4}\d{8}$/.test(cleaned)) return 'QC';
-            if (/^\d{8}$/.test(cleaned)) return 'PE';
-            if (/^\d{12}$/.test(cleaned)) return 'NL';
+            // Disabled: do not infer; require explicit entry/import
             return '';
         }
 
@@ -4405,6 +4693,7 @@ License: MIT
         window.updateInlineNotification = updateInlineNotification;
         window.updateInlineNotes = updateInlineNotes;
         window.updateInlineRandomizationDate = updateInlineRandomizationDate;
+        window.updateHealthCardProvince = updateHealthCardProvince;
         window.updateDialysisStartDate = updateDialysisStartDate;
         window.toggleTherapyPrescribed = toggleTherapyPrescribed;
         window.updateAllocation = updateAllocation;
