@@ -1174,6 +1174,15 @@ License: MIT
         .expand-indicator.expanded svg {
             transform: rotate(90deg);
         }
+        .expand-indicator.right {
+            margin-left: auto;
+        }
+        .expand-indicator.right svg {
+            transform: rotate(180deg);
+        }
+        .expand-indicator.right.expanded svg {
+            transform: rotate(90deg);
+        }
         .patient-collapsed-summary {
             display: flex;
             align-items: center;
@@ -1201,12 +1210,21 @@ License: MIT
             flex-shrink: 0;
         }
         .patient-collapsed-summary .compact-age {
-            width: 35px;
+            width: 45px;
             flex-shrink: 0;
         }
         .patient-collapsed-summary .compact-age input {
-            max-width: 35px;
+            max-width: 45px;
+            min-width: 0;
+            width: 45px;
             box-sizing: border-box;
+            appearance: textfield;
+            -moz-appearance: textfield;
+        }
+        .patient-collapsed-summary .compact-age input::-webkit-inner-spin-button,
+        .patient-collapsed-summary .compact-age input::-webkit-outer-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
         }
         .patient-collapsed-summary .compact-mrn {
             width: 150px;
@@ -2570,6 +2588,7 @@ License: MIT
             const hcnFormatError = validateHealthCardFormat(patient.health_card.trim(), provinceForHcn || '');
             patient.incl_health_card = patient.hasHealthCard && !hcnFormatError ? 1 : 0;
             patient.health_card_province = provinceForHcn || '';
+            recalcDialysisInclusion(patient);
             patient.inclusionMet = INCLUSION_KEYS.every(key => patient[key] === 1);
             patient.bucketFlags = computeBucketFlags(patient);
             patient.primaryBucket = patient.bucketFlags.primary;
@@ -2952,8 +2971,6 @@ License: MIT
             const dialysisUnitCanonical = getDialysisUnitCanonical(patient);
             const dialysisUnitOptions = buildLocationOptionsHtml(dialysisUnitCanonical);
             const provinceOptions = buildProvinceOptions(patient.health_card_province || '');
-            const dialysisStartDisplay = patient.dialysis_start_date || '';
-            const dialysisStartFriendly = formatFriendlyDate(patient.dialysis_start_date);
             const statusBadge = getStatusBadgeHtml(patient);
             const expandedClass = isExpanded ? 'expanded' : '';
 
@@ -2999,11 +3016,12 @@ License: MIT
                                 ${dialysisUnitOptions}
                             </select>
                         </div>
-                        <div class="compact-field compact-start">
-                            <label>Dialysis Start</label>
-                            <input type="date" class="table-input" value="${dialysisStartDisplay}" ${isLocked ? 'disabled' : ''} onchange="updateDialysisStartDate(${patient._index}, this.value)">
-                        </div>
                         ${statusBadge}
+                        <div class="expand-indicator right ${expandedClass}" onclick="togglePatientRow(${patient._index})">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="9 18 15 12 9 6"></polyline>
+                            </svg>
+                        </div>
                     </div>
                 </td>
             `;
@@ -3118,16 +3136,26 @@ License: MIT
                     <div class="patient-expanded-grid">
                         <div>
                             <div class="checkbox-group">
-                                <label class="master-check-label">
-                                    <input type="checkbox" ${patient.inclusionMet ? 'checked' : ''} ${isLocked ? 'disabled' : ''} onchange="toggleMasterInclusion(${patient._index}, this)">
-                                    <span class="${inclusionLabelClass}">All inclusion criteria met</span>
-                                </label>
-                                <div class="inline-criteria-list">
-                                    ${INCLUSION_KEYS.map(key => renderCheckbox(patient, key, isLocked)).join('')}
+                            <label class="master-check-label">
+                                <input type="checkbox" ${patient.inclusionMet ? 'checked' : ''} ${isLocked ? 'disabled' : ''} onchange="toggleMasterInclusion(${patient._index}, this)">
+                                <span class="${inclusionLabelClass}">All inclusion criteria met</span>
+                            </label>
+                            <div class="inline-criteria-list">
+                                ${INCLUSION_KEYS.map(key => renderCheckbox(patient, key, isLocked)).join('')}
+                            </div>
+                            <div class="date-field" style="margin-top: 10px;">
+                                <div class="date-field-header">
+                                    <label class="patient-sub">Dialysis start date:</label>
+                                    <span class="date-display ${dialysisStartFriendly ? 'has-value' : ''}">${dialysisStartFriendly || 'Not set'}</span>
+                                </div>
+                                <div class="date-input-row">
+                                    <input type="date" class="table-input inline-date" value="${dialysisStartDisplay}" ${isLocked ? 'disabled' : ''} onchange="updateDialysisStartDate(${patient._index}, this.value)">
                                 </div>
                             </div>
+                            ${dialysisConfirmControls}
                         </div>
-                        <div>
+                    </div>
+                    <div>
                             <div class="checkbox-group">
                                 <label class="master-check-label">
                                     <input type="checkbox" ${patient.no_exclusions_confirmed ? 'checked' : ''} ${isLocked ? 'disabled' : ''} onchange="toggleMasterExclusion(${patient._index}, this)">
@@ -3808,6 +3836,7 @@ License: MIT
             const raw = (value || '').trim();
             if (!raw) {
                 patient.dialysis_start_date = '';
+                patient.dialysis_duration_confirmed = 0;
             } else {
                 const normalized = normalizeISODateString(raw);
                 if (!normalized) {
@@ -3827,6 +3856,7 @@ License: MIT
                 patient.dialysis_start_date = normalized;
                 patient.dialysis_duration_confirmed = 0;
             }
+            recalcDialysisInclusion(patient);
             persistPatient(patient, false);
             refreshPatientRow(patient);
         }
@@ -3837,6 +3867,7 @@ License: MIT
             if (!ensureEditablePatient(patient)) return;
             if (patient.dialysis_start_date) return;
             patient.dialysis_duration_confirmed = flag ? 1 : 0;
+            recalcDialysisInclusion(patient);
             persistPatient(patient, false);
             refreshPatientRow(patient);
         }
@@ -4605,6 +4636,13 @@ License: MIT
             if (Object.values(OPT_OUT_STATUS).includes(value)) return value;
             if (legacyDidNotOptOut) return OPT_OUT_STATUS.DID_NOT;
             return OPT_OUT_STATUS.PENDING;
+        }
+
+        function recalcDialysisInclusion(patient) {
+            if (!patient) return;
+            patient.incl_dialysis_90d = patient.dialysis_duration_confirmed
+                ? 1
+                : meetsDialysisDays(patient.dialysis_start_date);
         }
 
         function meetsDialysisDays(dialysisStartIso) {
