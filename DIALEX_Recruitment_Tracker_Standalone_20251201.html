@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DIALEX Eligibility Assessment Tracker</title>
+    <title>DIALEX Recruitment Tracker</title>
     <script>
 
 // We are modularizing this manually because the current modularize setting in Emscripten has some issues:
@@ -1370,6 +1370,11 @@ License: MIT
             color: #2196f3;
             border: 1px solid #2196f344;
         }
+        .status-badge.status-final-eligibility {
+            background: #3f51b522;
+            color: #3f51b5;
+            border: 1px solid #3f51b544;
+        }
         .status-badge.status-ready-randomize {
             background: #9c27b022;
             color: #9c27b0;
@@ -1492,7 +1497,7 @@ License: MIT
                     <li>Import the Registration Data Extract CSV for automated pre-screening; this is the preferred method because it is the fastest way to add many patients at once and imports health card numbers directly to mimimize the chance for errors. Valid health card numbers are required to follow patient outcomes in this trial. If needed, you can also add individual patients manually by clicking "Add individual patient".</li>
                     <li>For each patient, assess eligibility using the eligibility criteria. You will find pre-populated answers. The pre-populated answers are not guaranteed to be correct as they rely on data maintained by your program for the Ontario Renal Reporting System. Many of the exclusion criteria require knowledge of the patient beyond this database. To proceed to notification and randomization, a patient must meet all inclusion criteria and none of the exclusion criteria.</li>
                     <li>You must confirm that the patient has met all inclusion criteria and none of the exclusion criteria before proceeding to notification and randomization. The tool requires that you check the "No exclusions" checkbox before proceeding to notification and randomization.</li>
-                    <li>For eligible patients, track notification and opt-out periods before randomization. The tool requires that you enter a notification date before proceeding to randomization.</li>
+                    <li>For eligible patients, track notification and opt-out periods before randomization. Status flow: Deliver notification -&gt; Notified and waiting (notification date entered) -&gt; Assess eligibility for randomization (15 days after notification; pending opt-out stays here) -&gt; Ready to Randomize if opt-out status is "Did not opt out", or Opted Out if opted out.</li>
                     <li>You can enter randomization date and studyID after the patient is randomized. This can be found in REDCap once you complete randomization there.</li>
                     <li>You can lock patient records to prevent accidental changes and unlock them later when needed.</li>
                 </ol>
@@ -1616,9 +1621,10 @@ License: MIT
             <div class="header-controls">
                 <div class="filter-btn"><button id="show-all-btn" class="secondary">Show All</button><div id="count-all" class="filter-count">0</div></div>
                 <div class="filter-btn"><button id="show-missing-btn" class="secondary">Missing Data</button><div id="count-missing" class="filter-count">0</div></div>
-                <div class="filter-btn"><button id="show-pending-btn" class="secondary">Pending Assessment</button><div id="count-pending" class="filter-count">0</div></div>
-                <div class="filter-btn"><button id="show-notify-btn" class="secondary">Ready to Notify</button><div id="count-ready-notify" class="filter-count">0</div></div>
-                <div class="filter-btn"><button id="show-waiting-btn" class="secondary">Notified / Waiting</button><div id="count-waiting" class="filter-count">0</div></div>
+                <div class="filter-btn"><button id="show-pending-btn" class="secondary">Assess eligibility for notification</button><div id="count-pending" class="filter-count">0</div></div>
+                <div class="filter-btn"><button id="show-notify-btn" class="secondary">Deliver notification</button><div id="count-ready-notify" class="filter-count">0</div></div>
+                <div class="filter-btn"><button id="show-waiting-btn" class="secondary">Notified and waiting</button><div id="count-waiting" class="filter-count">0</div></div>
+                <div class="filter-btn"><button id="show-final-btn" class="secondary">Assess eligibility for randomization</button><div id="count-final" class="filter-count">0</div></div>
                 <div class="filter-btn"><button id="show-ready-btn" class="secondary">Ready to Randomize</button><div id="count-ready" class="filter-count">0</div></div>
                 <div class="filter-btn"><button id="show-randomized-np-btn" class="secondary">Randomized (Not Prescribed)</button><div id="count-randomized-np" class="filter-count">0</div></div>
                 <div class="filter-btn"><button id="show-prescribed-btn" class="secondary">Randomized &amp; Prescribed</button><div id="count-prescribed" class="filter-count">0</div></div>
@@ -1734,6 +1740,7 @@ License: MIT
             { key: 'pending', buttonId: 'show-pending-btn', countId: 'count-pending' },
             { key: 'ready_notify', buttonId: 'show-notify-btn', countId: 'count-ready-notify' },
             { key: 'waiting', buttonId: 'show-waiting-btn', countId: 'count-waiting' },
+            { key: 'final_eligibility', buttonId: 'show-final-btn', countId: 'count-final' },
             { key: 'ready_randomize', buttonId: 'show-ready-btn', countId: 'count-ready' },
             { key: 'randomized_np', buttonId: 'show-randomized-np-btn', countId: 'count-randomized-np' },
             { key: 'randomized_rx', buttonId: 'show-prescribed-btn', countId: 'count-prescribed' },
@@ -2087,6 +2094,7 @@ License: MIT
         $('show-pending-btn').addEventListener('click', () => setFilter('pending'));
         $('show-notify-btn').addEventListener('click', () => setFilter('ready_notify'));
         $('show-waiting-btn').addEventListener('click', () => setFilter('waiting'));
+        $('show-final-btn').addEventListener('click', () => setFilter('final_eligibility'));
         $('show-ready-btn').addEventListener('click', () => setFilter('ready_randomize'));
         $('show-randomized-np-btn').addEventListener('click', () => setFilter('randomized_np'));
         $('show-prescribed-btn').addEventListener('click', () => setFilter('randomized_rx'));
@@ -2718,6 +2726,15 @@ License: MIT
             if (needsDiabetesInfo && patient.incl_age === 1) {
                 patient.diabetes_known = 1;
             }
+            if (Number.isFinite(patient.age)) {
+                if (patient.age >= 60) {
+                    patient.incl_age = 1;
+                } else if (patient.age >= 45 && patient.age < 60) {
+                    patient.incl_age = patient.diabetes_known ? 1 : 0;
+                } else {
+                    patient.incl_age = 0;
+                }
+            }
             patient.hasHealthCard = patient.health_card.trim().length > 0;
             const hcnFormatError = validateHealthCardFormat(patient.health_card.trim(), provinceForHcn || '');
             patient.incl_health_card = patient.hasHealthCard && !hcnFormatError ? 1 : 0;
@@ -2736,7 +2753,7 @@ License: MIT
             if (flags.opted_out || flags.ineligible) return 'ineligible-row';
             if (flags.randomized_rx) return 'enrolled-row';
             if (flags.randomized_np || flags.ready_randomize || flags.ready_notify) return 'eligible-row';
-            if (flags.waiting) return 'notified-row';
+            if (flags.waiting || flags.final_eligibility) return 'notified-row';
             if (flags.pending) return 'pending-row';
             if (flags.missing) return 'missing-row';
             return '';
@@ -2749,6 +2766,7 @@ License: MIT
             'randomized_rx',
             'randomized_np',
             'ready_randomize',
+            'final_eligibility',
             'waiting',
             'ready_notify',
             'pending'
@@ -2756,7 +2774,6 @@ License: MIT
 
         function computeMissingEligibilityReasons(patient = {}) {
             const reasons = [];
-            const hasMrn = Boolean((patient.mrn || '').trim()) && !isTemporaryMrn(patient.mrn);
             const hasHealthCard = Boolean((patient.health_card || '').trim());
             const hcnProvince = (patient.health_card_province || '').trim();
             const locationValue = getCanonicalLocationValue(patient.location_at_randomization || patient.location || '');
@@ -2767,7 +2784,6 @@ License: MIT
             const diabetesKnown = Number(patient.diabetes_known) ? 1 : 0;
             const missingDiabetes = needsDiabetesInfo && !diabetesKnown;
 
-            if (!hasMrn) reasons.push('MRN missing');
             if (!hasHealthCard) reasons.push('Health card number missing');
             if (hasHealthCard && !hcnProvince) reasons.push('HCN province/territory missing');
             const hcnFormatError = hasHealthCard ? validateHealthCardFormat(patient.health_card, hcnProvince || '') : '';
@@ -2880,6 +2896,7 @@ License: MIT
                 pending: false,
                 ready_notify: false,
                 waiting: false,
+                final_eligibility: false,
                 ready_randomize: false,
                 randomized_np: false,
                 randomized_rx: false,
@@ -2891,7 +2908,6 @@ License: MIT
             if (!patient) {
                 return flags;
             }
-            const hasMrn = Boolean((patient.mrn || '').trim()) && !isTemporaryMrn(patient.mrn);
             const hasHealthCard = Boolean((patient.health_card || '').trim());
             const hcnProvince = (patient.health_card_province || '').trim();
             const locationValue = getCanonicalLocationValue(patient.location_at_randomization || patient.location || '');
@@ -2902,19 +2918,21 @@ License: MIT
             const diabetesKnown = Number(patient.diabetes_known) ? 1 : 0;
             const missingDiabetes = needsDiabetesInfo && !diabetesKnown;
             const hcnFormatError = hasHealthCard ? validateHealthCardFormat(patient.health_card, hcnProvince || '') : '';
-            flags.missing = !hasMrn || !hasHealthCard || !hcnProvince || !!hcnFormatError || !hasDialysisUnit || !hasDialysisHistory || missingDiabetes;
+            flags.missing = !hasHealthCard || !hcnProvince || !!hcnFormatError || !hasDialysisUnit || !hasDialysisHistory || missingDiabetes;
 
-            const isOptedOutStatus = patient.opt_out_status === OPT_OUT_STATUS.OPTED_OUT;
-            const hasOptOutDate = Boolean(patient.opt_out_date);
-            flags.opted_out = isOptedOutStatus && hasOptOutDate;
+            const optOutStatus = patient.opt_out_status || OPT_OUT_STATUS.PENDING;
+            const isOptedOutStatus = optOutStatus === OPT_OUT_STATUS.OPTED_OUT;
+            flags.opted_out = isOptedOutStatus;
             const hasAnyExclusion = patient.hasAnyExclusion || false;
             flags.ineligible = isOptedOutStatus || hasAnyExclusion || !patient.inclusionMet;
 
             const today = startOfToday();
             const hasNotification = Boolean(patient.notification_date);
+            const notificationDate = parseISODate(patient.notification_date);
+            const optOutEndDate = notificationDate ? addDays(notificationDate, NOTIFICATION_BUFFER_DAYS) : null;
+            const optOutWindowComplete = Boolean(optOutEndDate && optOutEndDate.getTime() <= today.getTime());
             const firstEligibleDate = patient.first_ready_date || null;
             const eligibleWindowStarted = Boolean(firstEligibleDate && firstEligibleDate.getTime() <= today.getTime());
-            const eligibleWindowFuture = Boolean(firstEligibleDate && firstEligibleDate.getTime() > today.getTime());
             const hasRandomization = Boolean(patient.randomization_date);
             const notMissingOrIneligible = !flags.missing && !flags.ineligible;
             const hasConfirmedNoExclusions = Boolean(patient.no_exclusions_confirmed);
@@ -2932,10 +2950,12 @@ License: MIT
                 } else if (!hasRandomization && !flags.opted_out) {
                     if (!meetsEligibility) {
                         flags.pending = true;
-                    } else if (!firstEligibleDate || eligibleWindowFuture) {
+                    } else if (!optOutWindowComplete) {
                         flags.waiting = true;
-                    } else if (eligibleWindowStarted) {
+                    } else if (optOutStatus === OPT_OUT_STATUS.DID_NOT && eligibleWindowStarted) {
                         flags.ready_randomize = true;
+                    } else {
+                        flags.final_eligibility = true;
                     }
                 }
             }
@@ -3042,9 +3062,10 @@ License: MIT
             const primary = flags.primary;
             const statusLabels = {
                 missing: 'Missing',
-                pending: 'Pending',
-                ready_notify: 'Ready to Notify',
-                waiting: 'Waiting',
+                pending: 'Assess eligibility for notification',
+                ready_notify: 'Deliver notification',
+                waiting: 'Notified and waiting',
+                final_eligibility: 'Assess eligibility for randomization',
                 ready_randomize: 'Ready to Randomize',
                 randomized_np: 'Randomized (Not Prescribed)',
                 randomized_rx: 'Randomized (Prescribed)',
@@ -3143,6 +3164,7 @@ License: MIT
             const provinceOptions = buildProvinceOptions(patient.health_card_province || '');
             const statusBadge = getStatusBadgeHtml(patient);
             const expandedClass = isExpanded ? 'expanded' : '';
+            const displayMrn = getDisplayMrnValue(patient.mrn);
 
             row.innerHTML = `
                 <td colspan="4">
@@ -3163,8 +3185,8 @@ License: MIT
                         <div class="compact-field compact-mrn">
                             <label>MRN</label>
                             <div class="input-with-copy">
-                                <input type="text" class="table-input" placeholder="MRN" value="${escapeHtml(patient.mrn || '')}" ${isLocked ? 'disabled' : ''} onchange="updatePatientMrn(${patient._index}, this.value)">
-                                <button class="copy-btn-mini" ${patient.mrn ? '' : 'disabled'} onclick="copyPatientField(${patient._index}, 'mrn')">Copy</button>
+                                <input type="text" class="table-input" placeholder="MRN" value="${escapeHtml(displayMrn)}" ${isLocked ? 'disabled' : ''} onchange="updatePatientMrn(${patient._index}, this.value)">
+                                <button class="copy-btn-mini" ${displayMrn ? '' : 'disabled'} onclick="copyPatientField(${patient._index}, 'mrn')">Copy</button>
                             </div>
                         </div>
                         <div class="compact-field compact-hcn">
@@ -3224,6 +3246,7 @@ License: MIT
             const optOutDateDisplay = patient.opt_out_date || '';
             const optOutFriendly = formatFriendlyDate(patient.opt_out_date);
             const hasEligibleDate = Boolean(patient.first_ready_iso);
+            const eligibleWindowStarted = Boolean(patient.first_ready_date && patient.first_ready_date.getTime() <= startOfToday().getTime());
             const optOutSelectEnabled = hasEligibleDate || optOutStatus !== OPT_OUT_STATUS.PENDING || !!optOutDateDisplay;
             const optOutDisabled = isLocked ? 'disabled' : (optOutSelectEnabled ? '' : 'disabled');
             const optOutHelper = hasEligibleDate ? '' : '<div class="status-subtext">Calculate eligible date to enable opt-out status.</div>';
@@ -3264,14 +3287,18 @@ License: MIT
                 const missingText = missing.length ? missing.join(' and ') : 'required dates';
                 eligibleMessage = `<div class="status-subtext">Set ${missingText}</div>`;
             }
-            const randomizationAllowed = optOutStatus === OPT_OUT_STATUS.DID_NOT && hasEligibleDate;
+            const randomizationAllowed = optOutStatus === OPT_OUT_STATUS.DID_NOT && eligibleWindowStarted;
             const randomizationRowVisible = randomizationAllowed || isRandomized;
             const randomizationRowStyle = randomizationRowVisible ? '' : 'display:none;';
             const randomizationDateDisabled = isLocked ? 'disabled' : (randomizationAllowed ? '' : (isRandomized ? '' : 'disabled'));
             const randomizationCopyDisabled = patient.randomization_date ? '' : 'disabled';
             let randomizationHelper = '';
             if (!randomizationRowVisible) {
-                randomizationHelper = '<div class="status-subtext">Complete eligibility and opt-out steps to enter randomization.</div>';
+                if (optOutStatus === OPT_OUT_STATUS.DID_NOT && hasEligibleDate && !eligibleWindowStarted) {
+                    randomizationHelper = `<div class="status-subtext">Eligible on ${firstEligibleDisplay}. Enter randomization once eligible.</div>`;
+                } else {
+                    randomizationHelper = '<div class="status-subtext">Complete eligibility and opt-out steps to enter randomization.</div>';
+                }
             } else if (randomizationAllowed && !hasStudyId) {
                 randomizationHelper = '<div class="status-subtext">Enter the Study ID before recording randomization date.</div>';
             }
@@ -3345,7 +3372,7 @@ License: MIT
                                 <span class="date-display ${notificationFriendly ? 'has-value' : ''}">${notificationFriendly || 'Not set'}</span>
                             </div>
                             <div class="date-input-row">
-                                <input type="date" class="table-input inline-date" value="${notificationDisplay}" placeholder="Select date" ${isLocked ? 'disabled' : ''} oninput="updateInlineNotification(${patient._index}, this.value)">
+                                <input type="date" class="table-input inline-date" value="${notificationDisplay}" placeholder="Select date" ${isLocked ? 'disabled' : ''} onchange="updateInlineNotification(${patient._index}, this.value)">
                                 ${notifiedCopyButton}
                             </div>
                         </div>
@@ -3367,7 +3394,7 @@ License: MIT
                                     <span class="date-display ${optOutFriendly ? 'has-value' : ''}">${optOutFriendly || 'Not set'}</span>
                                 </div>
                                 <div class="date-input-row">
-                                    <input type="date" class="table-input inline-date" value="${optOutDateDisplay}" placeholder="Select date" ${optOutDateDisabled} oninput="updateOptOutDate(${patient._index}, this.value)">
+                                    <input type="date" class="table-input inline-date" value="${optOutDateDisplay}" placeholder="Select date" ${optOutDateDisabled} onchange="updateOptOutDate(${patient._index}, this.value)">
                                     <button class="copy-btn" ${optOutCopyDisabled} onclick="copyPatientField(${patient._index}, 'opt_out_date')">Copy date</button>
                                 </div>
                             </div>
@@ -3385,7 +3412,7 @@ License: MIT
                                 <span class="date-display ${randomizationFriendly ? 'has-value' : ''}">${randomizationFriendly || 'Not set'}</span>
                             </div>
                             <div class="date-input-row">
-                                <input type="date" class="table-input inline-date" value="${randomizationDisplay}" placeholder="Select date" ${randomizationDateDisabled} oninput="updateInlineRandomizationDate(${patient._index}, this.value)">
+                                <input type="date" class="table-input inline-date" value="${randomizationDisplay}" placeholder="Select date" ${randomizationDateDisabled} onchange="updateInlineRandomizationDate(${patient._index}, this.value)">
                                 <button class="copy-btn" ${randomizationCopyDisabled} onclick="copyPatientField(${patient._index}, 'randomization_date')">Copy date</button>
                             </div>
                         </div>
@@ -3437,6 +3464,7 @@ License: MIT
                 case 'pending': return flags.pending;
                 case 'ready_notify': return flags.ready_notify;
                 case 'waiting': return flags.waiting;
+                case 'final_eligibility': return flags.final_eligibility;
                 case 'ready_randomize': return flags.ready_randomize;
                 case 'randomized_np': return flags.randomized_np;
                 case 'randomized_rx': return flags.randomized_rx;
@@ -3451,7 +3479,7 @@ License: MIT
             if (!currentSearchTerm) return true;
             const haystack = [
                 patient.patient_name,
-                patient.mrn,
+                getDisplayMrnValue(patient.mrn),
                 patient.health_card,
                 patient.location,
                 patient.location_at_notification,
@@ -3482,7 +3510,7 @@ License: MIT
 
         function getSortValue(patient, key) {
             if (key === 'mrn') {
-                return (patient.mrn || '').toLowerCase();
+                return getDisplayMrnValue(patient.mrn).toLowerCase();
             }
             if (key === 'date-notified') {
                 return sortableDateValue(patient.notification_date);
@@ -3753,11 +3781,6 @@ License: MIT
             if (!patient) return;
             if (!ensureEditablePatient(patient)) return;
             const trimmed = (value || '').trim();
-            if (!trimmed) {
-                showRecordWarning('Patient name cannot be empty.', 'error');
-                renderPatientTable();
-                return;
-            }
             patient.patient_name = trimmed;
             persistPatient(patient, false);
             refreshPatientRow(patient);
@@ -3804,12 +3827,24 @@ License: MIT
             if (!patient) return;
             if (!ensureEditablePatient(patient)) return;
             const trimmed = (value || '').trim();
+            const previous = patient.mrn || '';
             if (!trimmed) {
-                showRecordWarning('MRN cannot be empty.', 'error');
-                renderPatientTable();
+                if (isTemporaryMrn(previous)) {
+                    showRecordWarning('');
+                    return;
+                }
+                const tempMrn = generateTemporaryMrn();
+                if (db) {
+                    const updateStmt = db.prepare('UPDATE patient_assessments SET mrn = ? WHERE mrn = ?');
+                    updateStmt.run([tempMrn, previous]);
+                    updateStmt.free();
+                }
+                patient.mrn = tempMrn;
+                persistPatient(patient, false);
+                refreshPatientRow(patient);
+                showRecordWarning('');
                 return;
             }
-            const previous = patient.mrn || '';
             if (trimmed === previous) {
                 showRecordWarning('');
                 return;
@@ -3828,11 +3863,9 @@ License: MIT
                     renderPatientTable();
                     return;
                 }
-                if (previous) {
-                    const updateStmt = db.prepare('UPDATE patient_assessments SET mrn = ? WHERE mrn = ?');
-                    updateStmt.run([trimmed, previous]);
-                    updateStmt.free();
-                }
+                const updateStmt = db.prepare('UPDATE patient_assessments SET mrn = ? WHERE mrn = ?');
+                updateStmt.run([trimmed, previous]);
+                updateStmt.free();
             }
             patient.mrn = trimmed;
             persistPatient(patient, false);
@@ -3849,6 +3882,7 @@ License: MIT
             const provinceCode = patient.health_card_province || '';
             if (db && normalized) {
                 const check = db.prepare('SELECT mrn, health_card FROM patient_assessments WHERE mrn != ?');
+                check.bind([patient.mrn || '']);
                 let conflictMrn = '';
                 try {
                     while (check.step()) {
@@ -4156,7 +4190,7 @@ License: MIT
         function copyPatientField(index, field) {
             const patient = patientsData[index];
             if (!patient) return;
-            const value = patient[field];
+            const value = field === 'mrn' ? getDisplayMrnValue(patient.mrn) : patient[field];
             const labels = {
                 mrn: 'MRN',
                 health_card: 'Health card number',
@@ -4231,6 +4265,12 @@ License: MIT
 
         function isTemporaryMrn(value) {
             return typeof value === 'string' && value.startsWith(TEMP_MRN_PREFIX);
+        }
+
+        function getDisplayMrnValue(mrn) {
+            const trimmed = (mrn || '').toString().trim();
+            if (!trimmed || isTemporaryMrn(trimmed)) return '';
+            return trimmed;
         }
 
         function generateTemporaryMrn() {
@@ -5094,6 +5134,7 @@ License: MIT
                 pending: 0,
                 ready_notify: 0,
                 waiting: 0,
+                final_eligibility: 0,
                 ready_randomize: 0,
                 randomized_np: 0,
                 randomized_rx: 0,
@@ -5108,6 +5149,7 @@ License: MIT
                 if (flags.pending) counts.pending++;
                 if (flags.ready_notify) counts.ready_notify++;
                 if (flags.waiting) counts.waiting++;
+                if (flags.final_eligibility) counts.final_eligibility++;
                 if (flags.ready_randomize) counts.ready_randomize++;
                 if (flags.randomized_np) counts.randomized_np++;
                 if (flags.randomized_rx) counts.randomized_rx++;
