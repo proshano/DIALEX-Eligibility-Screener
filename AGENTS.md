@@ -8,6 +8,7 @@ This repository contains a self-contained, offline, browser-based screening tool
 - **No install step:** Users should be able to open the HTML file directly in a browser. Avoid build steps or package managers unless explicitly requested.
 - **Robust & maintainable:** Prefer clear, explicit code with defensive checks and readable structure over clever shortcuts.
 - **Stability over novelty:** Minimize changes that alter behavior; preserve existing flows unless a change is requested.
+- **Non-technical users:** Assume end users are healthcare or health research staff with limited technical comfort. If a workflow should be avoided, remove or restrict the option rather than relying on instructions.
 
 ## Implementation Guidelines
 - Keep functionality in the standalone HTML file unless asked to split files.
