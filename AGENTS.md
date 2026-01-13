@@ -22,5 +22,5 @@ This repository contains a self-contained, offline, browser-based screening tool
 - If a change adds risk or assumes network availability, call it out and propose an offline alternative.
 
 ## Testing Expectations
-- Prefer manual test steps that work offline (e.g., open `DIALEX_Screener_Standalone_20251201.html` in a browser and verify flows).
+- Prefer manual test steps that work offline (e.g., open `DIALEX_Screener_Standalone.html` in a browser and verify flows).
 - Do not require installing tooling or packages to validate changes unless explicitly requested.
