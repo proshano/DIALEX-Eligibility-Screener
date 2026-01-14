@@ -307,6 +307,31 @@ else if (typeof exports === 'object'){
             box-shadow: 0 0 0 2px color-mix(in srgb, var(--brand) 35%, transparent);
         }
 
+        input[type="checkbox"] {
+            width: 16px;
+            height: 16px;
+            padding: 0;
+            margin: 0;
+            border-radius: 4px;
+            accent-color: var(--brand);
+        }
+
+        .password-toggle {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin: 6px 0 14px;
+            color: var(--muted);
+            font-size: 13px;
+        }
+
+        .password-toggle label {
+            font-weight: 500;
+            font-size: 13px;
+            color: inherit;
+            cursor: pointer;
+        }
+
         .help {
             font-size: 12px;
             color: var(--muted);
@@ -391,24 +416,19 @@ else if (typeof exports === 'object'){
             <p>Create the encrypted starter database and the first admin account for a site.</p>
 
             <form id="provision-form" novalidate>
-                <h2>Encryption passwords</h2>
+                <h2>Recovery password</h2>
+                <div class="password-toggle">
+                    <input type="checkbox" id="toggle-passwords">
+                    <label for="toggle-passwords">Show passwords while typing</label>
+                </div>
                 <div class="field">
                     <label for="central-password">Central recovery password</label>
-                    <input type="password" id="central-password" autocomplete="new-password" required>
-                    <div class="help">Keep this password with the central study team only.</div>
+                    <input type="password" id="central-password" autocomplete="new-password" required data-password-field>
+                    <div class="help">Keep this password with the central study team only for recovery.</div>
                 </div>
                 <div class="field">
                     <label for="central-confirm">Confirm central recovery password</label>
-                    <input type="password" id="central-confirm" autocomplete="new-password" required>
-                </div>
-                <div class="field">
-                    <label for="site-password">Site access password</label>
-                    <input type="password" id="site-password" autocomplete="new-password" required>
-                    <div class="help">Share this password with the site (PI/admin).</div>
-                </div>
-                <div class="field">
-                    <label for="site-confirm">Confirm site access password</label>
-                    <input type="password" id="site-confirm" autocomplete="new-password" required>
+                    <input type="password" id="central-confirm" autocomplete="new-password" required data-password-field>
                 </div>
 
                 <h2>Initial admin account</h2>
@@ -418,12 +438,22 @@ else if (typeof exports === 'object'){
                     <div class="help">Example: admin</div>
                 </div>
                 <div class="field">
+                    <label for="admin-first-name">Admin first name</label>
+                    <input type="text" id="admin-first-name" autocomplete="given-name" required>
+                    <div class="help">Used for audit logs and to identify the site admin.</div>
+                </div>
+                <div class="field">
+                    <label for="admin-last-name">Admin last name</label>
+                    <input type="text" id="admin-last-name" autocomplete="family-name" required>
+                </div>
+                <div class="field">
                     <label for="admin-password">Admin password</label>
-                    <input type="password" id="admin-password" autocomplete="new-password" required>
+                    <input type="password" id="admin-password" autocomplete="new-password" required data-password-field>
+                    <div class="help">This password unlocks the database for the admin account.</div>
                 </div>
                 <div class="field">
                     <label for="admin-confirm">Confirm admin password</label>
-                    <input type="password" id="admin-confirm" autocomplete="new-password" required>
+                    <input type="password" id="admin-confirm" autocomplete="new-password" required data-password-field>
                 </div>
 
                 <h2>Study ID list (optional)</h2>
@@ -476,6 +506,17 @@ else if (typeof exports === 'object'){
         const studyIdStatus = document.getElementById('study-id-status');
         const studyIdPreview = document.getElementById('study-id-preview');
         const clearStudyIdsBtn = document.getElementById('clear-study-ids');
+        const passwordToggle = document.getElementById('toggle-passwords');
+        const passwordFields = document.querySelectorAll('[data-password-field]');
+
+        if (passwordToggle) {
+            passwordToggle.addEventListener('change', () => {
+                const nextType = passwordToggle.checked ? 'text' : 'password';
+                passwordFields.forEach(field => {
+                    field.type = nextType;
+                });
+            });
+        }
 
         function showStatus(message, type) {
             statusEl.textContent = message;
@@ -493,6 +534,11 @@ else if (typeof exports === 'object'){
 
         function normalizeUsername(value) {
             return (value || '').toString().trim().toLowerCase();
+        }
+
+        function getUserWrapId(username) {
+            const normalized = normalizeUsername(username);
+            return normalized ? `user:${normalized}` : '';
         }
 
         function sanitizeFileLabel(value) {
@@ -692,7 +738,13 @@ else if (typeof exports === 'object'){
 
         async function getPasswordKey(password) {
             const enc = new TextEncoder();
-            return window.crypto.subtle.importKey('raw', enc.encode(password), { name: 'PBKDF2' }, false, ['deriveKey']);
+            return window.crypto.subtle.importKey(
+                'raw',
+                enc.encode(password),
+                { name: 'PBKDF2' },
+                false,
+                ['deriveKey', 'deriveBits']
+            );
         }
 
         async function deriveKey(passwordKey, salt, keyUsage) {
@@ -790,11 +842,14 @@ else if (typeof exports === 'object'){
             return serializeEncryptedPayloadV2(payload);
         }
 
-        async function createEncryptionState(centralPassword, sitePassword) {
+        async function createEncryptionState(centralPassword, userWraps) {
             const dataKey = await generateDataKey();
             const wraps = [];
             wraps.push({ id: 'central', ...(await wrapDataKey(dataKey, centralPassword)) });
-            wraps.push({ id: 'site', ...(await wrapDataKey(dataKey, sitePassword)) });
+            for (const entry of userWraps || []) {
+                if (!entry || !entry.id || !entry.password) continue;
+                wraps.push({ id: entry.id, ...(await wrapDataKey(dataKey, entry.password)) });
+            }
             return {
                 mode: 'multi',
                 dataKey,
@@ -872,12 +927,13 @@ else if (typeof exports === 'object'){
             `);
         }
 
-        function insertAdminUser(db, username, passwordRecord) {
+        function insertAdminUser(db, username, firstName, lastName, passwordRecord) {
+            const displayName = buildDisplayName(firstName, lastName);
             const stmt = db.prepare(`
                 INSERT INTO users (username, display_name, password_salt, password_hash, role, active)
                 VALUES (?, ?, ?, ?, 'admin', 1)
             `);
-            stmt.run([username, '', passwordRecord.salt, passwordRecord.hash]);
+            stmt.run([username, displayName, passwordRecord.salt, passwordRecord.hash]);
             stmt.free();
         }
 
@@ -925,15 +981,29 @@ else if (typeof exports === 'object'){
             return '';
         }
 
+        function normalizeNamePart(value) {
+            return (value || '').toString().trim().replace(/\s+/g, ' ');
+        }
+
+        function buildDisplayName(firstName, lastName) {
+            const first = normalizeNamePart(firstName);
+            const last = normalizeNamePart(lastName);
+            return `${first} ${last}`.trim();
+        }
+
+        function hasRequiredNameParts(firstName, lastName) {
+            return Boolean(normalizeNamePart(firstName) && normalizeNamePart(lastName));
+        }
+
         async function handleProvision(event) {
             event.preventDefault();
             clearStatus();
 
             const centralPassword = document.getElementById('central-password').value;
             const centralConfirm = document.getElementById('central-confirm').value;
-            const sitePassword = document.getElementById('site-password').value;
-            const siteConfirm = document.getElementById('site-confirm').value;
             const adminUsernameRaw = document.getElementById('admin-username').value;
+            const adminFirstNameRaw = document.getElementById('admin-first-name').value;
+            const adminLastNameRaw = document.getElementById('admin-last-name').value;
             const adminPassword = document.getElementById('admin-password').value;
             const adminConfirm = document.getElementById('admin-confirm').value;
             const siteLabelRaw = document.getElementById('site-label').value;
@@ -944,15 +1014,16 @@ else if (typeof exports === 'object'){
                 return;
             }
 
-            const centralError = validatePasswords('Central recovery password', centralPassword, centralConfirm);
-            if (centralError) {
-                showStatus(centralError, 'error');
+            const adminFirstName = normalizeNamePart(adminFirstNameRaw);
+            const adminLastName = normalizeNamePart(adminLastNameRaw);
+            if (!hasRequiredNameParts(adminFirstName, adminLastName)) {
+                showStatus('Enter both first name and last name for the admin account.', 'error');
                 return;
             }
 
-            const siteError = validatePasswords('Site access password', sitePassword, siteConfirm);
-            if (siteError) {
-                showStatus(siteError, 'error');
+            const centralError = validatePasswords('Central recovery password', centralPassword, centralConfirm);
+            if (centralError) {
+                showStatus(centralError, 'error');
                 return;
             }
 
@@ -968,11 +1039,14 @@ else if (typeof exports === 'object'){
                 const db = new SQL.Database();
                 setupDatabase(db);
                 const adminRecord = await createPasswordRecord(adminPassword);
-                insertAdminUser(db, adminUsername, adminRecord);
+                insertAdminUser(db, adminUsername, adminFirstName, adminLastName, adminRecord);
                 insertStudyIds(db, importedStudyIds);
 
                 const sqlData = db.export();
-                const encryptionState = await createEncryptionState(centralPassword, sitePassword);
+                const adminWrapId = getUserWrapId(adminUsername);
+                const encryptionState = await createEncryptionState(centralPassword, [
+                    { id: adminWrapId, password: adminPassword }
+                ]);
                 const encrypted = await encryptDatabaseV2(sqlData, encryptionState);
                 const siteLabel = sanitizeFileLabel(siteLabelRaw);
                 const filename = buildFilename(siteLabel);
@@ -980,7 +1054,7 @@ else if (typeof exports === 'object'){
                 triggerDownload(blob, filename);
 
                 const studyIdNote = importedStudyIds.length ? ` Included ${importedStudyIds.length} study IDs.` : '';
-                showStatus(`Encrypted starter database created. Keep the central password private and share the site password with the PI.${studyIdNote}`, 'success');
+                showStatus(`Encrypted starter database created. Keep the central recovery password private and share the admin credentials with the site.${studyIdNote}`, 'success');
                 form.reset();
                 clearStudyIdImport();
             } catch (error) {
