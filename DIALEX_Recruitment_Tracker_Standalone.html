@@ -1717,8 +1717,9 @@ License: MIT
         .patient-collapsed-summary {
             display: flex;
             align-items: center;
-            gap: 16px;
-            flex-wrap: nowrap;
+            gap: 12px;
+            row-gap: 8px;
+            flex-wrap: wrap;
         }
         .patient-collapsed-summary .compact-field {
             display: flex;
@@ -1726,37 +1727,37 @@ License: MIT
             gap: 2px;
         }
         .patient-collapsed-summary .compact-field label {
-            font-size: 15px;
-            letter-spacing: 0.3px;
+            font-size: 14px;
+            letter-spacing: 0.2px;
             color: var(--muted);
             text-transform: uppercase;
         }
         .patient-collapsed-summary .compact-field input,
         .patient-collapsed-summary .compact-field select {
-            font-size: 15px;
+            font-size: 14px;
             padding: 4px 6px;
         }
         .patient-collapsed-summary .compact-name {
-            width: 230px;
+            width: 200px;
             flex-shrink: 0;
         }
         .patient-collapsed-summary .compact-age {
-            width: 45px;
+            width: 40px;
             flex-shrink: 0;
         }
         .patient-collapsed-summary .compact-dob {
-            width: 120px;
+            width: 110px;
             flex-shrink: 0;
         }
         .patient-collapsed-summary .compact-dob input {
-            width: 120px;
+            width: 110px;
             min-width: 0;
             box-sizing: border-box;
         }
         .patient-collapsed-summary .compact-age input {
-            max-width: 45px;
+            max-width: 40px;
             min-width: 0;
-            width: 45px;
+            width: 40px;
             box-sizing: border-box;
             appearance: textfield;
             -moz-appearance: textfield;
@@ -1767,19 +1768,19 @@ License: MIT
             margin: 0;
         }
         .patient-collapsed-summary .compact-mrn {
-            width: 150px;
+            width: 130px;
             flex-shrink: 0;
         }
         .patient-collapsed-summary .compact-hcn {
-            width: 160px;
+            width: 140px;
             flex-shrink: 0;
         }
         .patient-collapsed-summary .compact-province {
-            width: 90px;
+            width: 70px;
             flex-shrink: 0;
         }
         .patient-collapsed-summary .compact-dialysis {
-            width: 200px;
+            width: 170px;
             flex-shrink: 0;
         }
         .patient-collapsed-summary .compact-start {
@@ -1816,6 +1817,18 @@ License: MIT
             white-space: nowrap;
             text-transform: uppercase;
             letter-spacing: 0.3px;
+        }
+        .patient-collapsed-summary .status-badge-wrap {
+            flex-basis: 100%;
+            display: flex;
+            justify-content: flex-end;
+        }
+        .patient-collapsed-summary .status-badge {
+            font-size: 12px;
+            padding: 3px 6px;
+            letter-spacing: 0.2px;
+            white-space: normal;
+            text-align: right;
         }
         .status-badge.status-missing {
             background: #ff6b6b22;
@@ -5894,7 +5907,7 @@ License: MIT
                         </div>
                         <div class="compact-field compact-dob" data-field="birth_date">
                             <label>DOB</label>
-                            <input type="date" class="table-input" value="${birthDateValue}" ${isLocked ? 'disabled' : ''} onchange="updatePatientBirthDate(${patient._index}, this.value)">
+                            <input type="text" class="table-input" value="${birthDateValue}" placeholder="YYYY-MM-DD" title="YYYY-MM-DD or MM/DD/YYYY" inputmode="numeric" autocomplete="off" spellcheck="false" ${isLocked ? 'disabled' : ''} onchange="updatePatientBirthDate(${patient._index}, this.value)">
                         </div>
                         <div class="compact-field compact-age">
                             <label>Age</label>
@@ -5926,11 +5939,13 @@ License: MIT
                                 ${dialysisUnitOptions}
                             </select>
                         </div>
-                        ${statusBadge}
                         <div class="expand-indicator right ${expandedClass}" onclick="togglePatientRow(${patient._index})">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                 <polyline points="9 18 15 12 9 6"></polyline>
                             </svg>
+                        </div>
+                        <div class="status-badge-wrap">
+                            ${statusBadge}
                         </div>
                     </div>
                 </td>
@@ -6075,7 +6090,7 @@ License: MIT
                                     <span class="date-display ${dialysisStartFriendly ? 'has-value' : ''}">${dialysisStartFriendly || 'Not set'}</span>
                                 </div>
                                 <div class="date-input-row">
-                                    <input type="date" class="table-input inline-date" value="${dialysisStartDisplay}" ${isLocked ? 'disabled' : ''} onchange="updateDialysisStartDate(${patient._index}, this.value)">
+                                    <input type="text" class="table-input inline-date" value="${dialysisStartDisplay}" placeholder="YYYY-MM-DD" title="YYYY-MM-DD or MM/DD/YYYY" inputmode="numeric" autocomplete="off" spellcheck="false" ${isLocked ? 'disabled' : ''} onchange="updateDialysisStartDate(${patient._index}, this.value)">
                                 </div>
                             </div>
                             ${dialysisConfirmControls}
@@ -6103,7 +6118,7 @@ License: MIT
                                 <span class="date-display ${notificationFriendly ? 'has-value' : ''}">${notificationFriendly || 'Not set'}</span>
                             </div>
                             <div class="date-input-row">
-                                <input type="date" class="table-input inline-date" value="${notificationDisplay}" placeholder="Select date" ${isLocked ? 'disabled' : ''} onchange="updateInlineNotification(${patient._index}, this.value)">
+                                <input type="text" class="table-input inline-date" value="${notificationDisplay}" placeholder="YYYY-MM-DD" title="YYYY-MM-DD or MM/DD/YYYY" inputmode="numeric" autocomplete="off" spellcheck="false" ${isLocked ? 'disabled' : ''} onchange="updateInlineNotification(${patient._index}, this.value)">
                                 ${notifiedCopyButton}
                             </div>
                         </div>
@@ -7647,6 +7662,21 @@ License: MIT
             return ['yes', 'true', '1', 'y'].includes(normalized);
         }
 
+        function buildDateFromParts(year, month, day) {
+            const date = new Date(0);
+            date.setFullYear(year, month - 1, day);
+            date.setHours(0, 0, 0, 0);
+            return Number.isNaN(date.getTime()) ? null : date;
+        }
+
+        function resolveTwoDigitYear(value) {
+            const year = Number(value);
+            if (!Number.isFinite(year)) return null;
+            if (year >= 100) return year;
+            const current = new Date().getFullYear() % 100;
+            return (year <= current ? 2000 : 1900) + year;
+        }
+
         function parseLegacyDate(value) {
             if (!value) return null;
             const trimmed = String(value).trim();
@@ -7656,15 +7686,27 @@ License: MIT
             }
             const parts = trimmed.split(/[\/\-]/).map(Number);
             if (parts.length !== 3) return null;
+            const [first, second, third] = parts;
             let day, month, year;
-            if (parts[2] > 1900) {
-                [day, month, year] = parts;
-            } else {
+            if (first > 1900) {
                 [year, month, day] = parts;
+            } else if (third > 1900 || (third >= 0 && third < 100)) {
+                year = resolveTwoDigitYear(third);
+                if (first > 12 && second <= 12) {
+                    day = first;
+                    month = second;
+                } else if (second > 12 && first <= 12) {
+                    month = first;
+                    day = second;
+                } else {
+                    month = first;
+                    day = second;
+                }
+            } else {
+                return null;
             }
             if (!day || !month || !year) return null;
-            const date = new Date(year, month - 1, day);
-            return Number.isNaN(date.getTime()) ? null : date;
+            return buildDateFromParts(year, month, day);
         }
 
         function normalizeLegacyDate(value) {
@@ -8007,8 +8049,7 @@ License: MIT
             const parts = value.split('-').map(Number);
             if (parts.length !== 3) return null;
             const [y, m, d] = parts;
-            const date = new Date(y, m - 1, d);
-            return Number.isNaN(date.getTime()) ? null : date;
+            return buildDateFromParts(y, m, d);
         }
 
         function addDays(date, days) {
