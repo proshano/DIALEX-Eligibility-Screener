@@ -3,12 +3,46 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DIALEX Recruitment Tracker</title>
-    <link rel="stylesheet" href="styles.css">
-    <script src="js/sql.js"></script>
-    <script src="js/papaparse.js"></script>
+    <title>DIALEX Recruitment Tracker App</title>
+    <link rel="stylesheet" href="css/app-01.css">
+    <link rel="stylesheet" href="css/app-02.css">
+    <link rel="stylesheet" href="css/app-03.css">
+    <link rel="stylesheet" href="css/app-04.css">
+    <script>
+        (function enforceSupportedBrowser() {
+            const ua = navigator.userAgent || '';
+            const isEdge = /Edg/.test(ua);
+            const isChrome = /Chrome/.test(ua) && !/Edg|OPR|Brave/.test(ua);
+            if (isChrome || isEdge) return;
+            const showWarning = () => {
+                document.body.classList.add('browser-warning-active');
+                const overlay = document.getElementById('browser-warning');
+                if (overlay) {
+                    overlay.classList.remove('hidden');
+                }
+            };
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', showWarning);
+            } else {
+                showWarning();
+            }
+        })();
+    </script>
+    <script src="js/lib/sql.js"></script>
+    <script src="js/lib/papaparse.js"></script>
 </head>
 <body>
+    <div id="browser-warning" class="browser-warning hidden" role="alert" aria-live="assertive" aria-label="Unsupported browser">
+        <div class="browser-warning-card">
+            <h2>Chrome or Edge required</h2>
+            <p>This tracker only supports Google Chrome or Microsoft Edge. Please close this window and reopen <strong>DIALEX Recruitment Tracker App.html</strong> with one of those browsers.</p>
+            <ul>
+                <li>Chrome and Edge are kept current with the latest security settings we rely on.</li>
+                <li>Keeping other browsers out protects the offline encryption/store logic.</li>
+            </ul>
+            <p>Once you are in Chrome/Edge, reload this page to continue.</p>
+        </div>
+    </div>
     <div class="container">
     <div id="toast-root" class="toast-container" aria-live="polite" aria-atomic="true"></div>
         <div class="header">
@@ -521,7 +555,13 @@
     </div>
 
     <!-- Patient Assessment Modal REMOVED -->
-        <script src="js/app.js"></script>
+    <script src="js/app/app-01.js"></script>
+    <script src="js/app/app-02.js"></script>
+    <script src="js/app/app-03.js"></script>
+    <script src="js/app/app-04.js"></script>
+    <script src="js/app/app-05.js"></script>
+    <script src="js/app/app-06.js"></script>
+    <script src="js/app/app-boot.js"></script>
 
 </body>
 </html>

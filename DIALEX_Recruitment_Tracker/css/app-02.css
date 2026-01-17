@@ -1,0 +1,451 @@
+.stage-segment:not(:last-child)::before {
+    content: '';
+    position: absolute;
+    right: -7px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 0;
+    height: 0;
+    border-top: 9px solid transparent;
+    border-bottom: 9px solid transparent;
+    border-left: 7px solid var(--card);
+    z-index: 2;
+}
+.stage-segment:hover::before {
+    border-left-color: color-mix(in srgb, var(--brand) 10%, var(--card));
+}
+.stage-segment.active::before {
+    border-left-color: var(--stage-color, var(--brand));
+}
+.stage-segment.active::after {
+    border-left-color: var(--stage-color, var(--brand));
+}
+
+/* Stage colors - gradient from orange (start) to green (complete) */
+.stage-pending { --stage-color: #e65100; }      /* Deep orange - start */
+.stage-notify { --stage-color: #f57c00; }       /* Orange */
+.stage-waiting { --stage-color: #ff9800; }      /* Amber */
+.stage-final { --stage-color: #fb8c00; }        /* Orange - assess */
+.stage-ready { --stage-color: #fdd835; }        /* Yellow - ready */
+.stage-randomized-np { --stage-color: #c0ca33; } /* Yellow-green - not prescribed */
+.stage-prescribed { --stage-color: #43a047; }   /* True green - complete! */
+
+.stage-segment[class*="stage-"]:not(.active) {
+    background: color-mix(in srgb, var(--stage-color) 12%, var(--card));
+    border-color: color-mix(in srgb, var(--stage-color) 35%, var(--border));
+}
+.stage-segment[class*="stage-"]:not(.active) .stage-count {
+    color: var(--stage-color);
+}
+.stage-segment[class*="stage-"]:not(.active):hover {
+    background: color-mix(in srgb, var(--stage-color) 20%, var(--card));
+}
+.stage-segment[class*="stage-"]:not(.active)::after {
+    border-left-color: color-mix(in srgb, var(--stage-color) 35%, var(--border));
+}
+.stage-segment[class*="stage-"]:not(.active)::before {
+    border-left-color: color-mix(in srgb, var(--stage-color) 12%, var(--card));
+}
+.stage-segment[class*="stage-"]:not(.active):hover::before {
+    border-left-color: color-mix(in srgb, var(--stage-color) 20%, var(--card));
+}
+
+/* Utility Filters - Non-flow filter buttons */
+.utility-filters {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    margin-top: 12px;
+    flex-wrap: wrap;
+}
+.utility-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 16px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 24px;
+    font-size: 17px;
+    font-weight: 500;
+    color: var(--text);
+    cursor: pointer;
+    transition: background 0.2s ease, border-color 0.2s ease;
+}
+.utility-btn:hover {
+    background: color-mix(in srgb, var(--brand) 8%, var(--card));
+    border-color: color-mix(in srgb, var(--brand) 30%, var(--border));
+}
+.utility-btn.active {
+    background: color-mix(in srgb, var(--brand) 15%, var(--card));
+    border-color: var(--brand);
+    color: var(--brand);
+}
+.utility-btn .utility-count {
+    font-weight: 700;
+    opacity: 0.7;
+}
+.utility-btn.active .utility-count {
+    opacity: 1;
+}
+.utility-filters .save-btn {
+    margin-left: auto;
+}
+
+.section-header {
+    margin-top: 10px;
+    margin-bottom: 5px;
+    font-weight: bold;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 5px;
+}
+
+.status-indicator {
+    color: var(--text);
+    background: var(--card);
+    border: 1px solid var(--border);
+    padding: 8px 16px;
+    border-radius: 8px;
+}
+
+.success-indicator,
+.error-indicator {
+    padding: 8px 16px;
+    border-radius: 8px;
+    border: 1px solid transparent;
+}
+
+.success-indicator {
+    color: var(--success);
+    background: color-mix(in srgb, var(--success) 12%, transparent);
+    border-color: color-mix(in srgb, var(--success) 50%, transparent);
+}
+
+.error-indicator {
+    color: var(--danger);
+    background: color-mix(in srgb, var(--danger) 12%, transparent);
+    border-color: color-mix(in srgb, var(--danger) 45%, transparent);
+}
+
+.hidden {
+    display: none;
+}
+
+.table-container {
+    background: var(--card);
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    overflow-x: auto;
+    margin-bottom: 20px;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 15px;
+}
+
+th, td {
+    padding: 12px 14px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+    color: var(--text);
+}
+
+th {
+    background: var(--table-header-bg);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+th:hover {
+    background-color: var(--table-header-hover);
+}
+
+th.sorted-asc::after {
+    content: " ↑";
+    color: var(--brand);
+}
+
+th.sorted-desc::after {
+    content: " ↓";
+    color: var(--brand);
+}
+
+select, input[type="text"], input[type="date"], input[type="number"], button {
+    padding: 6px 8px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    font-size: 15px;
+    background: var(--card);
+    color: var(--text);
+}
+
+select:disabled, input:disabled {
+    background-color: var(--input-disabled);
+    color: var(--text);
+    cursor: not-allowed;
+}
+
+button {
+    background: var(--brand);
+    color: var(--primary-btn-text);
+    border: 1px solid var(--brand-600);
+    cursor: pointer;
+    font-weight: 600;
+    letter-spacing: 0.2px;
+    padding: 10px 14px;
+    border-radius: 12px;
+    box-shadow: none;
+    transition: background .2s ease, transform .2s ease;
+}
+button:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--ring); }
+
+button:disabled {
+    background: color-mix(in srgb, var(--border) 70%, var(--card));
+    color: var(--muted);
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+button:hover:not(:disabled) { filter: brightness(0.98); transform: translateY(-1px); }
+button:active:not(:disabled) { transform: translateY(0); }
+
+button.secondary {
+    background: color-mix(in srgb, var(--border) 65%, var(--card));
+    border-color: var(--border);
+    color: var(--text);
+}
+
+button.secondary:hover:not(:disabled) { filter: brightness(0.97); }
+
+button.success {
+    background: var(--success);
+    border-color: color-mix(in srgb, var(--success) 65%, #0b0b0f);
+    color: #041007;
+}
+
+button.success:hover:not(:disabled) { filter: brightness(0.97); }
+
+button.danger {
+    background: var(--danger);
+    border-color: color-mix(in srgb, var(--danger) 65%, #0b0b0f);
+    color: var(--primary-btn-text);
+}
+
+button.danger:hover:not(:disabled) { filter: brightness(0.97); }
+
+button.small { padding: 6px 10px; font-size: 15px; box-shadow: none; border-radius: 8px; }
+
+.file-input {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.file-input label {
+    font-weight: 500;
+    color: var(--text);
+}
+
+.file-input small {
+    color: var(--muted);
+    font-size: 15px;
+}
+
+small {
+    font-size: 15px;
+}
+
+/* summary indicator removed */
+
+/* Pre-screening results summary styling */
+.stats-container {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 12px;
+    margin-top: 10px;
+    margin-bottom: 10px;
+}
+.stat-card {
+    background: var(--card);
+    padding: 12px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    text-align: center;
+}
+.stat-card .stat-number {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--brand);
+}
+
+/* Status badges */
+.badge {
+    display: inline-block;
+    padding: 4px 8px;
+    border-radius: 9999px;
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: 0.2px;
+    border: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+    -webkit-user-select: none;
+    user-select: none;
+}
+.badge-eligible {
+    color: var(--success);
+    background: color-mix(in srgb, var(--success) 12%, transparent);
+    border-color: color-mix(in srgb, var(--success) 45%, transparent);
+}
+.badge-ineligible {
+    color: var(--danger);
+    background: color-mix(in srgb, var(--danger) 12%, transparent);
+    border-color: color-mix(in srgb, var(--danger) 45%, transparent);
+}
+.badge-pending {
+    color: var(--warning);
+    background: color-mix(in srgb, var(--warning) 12%, transparent);
+    border-color: color-mix(in srgb, var(--warning) 45%, transparent);
+}
+.badge-notified,
+.badge-ready {
+    color: var(--brand-700);
+    background: color-mix(in srgb, var(--brand) 14%, transparent);
+    border-color: color-mix(in srgb, var(--brand) 45%, transparent);
+}
+.badge-randomized {
+    color: color-mix(in srgb, var(--success) 80%, #0b0b0f);
+    background: color-mix(in srgb, var(--success) 16%, transparent);
+    border-color: color-mix(in srgb, var(--success) 50%, transparent);
+}
+
+/* Toast notifications */
+.toast-container {
+    position: fixed;
+    top: 14px;
+    right: 14px;
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+.toast {
+    min-width: 260px;
+    max-width: 420px;
+    background: var(--card);
+    color: var(--text);
+    border: 1px solid var(--border);
+    box-shadow: none;
+    border-radius: 10px;
+    padding: 10px 12px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    animation: fadeIn .25s ease;
+}
+.toast.success { border-color: color-mix(in srgb, var(--success) 45%, transparent); }
+.toast.error { border-color: color-mix(in srgb, var(--danger) 45%, transparent); }
+.toast.status { border-color: var(--border); }
+
+/* Tabs for pre-screen results */
+.tabs { display: flex; gap: 8px; margin-top: 8px; }
+.tab-btn {
+    background: color-mix(in srgb, var(--border) 45%, var(--card));
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 8px 14px;
+    cursor: pointer;
+    transition: all .2s ease;
+}
+.tab-btn:hover { background: color-mix(in srgb, var(--brand) 12%, var(--card)); }
+.tab-btn.active { background: var(--brand); color: var(--primary-btn-text); border-color: var(--brand-600); }
+.tab-panel { display: none; margin-top: 10px; }
+.tab-panel.active { display: block; animation: fadeIn .25s ease; }
+
+@keyframes fadeIn { from { opacity: 0; transform: translateY(4px);} to { opacity: 1; transform: translateY(0);} }
+
+/* Dark table container and compact density */
+.table-container { background: var(--card); border: 1px solid var(--border); }
+body.compact th, body.compact td { padding: 8px 10px; }
+tr:hover { background: color-mix(in srgb, var(--border) 25%, transparent); }
+.row-highlight td {
+    animation: rowFlash 1.6s ease-out;
+}
+@keyframes rowFlash {
+    0% { background-color: color-mix(in srgb, var(--brand) 32%, var(--card)); }
+    100% { background-color: transparent; }
+}
+.field-highlight {
+    animation: fieldPulse 1.6s ease-out;
+}
+.field-highlight .table-input,
+.field-highlight .copy-btn,
+.field-highlight .copy-btn-mini,
+.field-highlight button {
+    border-color: var(--brand);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--brand) 45%, transparent);
+}
+@keyframes fieldPulse {
+    0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--brand) 35%, transparent); }
+    100% { box-shadow: 0 0 0 14px transparent; }
+}
+
+/* Utility classes */
+.mt-8 { margin-top: 8px; }
+.mt-12 { margin-top: 12px; }
+.mb-15 { margin-bottom: 15px; }
+.ml-10 { margin-left: 10px; }
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+.modal-footer { margin-top: 20px; text-align: right; border-top: 1px solid var(--border); padding-top: 15px; }
+
+/* Inputs sizing */
+#search-input { min-width: 250px; }
+#notes { width: 100%; resize: vertical; }
+
+/* Status row colors */
+.eligible-row {
+    background-color: color-mix(in srgb, var(--success) 14%, var(--bg));
+}
+
+.ineligible-row {
+    background-color: color-mix(in srgb, var(--danger) 14%, var(--bg));
+}
+
+.pending-row {
+    background-color: color-mix(in srgb, var(--warning) 12%, var(--bg));
+}
+
+.missing-row {
+    background-color: color-mix(in srgb, var(--border) 32%, var(--bg));
+}
+
+.notified-row {
+    background-color: color-mix(in srgb, var(--brand) 12%, var(--bg));
+}
+
+.enrolled-row {
+    background-color: color-mix(in srgb, var(--success) 18%, var(--bg));
+}
+
+/* Darker highlight for pre-screen ineligible (import-determined) */
+.prescreen-ineligible-row {
+    background-color: color-mix(in srgb, var(--warning) 25%, var(--bg));
+}
+
+.checkbox-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.checkbox-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    font-size: 15px;
+}

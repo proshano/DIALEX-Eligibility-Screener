@@ -1,0 +1,454 @@
+.status-stepper .step.alt {
+    background: color-mix(in srgb, var(--danger) 10%, var(--card));
+    border-color: color-mix(in srgb, var(--danger) 40%, var(--border));
+}
+.status-stepper .step.active {
+    background: var(--brand);
+    border-color: var(--brand-600);
+    color: var(--primary-btn-text);
+}
+.status-stepper .step.disabled { opacity: .5; cursor: not-allowed; }
+
+.status-subtext {
+    font-size: 15px;
+    color: var(--muted);
+    margin-top: 4px;
+}
+
+.criteria-reference-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    margin-bottom: 20px;
+    overflow: hidden;
+}
+.criteria-header {
+    padding: 12px 16px;
+    background: var(--table-header-bg);
+    border-bottom: 1px solid var(--border);
+    font-weight: 600;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    -webkit-user-select: none;
+    user-select: none;
+}
+.criteria-content {
+    padding: 16px;
+    display: none;
+    background: var(--card);
+}
+.criteria-content.open { display: block; }
+.criteria-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+}
+.criteria-list { padding-left: 20px; font-size: 15px; color: var(--text); }
+.criteria-list li { margin-bottom: 6px; }
+
+/* Compact Inputs in Table */
+.table-input {
+    width: 100%;
+    min-width: 100px;
+    padding: 4px 8px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    font-size: 15px;
+    background: var(--card);
+    color: var(--text);
+}
+.table-input:disabled {
+    color: var(--text);
+}
+.patient-name-input {
+    font-size: 15px;
+    font-weight: 600;
+}
+.patient-name-input::placeholder {
+    color: var(--muted);
+    font-weight: 400;
+}
+
+.record-warning {
+    margin-top: 12px;
+    padding: 10px 14px;
+    border-radius: 10px;
+    border: 1px solid color-mix(in srgb, var(--danger) 55%, transparent);
+    background: color-mix(in srgb, var(--danger) 18%, transparent);
+    color: var(--danger);
+    font-weight: 600;
+    text-align: center;
+}
+.record-warning.success {
+    border-color: color-mix(in srgb, var(--success) 55%, transparent);
+    background: color-mix(in srgb, var(--success) 18%, transparent);
+    color: var(--success);
+}
+.record-warning.status {
+    border-color: color-mix(in srgb, var(--brand) 55%, transparent);
+    background: color-mix(in srgb, var(--brand) 18%, transparent);
+    color: var(--brand);
+}
+.record-warning.hidden { display: none; }
+.table-date { width: 130px; }
+.table-date::placeholder { color: var(--muted); }
+.master-check-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 15px;
+    cursor: pointer;
+}
+.patient-info-compact {
+    display: flex;
+    flex-direction: column;
+    gap: 0px;
+}
+.patient-field {
+    margin-top: 4px;
+}
+.patient-field:first-child {
+    margin-top: 0;
+}
+.patient-field label {
+    font-size: 15px;
+    letter-spacing: 0.3px;
+    color: var(--muted);
+    text-transform: uppercase;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2px;
+}
+.patient-field .input-row {
+    margin-top: 0px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.patient-field input,
+.patient-field select {
+    flex: 1;
+}
+.patient-field .copy-btn {
+    margin-left: 0;
+}
+.patient-name-age-row {
+    display: flex;
+    gap: 10px;
+    margin-top: 0px;
+}
+.patient-name-age-row .patient-field:first-child {
+    flex: 1;
+    margin-top: 0;
+}
+.patient-name-age-row .patient-field:last-child {
+    width: 90px;
+    flex-shrink: 0;
+    margin-top: 0;
+}
+.patient-mrn-hcn-row {
+    display: flex;
+    gap: 6px;
+    margin-top: 4px;
+    align-items: flex-end;
+}
+.patient-mrn-hcn-row .patient-field {
+    margin-top: 0;
+}
+.patient-mrn-hcn-row .patient-field .input-row {
+    gap: 4px;
+}
+.patient-mrn-hcn-row .mrn-field {
+    width: 140px;
+    flex-shrink: 0;
+}
+.patient-mrn-hcn-row .hcn-field {
+    width: 160px;
+    flex-shrink: 0;
+}
+.patient-mrn-hcn-row .province-field {
+    width: 90px;
+    flex-shrink: 0;
+}
+.patient-meta-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 10px;
+    margin-top: 4px;
+}
+.patient-row-collapsed td {
+    padding: 8px 12px !important;
+}
+.patient-row-expanded {
+    background: color-mix(in srgb, var(--brand) 5%, var(--card));
+}
+.expand-indicator {
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+}
+.expand-indicator:hover {
+    background: color-mix(in srgb, var(--brand) 15%, var(--card));
+}
+.expand-indicator svg {
+    width: 16px;
+    height: 16px;
+    transition: transform 0.2s ease;
+}
+.expand-indicator.expanded svg {
+    transform: rotate(90deg);
+}
+.expand-indicator.right {
+    margin-left: auto;
+}
+.expand-indicator.right svg {
+    transform: rotate(180deg);
+}
+.expand-indicator.right.expanded svg {
+    transform: rotate(90deg);
+}
+.patient-collapsed-summary {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: nowrap;
+}
+.patient-collapsed-summary .compact-field {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+.patient-collapsed-summary .compact-field label {
+    font-size: 15px;
+    letter-spacing: 0.3px;
+    color: var(--muted);
+    text-transform: uppercase;
+}
+.patient-collapsed-summary .compact-field input,
+.patient-collapsed-summary .compact-field select {
+    font-size: 15px;
+    padding: 4px 6px;
+}
+.patient-collapsed-summary .compact-name {
+    width: 230px;
+    flex-shrink: 0;
+}
+.patient-collapsed-summary .compact-age {
+    width: 45px;
+    flex-shrink: 0;
+}
+.patient-collapsed-summary .compact-dob {
+    width: 120px;
+    flex-shrink: 0;
+}
+.patient-collapsed-summary .compact-dob input {
+    width: 120px;
+    min-width: 0;
+    box-sizing: border-box;
+}
+.patient-collapsed-summary .compact-age input {
+    max-width: 45px;
+    min-width: 0;
+    width: 45px;
+    box-sizing: border-box;
+    appearance: textfield;
+    -moz-appearance: textfield;
+}
+.patient-collapsed-summary .compact-age input::-webkit-inner-spin-button,
+.patient-collapsed-summary .compact-age input::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+.patient-collapsed-summary .compact-mrn {
+    width: 150px;
+    flex-shrink: 0;
+}
+.patient-collapsed-summary .compact-hcn {
+    width: 160px;
+    flex-shrink: 0;
+}
+.patient-collapsed-summary .compact-province {
+    width: 90px;
+    flex-shrink: 0;
+}
+.patient-collapsed-summary .compact-dialysis {
+    width: 200px;
+    flex-shrink: 0;
+}
+.patient-collapsed-summary .compact-start {
+    width: 140px;
+    flex-shrink: 0;
+}
+.patient-collapsed-summary .compact-field .input-with-copy {
+    display: flex;
+    gap: 3px;
+    align-items: center;
+}
+.patient-collapsed-summary .copy-btn-mini {
+    padding: 3px 6px;
+    font-size: 15px;
+    border-radius: 3px;
+    border: 1px solid color-mix(in srgb, var(--brand) 30%, var(--border));
+    background: color-mix(in srgb, var(--brand) 22%, var(--card));
+    color: var(--text);
+    cursor: pointer;
+    white-space: nowrap;
+}
+.patient-collapsed-summary .copy-btn-mini:hover {
+    background: color-mix(in srgb, var(--brand) 32%, var(--card));
+}
+.patient-collapsed-summary .copy-btn-mini:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+.status-badge {
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 15px;
+    font-weight: 600;
+    white-space: nowrap;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+.status-badge.status-missing {
+    background: #ff6b6b22;
+    color: #ff6b6b;
+    border: 1px solid #ff6b6b44;
+}
+.status-badge.status-pending {
+    background: #e6510022;
+    color: #e65100;
+    border: 1px solid #e6510044;
+}
+.status-badge.status-ready-notify {
+    background: #f57c0022;
+    color: #f57c00;
+    border: 1px solid #f57c0044;
+}
+.status-badge.status-waiting {
+    background: #ff980022;
+    color: #ff9800;
+    border: 1px solid #ff980044;
+}
+.status-badge.status-final-eligibility {
+    background: #fb8c0022;
+    color: #fb8c00;
+    border: 1px solid #fb8c0044;
+}
+.status-badge.status-ready-randomize {
+    background: #fdd83522;
+    color: #fdd835;
+    border: 1px solid #fdd83544;
+}
+.status-badge.status-randomized-np {
+    background: #c0ca3322;
+    color: #c0ca33;
+    border: 1px solid #c0ca3344;
+}
+.status-badge.status-randomized-rx {
+    background: #43a04722;
+    color: #43a047;
+    border: 1px solid #43a04744;
+}
+.status-badge.status-ineligible {
+    background: #f4433622;
+    color: #f44336;
+    border: 1px solid #f4433644;
+}
+.status-badge.status-opted-out {
+    background: #9e9e9e22;
+    color: #9e9e9e;
+    border: 1px solid #9e9e9e44;
+}
+.patient-expanded-details {
+    padding: 12px;
+}
+.patient-expanded-details td {
+    padding: 0 !important;
+}
+.patient-expanded-grid {
+    display: grid;
+    grid-template-columns: 1.3fr 1.3fr 1.2fr 0.6fr;
+    gap: 24px;
+    padding: 4px 8px;
+}
+.date-field {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+.date-field-header {
+    display: flex;
+    justify-content: flex-start;
+    align-items: center;
+    gap: 8px;
+}
+.date-field-header label {
+    margin: 0;
+}
+.date-input-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: nowrap;
+}
+.date-display {
+    font-size: 15px;
+    letter-spacing: 0.2px;
+    color: var(--muted);
+    text-transform: uppercase;
+}
+.date-display.has-value {
+    color: var(--brand);
+    font-weight: 600;
+}
+.patient-sub { font-size: 15px; color: var(--muted); }
+.font-medium { font-weight: 500; }
+.text-sm { font-size: 15px; }
+
+/* Section labels for expanded patient view */
+.section-label {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 8px;
+    padding-bottom: 4px;
+    border-bottom: 1px solid var(--border);
+}
+
+/* Lock section visual separator */
+.lock-section {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px dashed var(--border);
+}
+
+.record-actions {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px dashed var(--border);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+/* Locked record indicator styling */
+.locked-indicator {
+    color: var(--warning) !important;
+    font-weight: 600;
+}
+
+/* Validation status colors for master checkboxes */
+.check-success { color: var(--success); }
+.check-danger { color: var(--danger); }
