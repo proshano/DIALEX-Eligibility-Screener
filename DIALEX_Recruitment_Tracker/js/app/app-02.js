@@ -520,12 +520,18 @@ function isAdminUser() {
 function updateAppAccessState() {
     const hasDb = Boolean(db);
     const hasUser = Boolean(currentUser);
+    const hasSaveFolder = Boolean(saveDirectoryHandle && saveDirectoryReady);
     const unlocked = hasDb && hasUser;
     const canEdit = Boolean(unlocked && saveDirectoryReady && isAutosaveEncryptionReady());
     const assessmentControls = $('assessment-controls');
     const tableContainer = $('table-container');
     if (assessmentControls) assessmentControls.classList.toggle('hidden', !canEdit);
     if (tableContainer) tableContainer.classList.toggle('hidden', !canEdit);
+
+    const loadDbRow = $('workflow-load-db-row');
+    if (loadDbRow) loadDbRow.classList.toggle('hidden', !hasSaveFolder);
+    const patientDataCard = $('patient-data-card');
+    if (patientDataCard) patientDataCard.classList.toggle('hidden', !hasSaveFolder || !hasDb);
 
     const saveDbBtn = $('save-db-btn');
     if (saveDbBtn) saveDbBtn.disabled = !unlocked;
@@ -563,6 +569,13 @@ function updateAppAccessState() {
             && encryptionState.unlockId === 'central';
         rotateCentralBtn.classList.toggle('hidden', !showCentral);
         rotateCentralBtn.disabled = !showCentral;
+    }
+
+    const adminGroup = $('admin-actions');
+    if (adminGroup) {
+        const showAdmin = [manageUsersBtn, signOutBtn, rotateCentralBtn]
+            .some((btn) => btn && !btn.classList.contains('hidden'));
+        adminGroup.classList.toggle('hidden', !showAdmin);
     }
 
     const userStatus = $('user-status');

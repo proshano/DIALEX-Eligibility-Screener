@@ -207,7 +207,7 @@ body.browser-warning-active footer {
 /* Control Panel Grid Layout */
 .control-grid {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
     gap: 16px;
     margin-top: 16px;
 }
@@ -246,6 +246,60 @@ body.browser-warning-active footer {
     color: var(--muted);
     width: 100%;
     margin-bottom: 4px;
+}
+
+/* Workflow rows */
+.workflow-rows {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+.workflow-row {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px 14px;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    background: color-mix(in srgb, var(--border) 18%, var(--card));
+}
+.workflow-row-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+.workflow-row-info {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.workflow-row-title {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text);
+}
+.workflow-row-note {
+    font-size: 13px;
+    color: var(--muted);
+    line-height: 1.4;
+}
+.workflow-row-status {
+    font-weight: 600;
+    color: var(--text);
+}
+.workflow-row-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+.workflow-row-split {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 12px;
+    width: 100%;
 }
 
 /* Status Bar */

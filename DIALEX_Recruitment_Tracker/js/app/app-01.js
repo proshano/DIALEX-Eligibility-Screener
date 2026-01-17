@@ -728,11 +728,13 @@ async function setupSaveLocationControls() {
         console.warn('Unable to restore save folder handle', error);
     }
     updateSaveFolderStatus();
+    updateAppAccessState();
 }
 
 function updateSaveFolderStatus() {
     const statusEl = $('save-folder-status');
-    if (!statusEl) return;
+    const inlineEl = $('save-folder-inline');
+    if (!statusEl && !inlineEl) return;
     let message = 'Required';
     if (!supportsDirectoryPicker) {
         message = 'Unavailable';
@@ -741,7 +743,12 @@ function updateSaveFolderStatus() {
     } else if (saveDirectoryHandle) {
         message = 'Permission needed';
     }
-    statusEl.textContent = message;
+    if (statusEl) {
+        statusEl.textContent = message;
+    }
+    if (inlineEl) {
+        inlineEl.textContent = message;
+    }
 }
 
 function updateAutosaveGate() {

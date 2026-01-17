@@ -76,54 +76,72 @@
                 <!-- Database & System Card -->
                 <div class="control-card">
                 <div class="card-header">Database</div>
-                <div class="action-group">
-                        <button id="save-db-btn" class="hidden" disabled>Save database</button>
-                        <button id="load-db-btn">Load database</button>
-                        <input type="file" id="load-db-file" accept=".enc,.db" class="hidden" aria-label="Load database file">
-                        <button id="create-db-btn" class="hidden" disabled>Create new database</button>
+                <div class="workflow-rows">
+                        <div id="workflow-save-folder-row" class="workflow-row">
+                            <div class="workflow-row-head">
+                                <div class="workflow-row-info">
+                                    <div class="workflow-row-title">1. Set save folder</div>
+                                    <div class="workflow-row-note">Current folder: <span id="save-folder-inline" class="workflow-row-status">Browser default</span></div>
+                                </div>
+                                <div class="workflow-row-actions">
+                                    <button id="set-save-folder-btn" class="secondary" disabled>Set save folder</button>
+                                </div>
+                            </div>
+                        </div>
+                        <div id="workflow-load-db-row" class="workflow-row hidden">
+                            <div class="workflow-row-head">
+                                <div class="workflow-row-info">
+                                    <div class="workflow-row-title">2. Load database</div>
+                                    <div class="workflow-row-note">Click <strong>"Load database"</strong> and open the encrypted recruitment database for your site.</div>
+                                </div>
+                                <div class="workflow-row-actions">
+                                    <button id="load-db-btn">Load database</button>
+                                    <input type="file" id="load-db-file" accept=".enc,.db" class="hidden" aria-label="Load database file">
+                                    <button id="save-db-btn" class="hidden" disabled>Save database</button>
+                                    <button id="create-db-btn" class="hidden" disabled>Create new database</button>
+                                </div>
+                            </div>
+                        </div>
                 </div>
-                    <div class="action-group">
+                    <div class="action-group hidden" id="admin-actions">
                         <div class="action-group-label">Administration</div>
                         <button id="manage-users-btn" class="secondary hidden" disabled>Manage users</button>
                         <button id="sign-out-btn" class="secondary hidden" disabled>Switch user</button>
-                        <button id="set-save-folder-btn" class="secondary" disabled>Set save folder</button>
                         <button id="rotate-central-btn" class="secondary hidden" disabled>Rotate central password</button>
                     </div>
                 </div>
 
                 <!-- Patient Data Card -->
-                <div class="control-card">
+                <div class="control-card hidden" id="patient-data-card">
                     <div class="card-header">Patient data</div>
-                    <div class="action-group">
+                    <div class="workflow-rows">
                         <div id="autosave-gate" class="autosave-gate hidden">
                             <div id="autosave-gate-text" class="autosave-gate-text"></div>
                             <button type="button" id="autosave-gate-btn" class="secondary small hidden">Set save folder</button>
                         </div>
-                    </div>
-                    <div class="action-group">
-                        <div class="import-highlight">
-                            <div class="import-title">
-                                <div class="file-input">
-                                    <label for="registration-file">Import ORRS registration extract (.csv)</label>
+                        <div class="workflow-row-split">
+                            <div class="workflow-row import-highlight" id="workflow-import-row">
+                                <div class="import-title">
+                                    <div class="file-input">
+                                        <label for="registration-file">Import ORRS registration extract (.csv)</label>
+                                    </div>
+                                    <div class="import-preferred">Preferred</div>
                                 </div>
-                                <div class="import-preferred">Preferred</div>
+                                <input type="file" id="registration-file" class="import-file-input" accept=".csv" disabled>
+                                <div class="import-file-row">
+                                    <button type="button" id="registration-file-btn" class="import-file-btn" disabled>Choose file</button>
+                                    <div id="registration-file-name" class="import-file-name">No file selected</div>
+                                </div>
+                                <div class="import-help">
+                                    <small>Runs automated pre-screening (≥90 days, age/diabetes, valid modality &amp; health card).</small>
+                                    <small>Before importing, you will be prompted to create a named backup.</small>
+                                </div>
                             </div>
-                            <input type="file" id="registration-file" class="import-file-input" accept=".csv" disabled>
-                            <div class="import-file-row">
-                                <button type="button" id="registration-file-btn" class="import-file-btn" disabled>Choose file</button>
-                                <div id="registration-file-name" class="import-file-name">No file selected</div>
+                            <div class="workflow-row manual-entry" id="workflow-manual-row">
+                                <div class="manual-title">Manual entry (if needed)</div>
+                                <button id="add-patient-btn" class="secondary" disabled>Add individual patient</button>
+                                <div class="manual-note">Use this only when you cannot import an ORRS extract.</div>
                             </div>
-                            <div class="import-help">
-                                <small>Runs automated pre-screening (≥90 days, age/diabetes, valid modality &amp; health card).</small>
-                                <small>Before importing, you will be prompted to create a named backup.</small>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="action-group">
-                        <div class="manual-entry">
-                            <div class="manual-title">Manual entry (if needed)</div>
-                            <button id="add-patient-btn" class="secondary" disabled>Add individual patient</button>
-                            <div class="manual-note">Use this only when you cannot import an ORRS extract.</div>
                         </div>
                     </div>
                 </div>
@@ -139,7 +157,7 @@
                 <ol>
                     <li>
                         <div class="step-badge">1</div>
-                        <div class="step-content">Click <strong>"Load database"</strong> and open the encrypted file provided for your site. Enter your account password (or the central recovery password) to decrypt.</div>
+                        <div class="step-content">Set the save folder for continuous backups, then click <strong>"Load database"</strong> and open the encrypted recruitment database for your site. Enter your account password (or the central recovery password) to decrypt.</div>
                     </li>
                     <li>
                         <div class="step-badge">2</div>
