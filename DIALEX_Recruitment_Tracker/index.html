@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DIALEX Recruitment Tracker</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="js/sql.js"></script>
+    <script src="js/papaparse.js"></script>
+</head>
+<body>
+    <div class="container">
+    <div id="toast-root" class="toast-container" aria-live="polite" aria-atomic="true"></div>
+        <div class="header">
+            <h1>DIALEX eligibility, notification, and randomization tracker</h1>
+            <div class="meta-row">
+                <div class="meta-pill version-pill" aria-label="Version date">Version: 2025-12-01</div>
+                <div class="meta-pill owner-pill" aria-label="Ownership">Copyright 2025 DIALEX trial project office</div>
+                <button id="theme-toggle" class="meta-pill theme-toggle" onclick="toggleTheme()" aria-pressed="true" type="button">Dark theme</button>
+            </div>
+            
+            <!-- Status Bar -->
+            <div class="status-bar">
+                <div class="status-item">
+                    <span class="status-label">Database:</span>
+                    <span id="db-status" class="status-value">Not loaded</span>
+                </div>
+                <div class="status-divider"></div>
+                <div class="status-item">
+                    <span class="status-label">Save folder:</span>
+                    <span id="save-folder-status" class="status-value">Browser default</span>
+                </div>
+                <div class="status-divider"></div>
+                <div class="status-item">
+                    <span class="status-label">Signed in as:</span>
+                    <span id="user-status" class="status-value">Not signed in</span>
+                </div>
+            </div>
+
+            <!-- Control Panel Grid -->
+            <div class="control-grid">
+                <!-- Database & System Card -->
+                <div class="control-card">
+                <div class="card-header">Database</div>
+                <div class="action-group">
+                        <button id="save-db-btn" class="hidden" disabled>Save database</button>
+                        <button id="load-db-btn">Load database</button>
+                        <input type="file" id="load-db-file" accept=".enc,.db" class="hidden" aria-label="Load database file">
+                        <button id="create-db-btn" class="hidden" disabled>Create new database</button>
+                </div>
+                    <div class="action-group">
+                        <div class="action-group-label">Administration</div>
+                        <button id="manage-users-btn" class="secondary hidden" disabled>Manage users</button>
+                        <button id="sign-out-btn" class="secondary hidden" disabled>Switch user</button>
+                        <button id="set-save-folder-btn" class="secondary" disabled>Set save folder</button>
+                        <button id="rotate-central-btn" class="secondary hidden" disabled>Rotate central password</button>
+                    </div>
+                </div>
+
+                <!-- Patient Data Card -->
+                <div class="control-card">
+                    <div class="card-header">Patient data</div>
+                    <div class="action-group">
+                        <div id="autosave-gate" class="autosave-gate hidden">
+                            <div id="autosave-gate-text" class="autosave-gate-text"></div>
+                            <button type="button" id="autosave-gate-btn" class="secondary small hidden">Set save folder</button>
+                        </div>
+                    </div>
+                    <div class="action-group">
+                        <div class="import-highlight">
+                            <div class="import-title">
+                                <div class="file-input">
+                                    <label for="registration-file">Import ORRS registration extract (.csv)</label>
+                                </div>
+                                <div class="import-preferred">Preferred</div>
+                            </div>
+                            <input type="file" id="registration-file" class="import-file-input" accept=".csv" disabled>
+                            <div class="import-file-row">
+                                <button type="button" id="registration-file-btn" class="import-file-btn" disabled>Choose file</button>
+                                <div id="registration-file-name" class="import-file-name">No file selected</div>
+                            </div>
+                            <div class="import-help">
+                                <small>Runs automated pre-screening (≥90 days, age/diabetes, valid modality &amp; health card).</small>
+                                <small>Before importing, you will be prompted to create a named backup.</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="action-group">
+                        <div class="manual-entry">
+                            <div class="manual-title">Manual entry (if needed)</div>
+                            <button id="add-patient-btn" class="secondary" disabled>Add individual patient</button>
+                            <div class="manual-note">Use this only when you cannot import an ORRS extract.</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+            <div class="instructions">
+                <div class="instructions-header" onclick="toggleInstructions()">
+                    <span>How to use this tool</span>
+                    <span id="instructions-chevron" style="transform: rotate(0deg);">▼</span>
+                </div>
+                <div id="instructions-content" class="instructions-content">
+                <ol>
+                    <li>
+                        <div class="step-badge">1</div>
+                        <div class="step-content">Click <strong>"Load database"</strong> and open the encrypted file provided for your site. Enter your account password (or the central recovery password) to decrypt.</div>
+                    </li>
+                    <li>
+                        <div class="step-badge">2</div>
+                        <div class="step-content"><strong>Sign in</strong> with your username and password. Admin users can open <strong>"Manage users"</strong> to add or disable accounts.</div>
+                    </li>
+                    <li>
+                        <div class="step-badge">3</div>
+                        <div class="step-content">The software <strong>continuously writes</strong> two timestamped files in the save folder (<code>dialex-secure-latest-a-YYYY-MM-DD-HH-MM-SS.enc</code> and <code>dialex-secure-latest-b-YYYY-MM-DD-HH-MM-SS.enc</code>) to prevent data loss. Load the newest timestamp when resuming work.</div>
+                    </li>
+                    <li>
+                        <div class="step-badge">4</div>
+                        <div class="step-content"><strong>Import</strong> the Registration Data Extract CSV for automated pre-screening; this is the preferred method because it is the fastest way to add many patients at once and imports health card numbers directly to minimize the chance for errors. Before each import, you will be prompted to create a <strong>named backup</strong>; only load backups if the current version of the data is clearly wrong (for example, a bad import). If needed, you can also add individual patients manually by clicking <strong>"Add individual patient"</strong>.</div>
+                    </li>
+                    <li>
+                        <div class="step-badge">5</div>
+                        <div class="step-content">For each patient, <strong>assess eligibility</strong> using the eligibility criteria. You will find pre-populated answers (based on Ontario Renal Reporting System data) which should be verified. To proceed to notification and randomization, a patient must meet <strong>all inclusion criteria</strong> and <strong>none of the exclusion criteria</strong>.</div>
+                    </li>
+                    <li>
+                        <div class="step-badge">6</div>
+                        <div class="step-content">You must confirm that the patient has met all inclusion criteria and none of the exclusion criteria before proceeding. The tool requires that you check the <strong>"No exclusions"</strong> checkbox before proceeding to notification and randomization.</div>
+                    </li>
+                    <li>
+                        <div class="step-badge">7</div>
+                        <div class="step-content">For eligible patients, <strong>track notification and opt-out periods</strong>. Status flow: <code>Deliver notification</code> &rarr; <code>Notified and waiting</code> (15 days) &rarr; <code>Ready to Randomize</code> (if no opt-out) or <code>Opted Out</code>.</div>
+                    </li>
+                    <li>
+                        <div class="step-badge">8</div>
+                        <div class="step-content">When a patient is ready to randomize, assign a <strong>Study ID</strong> from the site list, then set <strong>Randomized = Yes</strong>.</div>
+                    </li>
+                    <li>
+                        <div class="step-badge">9</div>
+                        <div class="step-content">You can <strong>lock</strong> patient records to prevent accidental changes and unlock them later when needed.</div>
+                    </li>
+                </ol>
+                
+                
+                    
+                    <div id="prescreen-results" class="hidden" style="margin-top: 12px;">
+                        <h3>Pre-screening results</h3>
+                        <div class="stats-container">
+                            <div class="stat-card">
+                                <div>Total Patients</div>
+                                <div class="stat-number" id="ps-total">0</div>
+                            </div>
+                            <div class="stat-card">
+                                <div>Potentially Eligible</div>
+                                <div class="stat-number" id="ps-eligible">0</div>
+                            </div>
+                            <div class="stat-card">
+                                <div>Ineligible</div>
+                                <div class="stat-number" id="ps-ineligible">0</div>
+                            </div>
+                            <div class="stat-card">
+                                <div>Age < 45</div>
+                                <div class="stat-number" id="ps-age-under45">0</div>
+                            </div>
+                            <div class="stat-card">
+                                <div>45–59 w/o Diabetes</div>
+                                <div class="stat-number" id="ps-age45-59-nodm">0</div>
+                            </div>
+                            <div class="stat-card">
+                                <div>< 90 Days on Dialysis</div>
+                                <div class="stat-number" id="ps-days-under">0</div>
+                            </div>
+                            <div class="stat-card">
+                                <div>Invalid Modality</div>
+                                <div class="stat-number" id="ps-invalid-modality">0</div>
+                            </div>
+                            <div class="stat-card">
+                                <div>Missing Health Card</div>
+                                <div class="stat-number" id="ps-missing-hcn">0</div>
+                            </div>
+                            <div class="stat-card">
+                                <div>Invalid/Missing Dates</div>
+                                <div class="stat-number" id="ps-invalid-dates">0</div>
+                            </div>
+                        </div>
+                        <div class="tabs" id="ps-tabs" style="display:none;"></div>
+                        <div id="ps-tabpanels" style="display:none;">
+                            <div id="ps-panel-ineligible" class="tab-panel" style="display:none;"></div>
+                        </div>
+                    </div>
+            </div>
+        </div>
+
+        <div class="criteria-reference-card">
+            <div class="criteria-header" onclick="toggleCriteriaReference()">
+                <span>Eligibility criteria</span>
+                <span id="criteria-chevron" style="transform: rotate(0deg);">▼</span>
+            </div>
+            <div id="criteria-content" class="criteria-content">
+                <div class="criteria-grid">
+                    <div>
+                        <h4 style="color:var(--brand); margin-bottom:8px;">Inclusion criteria (all must be met)</h4>
+                        <ul class="criteria-list">
+                            <li>
+                                Age ≥60 years OR age 45-59 with history of diabetes (Type 1 or 2)
+                                <br>
+                                <small style="color: var(--muted); display:block; margin-top:4px;">Patients who have had diabetes in the past but who are currently not using any diabetes medication and have normal glycemic control are considered to have a history of diabetes and meet this criterion.</small>
+                            </li>
+                            <li>Receiving any form of dialysis regularly for previous 90 days (at randomization)</li>
+                            <li>Currently receiving HD in-centre (main or satellite unit)</li>
+                            <li>Valid provincial/territorial health insurance card number</li>
+                        </ul>
+                    </div>
+                    <div>
+                        <h4 style="color:var(--danger); margin-bottom:8px;">Exclusion criteria (any excludes patient)</h4>
+                        <ul class="criteria-list">
+                            <li>Prescribed HD less than 3 times per week</li>
+                            <li>
+                                Known/anticipated intolerance to Nipro Elisio HX
+                                <br>
+                                <small style="color: var(--muted);">Patients currently dialyzing with a non-polyarylsulfone membrane (e.g., cellulose triacetate, polyacrylonitrile, or PMMA) should not receive the ELISIO-HX dialyzer. Examples include: Fresenius CTA and Baxter CTA (cellulose triacetate), Asahi Kasei AN69/AN69ST (polyacrylonitrile), and Toray Filtryzer®/Toray PMMA (poly(methyl methacrylate)).</small>
+                            </li>
+                            <li>Planned to receive hemodiafiltration</li>
+                            <li>Planned to receive nocturnal hemodialysis</li>
+                            <li>
+                                Anticipated to discontinue in-centre HD in next 3 months
+                                <br>
+                                <small style="color: var(--muted);">For any reason (examples: transplantation, palliation, recovery, change to home HD or PD).</small>
+                            </li>
+                            <li>Anticipated severe non-adherence to treatment</li>
+                            <li>
+                                Overriding clinical preference for expanded HD
+                                <br>
+                                <small style="color: var(--muted);">Examples: already using ELISIO-HX or Theranova dialyzer outside of the study.</small>
+                            </li>
+                            <li>
+                                Other medical, psychosocial, or logistical reason
+                                <br>
+                                <small style="color: var(--muted); display:block; margin-top:4px;">
+                                    Examples:
+                                    <ul style="margin:4px 0 0 16px; padding-left:16px; color: var(--muted);">
+                                        <li>ELISIO-HX should not be used for isolated ultrafiltration (isoUF). For patients who need isoUF as part of regular HD (e.g., part isoUF and part HD), do not randomize unless planning to provide separate HD sessions from isoUF sessions so a conventional dialyzer is used for the entire isoUF session and ELISIO-HX is used for the entire HD session.</li>
+                                        <li>Concern that the patient lacks capacity to understand the notification handout and opt-out of enrollment while no substitute decision maker is available.</li>
+                                    </ul>
+                                </small>
+                            </li>
+                            <li>Enrolled in conflicting clinical trial</li>
+                            <li>Previously enrolled in DIALEX</li>
+                            <li>Declined participation</li>
+                        </ul>
+                    </div>
+                    </div>
+            </div>
+        </div>
+
+        <div id="assessment-controls" class="header hidden">
+            <div class="search-container" style="margin-bottom:8px;">
+                <input type="text" id="search-input" placeholder="Search by name, MRN, or Health Card... (space-separated to match multiple)" style="min-width: 320px;">
+            </div>
+            <div class="unit-filter-bar">
+                <div class="unit-filter-label">Recruiting units:</div>
+                <div id="unit-filter-summary" class="unit-filter-summary">All units</div>
+                <button type="button" id="unit-filter-btn" class="secondary small" disabled>Select units</button>
+            </div>
+            <!-- Stage Pipeline: Visual progression of recruitment stages -->
+            <div class="stage-pipeline">
+                <div class="stage-segment stage-pending" id="show-pending-btn" tabindex="0" role="button">
+                    <div class="stage-label">Assess eligibility for notification</div>
+                    <div class="stage-count" id="count-pending">0</div>
+                </div>
+                <div class="stage-segment stage-notify" id="show-notify-btn" tabindex="0" role="button">
+                    <div class="stage-label">Deliver notification</div>
+                    <div class="stage-count" id="count-ready-notify">0</div>
+                </div>
+                <div class="stage-segment stage-waiting" id="show-waiting-btn" tabindex="0" role="button">
+                    <div class="stage-label">Notified and waiting</div>
+                    <div class="stage-count" id="count-waiting">0</div>
+                </div>
+                <div class="stage-segment stage-final" id="show-final-btn" tabindex="0" role="button">
+                    <div class="stage-label">Assess eligibility for randomization</div>
+                    <div class="stage-count" id="count-final">0</div>
+                </div>
+                <div class="stage-segment stage-ready" id="show-ready-btn" tabindex="0" role="button">
+                    <div class="stage-label">Ready to randomize</div>
+                    <div class="stage-count" id="count-ready">0</div>
+                </div>
+                <div class="stage-segment stage-randomized-np" id="show-randomized-np-btn" tabindex="0" role="button">
+                    <div class="stage-label">Randomized (not prescribed)</div>
+                    <div class="stage-count" id="count-randomized-np">0</div>
+                </div>
+                <div class="stage-segment stage-prescribed" id="show-prescribed-btn" tabindex="0" role="button">
+                    <div class="stage-label">Randomized &amp; prescribed</div>
+                    <div class="stage-count" id="count-prescribed">0</div>
+                </div>
+            </div>
+
+            <!-- Utility Filters: Non-flow filter buttons -->
+            <div class="utility-filters">
+                <button class="utility-btn" id="show-all-btn">Show all <span class="utility-count" id="count-all">0</span></button>
+                <button class="utility-btn" id="show-missing-btn">Missing data <span class="utility-count" id="count-missing">0</span></button>
+                <button class="utility-btn" id="show-ineligible-btn">Ineligible <span class="utility-count" id="count-ineligible">0</span></button>
+                <button class="utility-btn" id="show-optedout-btn">Opted out <span class="utility-count" id="count-optedout">0</span></button>
+                <button class="utility-btn" id="show-notes-btn">Have notes <span class="utility-count" id="count-notes">0</span></button>
+                <button id="save-all-btn" class="save-btn hidden" disabled>Save database</button>
+            </div>
+            <div id="record-warning" class="record-warning hidden" role="alert"></div>
+        </div>
+
+        <div id="table-container" class="table-container hidden">
+            <table>
+                <thead>
+                    <tr>
+                        <th id="sort-name" colspan="4">Patients (click arrows to expand/collapse rows)</th>
+                    </tr>
+                </thead>
+                <tbody id="patient-table-body">
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Password Modal -->
+    <div id="password-modal" class="patient-modal" role="dialog" aria-modal="true" aria-labelledby="password-modal-title" aria-describedby="password-modal-message">
+        <div class="modal-content modal-narrow">
+            <div class="modal-header">
+                <h2 id="password-modal-title">Enter password</h2>
+                <span id="password-modal-close" class="close" role="button" tabindex="0" aria-label="Close password dialog">&times;</span>
+            </div>
+            <div class="modal-body">
+                <p id="password-modal-message" class="modal-message hidden"></p>
+                <form id="password-form">
+                    <div>
+                        <label for="password-input">Password</label>
+                        <input type="password" id="password-input" class="modal-input" autocomplete="current-password" required>
+                    </div>
+                    <div id="password-confirm-group" class="hidden">
+                        <label for="password-confirm-input">Confirm password</label>
+                        <input type="password" id="password-confirm-input" class="modal-input" autocomplete="new-password">
+                    </div>
+                    <p id="password-error" class="form-error hidden" role="alert"></p>
+                    <div class="modal-footer">
+                        <button type="button" class="secondary" id="password-cancel-btn">Cancel</button>
+                        <button type="submit" id="password-submit-btn">Continue</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Import Backup Modal -->
+    <div id="import-backup-modal" class="patient-modal" role="dialog" aria-modal="true" aria-labelledby="import-backup-title" aria-describedby="import-backup-message">
+        <div class="modal-content modal-narrow">
+            <div class="modal-header">
+                <h2 id="import-backup-title">Create import backup</h2>
+                <span id="import-backup-close" class="close" role="button" tabindex="0" aria-label="Close import backup dialog">&times;</span>
+            </div>
+            <div class="modal-body">
+                <p id="import-backup-message" class="modal-message"></p>
+                <form id="import-backup-form">
+                    <div>
+                        <label for="import-backup-name">Backup file name</label>
+                        <input type="text" id="import-backup-name" class="modal-input" autocomplete="off" required>
+                    </div>
+                    <p id="import-backup-error" class="form-error hidden" role="alert"></p>
+                    <div class="modal-footer">
+                        <button type="button" class="secondary" id="import-backup-cancel-btn">Cancel import</button>
+                        <button type="submit" id="import-backup-submit-btn">Create backup</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Login Modal -->
+    <div id="login-modal" class="patient-modal" role="dialog" aria-modal="true" aria-labelledby="login-modal-title" aria-describedby="login-modal-message">
+        <div class="modal-content modal-narrow">
+            <div class="modal-header">
+                <h2 id="login-modal-title">Sign in</h2>
+                <span id="login-modal-close" class="close hidden" role="button" tabindex="0" aria-label="Close sign in dialog">&times;</span>
+            </div>
+            <div class="modal-body">
+                <p id="login-modal-message" class="modal-message">Database loaded. Sign in to continue.</p>
+                <form id="login-form">
+                    <div>
+                        <label for="login-username">Username</label>
+                        <input type="text" id="login-username" class="modal-input" autocomplete="username" required>
+                    </div>
+                    <div>
+                        <label for="login-password">Password</label>
+                        <input type="password" id="login-password" class="modal-input" autocomplete="current-password" required>
+                    </div>
+                    <p id="login-error" class="form-error hidden" role="alert"></p>
+                    <div class="modal-footer">
+                        <button type="button" class="secondary hidden" id="login-cancel-btn">Cancel</button>
+                        <button type="button" class="secondary" id="login-unload-btn">Unload database</button>
+                        <button type="submit" id="login-submit-btn">Sign in</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Initial Admin Setup Modal -->
+    <div id="admin-setup-modal" class="patient-modal" role="dialog" aria-modal="true" aria-labelledby="admin-setup-title" aria-describedby="admin-setup-message">
+        <div class="modal-content modal-narrow">
+            <div class="modal-header">
+                <h2 id="admin-setup-title">Create admin account</h2>
+            </div>
+            <div class="modal-body">
+                <p id="admin-setup-message" class="modal-message">No user accounts exist yet. Create the first admin account.</p>
+                <form id="admin-setup-form">
+                    <div>
+                        <label for="admin-username">Username</label>
+                        <input type="text" id="admin-username" class="modal-input" autocomplete="username" required>
+                    </div>
+                    <div>
+                        <label for="admin-first-name">First name</label>
+                        <input type="text" id="admin-first-name" class="modal-input" autocomplete="given-name" required>
+                    </div>
+                    <div>
+                        <label for="admin-last-name">Last name</label>
+                        <input type="text" id="admin-last-name" class="modal-input" autocomplete="family-name" required>
+                    </div>
+                    <div>
+                        <label for="admin-password">Password</label>
+                        <input type="password" id="admin-password" class="modal-input" autocomplete="new-password" required>
+                    </div>
+                    <div>
+                        <label for="admin-password-confirm">Confirm password</label>
+                        <input type="password" id="admin-password-confirm" class="modal-input" autocomplete="new-password" required>
+                    </div>
+                    <p id="admin-setup-error" class="form-error hidden" role="alert"></p>
+                    <div class="modal-footer">
+                        <button type="button" class="secondary" id="admin-setup-unload-btn">Unload database</button>
+                        <button type="submit" id="admin-setup-submit-btn">Create admin</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- User Management Modal -->
+    <div id="user-management-modal" class="patient-modal" role="dialog" aria-modal="true" aria-labelledby="user-management-title">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="user-management-title">User management</h2>
+                <span id="user-management-close" class="close" role="button" tabindex="0" aria-label="Close user management dialog">&times;</span>
+            </div>
+            <div class="modal-body">
+                <p class="modal-message">Add, disable, or reset passwords for local users.</p>
+                <table class="user-table">
+                    <thead>
+                        <tr>
+                            <th>Username</th>
+                            <th>Display name</th>
+                            <th>Role</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="user-management-body"></tbody>
+                </table>
+                <div class="user-form">
+                    <h3>Create user</h3>
+                    <form id="user-create-form">
+                        <div>
+                            <label for="user-create-username">Username</label>
+                            <input type="text" id="user-create-username" class="modal-input" autocomplete="off" required>
+                        </div>
+                        <div>
+                            <label for="user-create-first-name">First name</label>
+                            <input type="text" id="user-create-first-name" class="modal-input" autocomplete="given-name" required>
+                        </div>
+                        <div>
+                            <label for="user-create-last-name">Last name</label>
+                            <input type="text" id="user-create-last-name" class="modal-input" autocomplete="family-name" required>
+                        </div>
+                        <div>
+                            <label for="user-create-role">Role</label>
+                            <select id="user-create-role" class="modal-input">
+                                <option value="user">User</option>
+                                <option value="admin">Admin</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="user-create-password">Password</label>
+                            <input type="password" id="user-create-password" class="modal-input" autocomplete="new-password" required>
+                        </div>
+                        <div>
+                            <label for="user-create-confirm">Confirm password</label>
+                            <input type="password" id="user-create-confirm" class="modal-input" autocomplete="new-password" required>
+                        </div>
+                        <p id="user-management-error" class="form-error hidden" role="alert"></p>
+                        <div class="modal-footer">
+                            <button type="submit">Add user</button>
+                            <button type="button" class="secondary" id="user-management-done-btn">Done</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recruiting Units Modal -->
+    <div id="unit-filter-modal" class="patient-modal" role="dialog" aria-modal="true" aria-labelledby="unit-filter-title">
+        <div class="modal-content modal-narrow">
+            <div class="modal-header">
+                <h2 id="unit-filter-title">Recruiting units</h2>
+                <span id="unit-filter-close" class="close" role="button" tabindex="0" aria-label="Close recruiting units dialog">&times;</span>
+            </div>
+            <div class="modal-body">
+                <p class="modal-message">Select the dialysis units currently recruiting at this site.</p>
+                <div id="unit-filter-empty" class="status-subtext hidden">No unit codes found in Study IDs.</div>
+                <div id="unit-filter-list" class="unit-filter-list"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="secondary" id="unit-filter-cancel">Cancel</button>
+                <button type="button" id="unit-filter-save">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Patient Assessment Modal REMOVED -->
+        <script src="js/app.js"></script>
+
+</body>
+</html>
