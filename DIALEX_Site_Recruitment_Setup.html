@@ -456,12 +456,12 @@ else if (typeof exports === 'object'){
                     <input type="password" id="admin-confirm" autocomplete="new-password" required data-password-field>
                 </div>
 
-                <h2>Study ID list (required)</h2>
+                <h2>Study ID list (optional)</h2>
                 <div class="field">
                     <label for="study-id-file">Import available study IDs (CSV)</label>
-                    <input type="file" id="study-id-file" accept=".csv,text/csv" required>
-                    <div class="help">Required. CSV must include a <code>study_id</code> column from REDCap.</div>
-                    <div id="study-id-status" class="inline-status">No study IDs loaded. Import required.</div>
+                    <input type="file" id="study-id-file" accept=".csv,text/csv">
+                    <div class="help">CSV must include a <code>study_id</code> column from REDCap.</div>
+                    <div id="study-id-status" class="inline-status">No study IDs loaded.</div>
                     <div id="study-id-preview" class="inline-status hidden"></div>
                     <div class="inline-actions">
                         <button type="button" id="clear-study-ids" class="secondary" disabled>Clear study ID list</button>
@@ -470,9 +470,9 @@ else if (typeof exports === 'object'){
 
                 <h2>Output file</h2>
                 <div class="field">
-                    <label for="site-label">Dialysis program name</label>
-                    <input type="text" id="site-label" autocomplete="off" placeholder="Dialysis program name" required>
-                    <div class="help">Required. Used only to label the filename.</div>
+                    <label for="site-label">Site label (optional)</label>
+                    <input type="text" id="site-label" autocomplete="off" placeholder="Site code or name">
+                    <div class="help">Used only to label the filename.</div>
                 </div>
 
                 <div class="actions">
@@ -687,7 +687,7 @@ else if (typeof exports === 'object'){
         function clearStudyIdImport() {
             importedStudyIds = [];
             studyIdInput.value = '';
-            setStudyIdStatus('No study IDs loaded. Import required.');
+            setStudyIdStatus('No study IDs loaded.');
             studyIdPreview.textContent = '';
             studyIdPreview.classList.add('hidden');
             clearStudyIdsBtn.disabled = true;
@@ -1033,20 +1033,6 @@ else if (typeof exports === 'object'){
                 return;
             }
 
-            const siteLabel = sanitizeFileLabel(siteLabelRaw);
-            if (!siteLabel) {
-                showStatus('Enter a dialysis program name to label the file.', 'error');
-                document.getElementById('site-label').focus();
-                return;
-            }
-
-            if (!importedStudyIds.length) {
-                setStudyIdStatus('Study ID list is required. Import a CSV before creating the database.', 'error');
-                showStatus('Import the study ID CSV before creating the database.', 'error');
-                studyIdInput.focus();
-                return;
-            }
-
             createBtn.disabled = true;
 
             try {
@@ -1062,6 +1048,7 @@ else if (typeof exports === 'object'){
                     { id: adminWrapId, password: adminPassword }
                 ]);
                 const encrypted = await encryptDatabaseV2(sqlData, encryptionState);
+                const siteLabel = sanitizeFileLabel(siteLabelRaw);
                 const filename = buildFilename(siteLabel);
                 const blob = new Blob([encrypted], { type: 'application/octet-stream' });
                 triggerDownload(blob, filename);
