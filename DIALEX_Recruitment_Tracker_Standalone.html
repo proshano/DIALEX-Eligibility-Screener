@@ -1142,20 +1142,39 @@ License: MIT
         }
 
         .instructions-header {
-            padding: 12px 16px;
+            padding: 14px 20px;
             background: var(--table-header-bg);
             border-bottom: 1px solid var(--border);
-            font-weight: 600;
+            font-weight: 700;
+            font-size: 16px;
+            letter-spacing: 0.3px;
             display: flex;
             justify-content: space-between;
             align-items: center;
             cursor: pointer;
             -webkit-user-select: none;
             user-select: none;
+            color: var(--brand);
+            transition: background 0.2s ease;
+        }
+
+        .instructions-header:hover {
+            background: var(--table-header-hover);
+        }
+
+        .instructions-header span:first-child {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .instructions-header span:first-child::before {
+            content: "ℹ️";
+            font-size: 18px;
         }
 
         .instructions-content {
-            padding: 15px;
+            padding: 20px;
             display: none;
             background: var(--card);
         }
@@ -1163,11 +1182,63 @@ License: MIT
         .instructions-content.open { display: block; }
 
         .instructions-content ol {
-            padding-left: 25px;
+            padding-left: 0;
+            list-style: none;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
         }
 
         .instructions-content li {
-            margin-bottom: 8px;
+            background: color-mix(in srgb, var(--bg) 50%, var(--card));
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 14px 18px;
+            margin-bottom: 0;
+            display: flex;
+            gap: 16px;
+            align-items: flex-start;
+            transition: border-color 0.2s ease, transform 0.2s ease;
+        }
+
+        .instructions-content li:hover {
+            border-color: var(--brand);
+            transform: translateX(4px);
+        }
+
+        .step-badge {
+            flex-shrink: 0;
+            width: 28px;
+            height: 28px;
+            background: var(--brand);
+            color: var(--primary-btn-text);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 13px;
+            margin-top: 2px;
+        }
+
+        .step-content {
+            flex-grow: 1;
+            font-size: 15px;
+            line-height: 1.55;
+        }
+
+        .step-content strong {
+            color: var(--brand);
+            font-weight: 600;
+        }
+
+        .step-content code {
+            background: var(--table-header-bg);
+            padding: 2px 5px;
+            border-radius: 4px;
+            font-family: inherit;
+            font-size: 0.95em;
+            border: 1px solid var(--border);
         }
 
         .patient-modal {
@@ -2047,15 +2118,42 @@ License: MIT
                 </div>
                 <div id="instructions-content" class="instructions-content">
                 <ol>
-                    <li>Click "Load database" and open the encrypted file provided for your site. Enter your account password (or the central recovery password) to decrypt.</li>
-                    <li>Sign in with your username and password. Admin users can open "Manage users" to add or disable accounts.</li>
-                    <li>Autosave continuously writes two timestamped files in the save folder (dialex-secure-latest-a-YYYY-MM-DD-HH-MM-SS.enc and dialex-secure-latest-b-YYYY-MM-DD-HH-MM-SS.enc). Load the newest timestamp when resuming work.</li>
-                    <li>Import the Registration Data Extract CSV for automated pre-screening; this is the preferred method because it is the fastest way to add many patients at once and imports health card numbers directly to minimize the chance for errors. Before each import, you will be prompted to create a named backup; only load backups if the current autosave is clearly wrong (for example, a bad import). If needed, you can also add individual patients manually by clicking "Add individual patient".</li>
-                    <li>For each patient, assess eligibility using the eligibility criteria. You will find pre-populated answers. The pre-populated answers are not guaranteed to be correct as they rely on data maintained by your program for the Ontario Renal Reporting System. Many of the exclusion criteria require knowledge of the patient beyond this database. To proceed to notification and randomization, a patient must meet all inclusion criteria and none of the exclusion criteria.</li>
-                    <li>You must confirm that the patient has met all inclusion criteria and none of the exclusion criteria before proceeding to notification and randomization. The tool requires that you check the "No exclusions" checkbox before proceeding to notification and randomization.</li>
-                    <li>For eligible patients, track notification and opt-out periods before randomization. Status flow: Deliver notification -&gt; Notified and waiting (notification date entered) -&gt; Assess eligibility for randomization (15 days after notification; pending opt-out stays here) -&gt; Ready to Randomize if opt-out status is "Did not opt out", or Opted Out if opted out.</li>
-                    <li>When a patient is ready to randomize, assign a Study ID from the site list, then set Randomized = Yes.</li>
-                    <li>You can lock patient records to prevent accidental changes and unlock them later when needed.</li>
+                    <li>
+                        <div class="step-badge">1</div>
+                        <div class="step-content">Click <strong>"Load database"</strong> and open the encrypted file provided for your site. Enter your account password (or the central recovery password) to decrypt.</div>
+                    </li>
+                    <li>
+                        <div class="step-badge">2</div>
+                        <div class="step-content"><strong>Sign in</strong> with your username and password. Admin users can open <strong>"Manage users"</strong> to add or disable accounts.</div>
+                    </li>
+                    <li>
+                        <div class="step-badge">3</div>
+                        <div class="step-content">The software <strong>continuously writes</strong> two timestamped files in the save folder (<code>dialex-secure-latest-a-YYYY-MM-DD-HH-MM-SS.enc</code> and <code>dialex-secure-latest-b-YYYY-MM-DD-HH-MM-SS.enc</code>) to prevent data loss. Load the newest timestamp when resuming work.</div>
+                    </li>
+                    <li>
+                        <div class="step-badge">4</div>
+                        <div class="step-content"><strong>Import</strong> the Registration Data Extract CSV for automated pre-screening; this is the preferred method because it is the fastest way to add many patients at once and imports health card numbers directly to minimize the chance for errors. Before each import, you will be prompted to create a <strong>named backup</strong>; only load backups if the current version of the data is clearly wrong (for example, a bad import). If needed, you can also add individual patients manually by clicking <strong>"Add individual patient"</strong>.</div>
+                    </li>
+                    <li>
+                        <div class="step-badge">5</div>
+                        <div class="step-content">For each patient, <strong>assess eligibility</strong> using the eligibility criteria. You will find pre-populated answers (based on Ontario Renal Reporting System data) which should be verified. To proceed to notification and randomization, a patient must meet <strong>all inclusion criteria</strong> and <strong>none of the exclusion criteria</strong>.</div>
+                    </li>
+                    <li>
+                        <div class="step-badge">6</div>
+                        <div class="step-content">You must confirm that the patient has met all inclusion criteria and none of the exclusion criteria before proceeding. The tool requires that you check the <strong>"No exclusions"</strong> checkbox before proceeding to notification and randomization.</div>
+                    </li>
+                    <li>
+                        <div class="step-badge">7</div>
+                        <div class="step-content">For eligible patients, <strong>track notification and opt-out periods</strong>. Status flow: <code>Deliver notification</code> &rarr; <code>Notified and waiting</code> (15 days) &rarr; <code>Ready to Randomize</code> (if no opt-out) or <code>Opted Out</code>.</div>
+                    </li>
+                    <li>
+                        <div class="step-badge">8</div>
+                        <div class="step-content">When a patient is ready to randomize, assign a <strong>Study ID</strong> from the site list, then set <strong>Randomized = Yes</strong>.</div>
+                    </li>
+                    <li>
+                        <div class="step-badge">9</div>
+                        <div class="step-content">You can <strong>lock</strong> patient records to prevent accidental changes and unlock them later when needed.</div>
+                    </li>
                 </ol>
                 
                 
@@ -2696,7 +2794,7 @@ License: MIT
             let accountPassword = await promptPasswordModal({
                 title: needsUpgrade ? 'Upgrade encryption' : 'Confirm account password',
                 message: needsUpgrade
-                    ? 'This database uses legacy encryption. Enter your account password to upgrade it to multi-user encryption for autosave.'
+                    ? 'This database uses legacy encryption. Enter your account password to upgrade it to multi-user encryption to enable continuous data saving.'
                     : 'Enter your account password so your account can unlock this database.',
                 requireConfirmation: false,
                 submitLabel: 'Continue',
@@ -3267,7 +3365,7 @@ License: MIT
                     setFolderBtn.addEventListener('click', handleSetSaveFolder);
                 } else {
                     setFolderBtn.disabled = true;
-                    setFolderBtn.title = 'This browser does not support selecting a folder for autosave.';
+                    setFolderBtn.title = 'This browser does not support selecting a folder for continuous data saving.';
                 }
             }
             const gateBtn = $('autosave-gate-btn');
@@ -3432,7 +3530,7 @@ License: MIT
                 updateSaveFolderStatus();
                 updateAppAccessState();
                 if (showMessages && db) {
-                    showStatus('Autosave requires a browser that supports selecting a save folder.', 'error');
+                    showStatus('Continuous data saving requires Google Chrome or Microsoft Edge.', 'error');
                 }
                 return false;
             }
@@ -3440,7 +3538,7 @@ License: MIT
                 updateSaveFolderStatus();
                 updateAppAccessState();
                 if (showMessages && db) {
-                    showStatus('Select a save folder to enable autosave and editing.', 'error');
+                    showStatus('Select a save folder to enable continuous data saving and editing.', 'error');
                 }
                 return false;
             }
@@ -3569,10 +3667,10 @@ License: MIT
 
         function getAutosaveBlockingMessage() {
             if (!supportsDirectoryPicker) {
-                return 'Autosave requires a browser that supports selecting a save folder.';
+                return 'Continuous data saving requires Google Chrome or Microsoft Edge.';
             }
             if (!saveDirectoryHandle) {
-                return 'Select a save folder to enable autosave and editing.';
+                return 'Select a save folder to enable continuous data saving and editing.';
             }
             if (!saveDirectoryReady) {
                 return 'Save folder access is required. Click "Set save folder".';
@@ -3746,7 +3844,7 @@ License: MIT
                 return null;
             }
             if (!isAutosaveReady()) {
-                showStatus('Autosave must be ready before importing.', 'error');
+                showStatus('Continuous saving must be ready before importing.', 'error');
                 return null;
             }
             const sanitizedLabel = sanitizeBackupLabel(label);
@@ -3755,7 +3853,7 @@ License: MIT
                 return null;
             }
             if (autosaveInProgress) {
-                showStatus('Autosave in progress. Please wait...', 'status');
+                showStatus('Data saving in progress. Please wait...', 'status');
                 await waitForAutosaveToFinish();
             }
             manualSaveInProgress = true;
@@ -3783,22 +3881,22 @@ License: MIT
         }
 
         async function handleAutosaveFailure(error) {
-            console.error('Autosave failed', error);
+            console.error('Data saving failed', error);
             if (error && (error.code === 'no_folder' || error.code === 'no_permission' || error.code === 'write_failed')) {
                 saveDirectoryReady = false;
                 saveDirectoryHandle = null;
                 await clearStoredSaveDirectoryHandle();
                 updateSaveFolderStatus();
                 updateAppAccessState();
-                showStatus('Autosave failed. Select a save folder to continue.', 'error');
+                showStatus('Continuous data saving failed. Select a save folder to continue.', 'error');
                 return;
             }
             if (error && error.code === 'encryption') {
                 updateAppAccessState();
-                showStatus('Autosave requires multi-user encryption. Load an updated database.', 'error');
+                showStatus('Continuous data saving requires multi-user encryption. Load an updated database.', 'error');
                 return;
             }
-            showStatus('Autosave failed: ' + (error && error.message ? error.message : error), 'error');
+            showStatus('Continuous data saving failed: ' + (error && error.message ? error.message : error), 'error');
         }
 
         async function runAutosave() {
