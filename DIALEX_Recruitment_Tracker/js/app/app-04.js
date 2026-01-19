@@ -840,7 +840,7 @@ function updateInlineNotification(index, value) {
         }
         const normalized = normalizeISODateString(newDate);
             if (!normalized) {
-        showRecordWarning('Enter notification date as DD/MM/YYYY (or YYYY-MM-DD).', 'error');
+        showRecordWarning('Enter notification date as DD/MM/YYYY.', 'error');
             renderPatientTable();
             return;
         }
@@ -925,7 +925,7 @@ function updateOptOutDate(index, value) {
     }
     const normalized = normalizeISODateString(dateVal);
     if (!normalized) {
-        showRecordWarning('Enter opt-out date as DD/MM/YYYY (or YYYY-MM-DD).', 'error');
+        showRecordWarning('Enter opt-out date as DD/MM/YYYY.', 'error');
         renderPatientTable();
         return;
     }

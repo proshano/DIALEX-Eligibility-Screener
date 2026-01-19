@@ -26,7 +26,7 @@ function updatePatientBirthDate(index, value) {
     }
     const normalized = normalizeISODateString(raw);
     if (!normalized) {
-        showRecordWarning('Enter birth date as DD/MM/YYYY (or YYYY-MM-DD).', 'error');
+        showRecordWarning('Enter birth date as DD/MM/YYYY.', 'error');
         renderPatientTable();
         return;
     }
@@ -283,7 +283,7 @@ function updateDialysisStartDate(index, value) {
     } else {
         const normalized = normalizeISODateString(raw);
         if (!normalized) {
-            showRecordWarning('Enter dialysis start date as DD/MM/YYYY (or YYYY-MM-DD).', 'error');
+            showRecordWarning('Enter dialysis start date as DD/MM/YYYY.', 'error');
             renderPatientTable();
             return;
         }

@@ -218,10 +218,13 @@
 }
 .patient-collapsed-summary {
     display: flex;
-    align-items: center;
-    gap: 12px;
-    row-gap: 8px;
+    align-items: flex-end;
+    column-gap: 16px;
+    row-gap: 10px;
     flex-wrap: wrap;
+}
+.patient-collapsed-summary .table-input {
+    min-width: 0;
 }
 .patient-collapsed-summary .compact-field {
     display: flex;
@@ -240,15 +243,15 @@
     padding: 4px 6px;
 }
 .patient-collapsed-summary .compact-name {
-    width: 200px;
+    width: 240px;
     flex-shrink: 0;
 }
 .patient-collapsed-summary .compact-age {
-    width: 40px;
+    width: 60px;
     flex-shrink: 0;
 }
 .patient-collapsed-summary .compact-dob {
-    width: 110px;
+    width: 120px;
     flex-shrink: 0;
 }
 .patient-collapsed-summary .compact-dob input {
@@ -270,19 +273,19 @@
     margin: 0;
 }
 .patient-collapsed-summary .compact-mrn {
-    width: 130px;
+    width: 160px;
     flex-shrink: 0;
 }
 .patient-collapsed-summary .compact-hcn {
-    width: 140px;
+    width: 180px;
     flex-shrink: 0;
 }
 .patient-collapsed-summary .compact-province {
-    width: 70px;
+    width: 110px;
     flex-shrink: 0;
 }
 .patient-collapsed-summary .compact-dialysis {
-    width: 170px;
+    width: 280px;
     flex-shrink: 0;
 }
 .patient-collapsed-summary .compact-start {
@@ -291,8 +294,16 @@
 }
 .patient-collapsed-summary .compact-field .input-with-copy {
     display: flex;
-    gap: 3px;
+    gap: 6px;
     align-items: center;
+}
+.patient-collapsed-summary .compact-field .input-with-copy .table-input {
+    width: auto;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+.patient-collapsed-summary .copy-btn-mini {
+    flex-shrink: 0;
 }
 .patient-collapsed-summary .copy-btn-mini {
     padding: 3px 6px;

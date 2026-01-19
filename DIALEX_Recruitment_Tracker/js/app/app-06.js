@@ -559,10 +559,36 @@ function isFutureISODateString(value) {
 function buildLocationOptionsHtml(selectedValue = '') {
     const normalizedSelected = normalizeLocationValue(selectedValue);
     const options = ['<option value="">None (not in-centre)</option>'];
+    const hasAvailableUnits = !!(db && Array.isArray(availableUnitCodes) && availableUnitCodes.length);
+    const shouldMarkUnavailable = hasAvailableUnits;
+    const allowedSet = hasAvailableUnits
+        ? new Set(availableUnitCodes.map(normalizeUnitCode).filter(Boolean))
+        : null;
+    let selectedListed = false;
+
     LOCATION_OPTION_LIST.forEach(option => {
+        if (db) {
+            if (!hasAvailableUnits) {
+                return;
+            }
+            const code = normalizeUnitCode(getLocationCodeFromValue(option.canonical));
+            if (!code || !allowedSet.has(code)) {
+                return;
+            }
+        }
         const selected = option.normalized === normalizedSelected ? ' selected' : '';
+        if (selected) {
+            selectedListed = true;
+        }
         options.push(`<option value="${escapeHtml(option.canonical)}"${selected}>${escapeHtml(option.display)}</option>`);
     });
+    if (normalizedSelected && !selectedListed) {
+        const display = getLocationDisplayFromCanonical(selectedValue) || formatLocationDisplay(selectedValue) || selectedValue;
+        const suffix = shouldMarkUnavailable ? ' (not in program)' : '';
+        options.push(`<option value="${escapeHtml(selectedValue)}" selected>${escapeHtml(`${display}${suffix}`)}</option>`);
+    } else if (db && !hasAvailableUnits) {
+        options.push('<option value="" disabled>No program units loaded</option>');
+    }
     return options.join('');
 }
 
