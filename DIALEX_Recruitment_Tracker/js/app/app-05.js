@@ -26,7 +26,7 @@ function updatePatientBirthDate(index, value) {
     }
     const normalized = normalizeISODateString(raw);
     if (!normalized) {
-        showRecordWarning('Enter birth date as YYYY-MM-DD (or MM/DD/YYYY).', 'error');
+        showRecordWarning('Enter birth date as DD/MM/YYYY (or YYYY-MM-DD).', 'error');
         renderPatientTable();
         return;
     }
@@ -283,7 +283,7 @@ function updateDialysisStartDate(index, value) {
     } else {
         const normalized = normalizeISODateString(raw);
         if (!normalized) {
-            showRecordWarning('Enter dialysis start date as YYYY-MM-DD (or MM/DD/YYYY).', 'error');
+            showRecordWarning('Enter dialysis start date as DD/MM/YYYY (or YYYY-MM-DD).', 'error');
             renderPatientTable();
             return;
         }
@@ -552,7 +552,9 @@ function toggleRecordLocked(index, checked) {
 function copyPatientField(index, field) {
     const patient = patientsData[index];
     if (!patient) return;
-    const value = field === 'mrn' ? getDisplayMrnValue(patient.mrn) : patient[field];
+    const rawValue = field === 'mrn' ? getDisplayMrnValue(patient.mrn) : patient[field];
+    const dateFields = new Set(['notification_date', 'opt_out_date', 'dialysis_start_date', 'birth_date']);
+    const value = dateFields.has(field) ? formatEntryDate(rawValue) : rawValue;
     const labels = {
         mrn: 'MRN',
         health_card: 'Health card number',

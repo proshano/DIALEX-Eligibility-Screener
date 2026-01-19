@@ -110,6 +110,18 @@ setupSaveLocationControls();
 setupUserManagementControls();
 window.addEventListener('beforeunload', handleBeforeUnload);
 
+document.addEventListener('input', event => {
+    const target = event.target;
+    if (!target || !target.dataset || target.dataset.dateEntry !== 'true') return;
+    const formatted = formatDateEntryInput(target.value);
+    if (formatted === target.value) return;
+    target.value = formatted;
+    if (typeof target.setSelectionRange === 'function') {
+        const end = formatted.length;
+        target.setSelectionRange(end, end);
+    }
+});
+
 window.toggleMasterInclusion = toggleMasterInclusion;
 window.toggleMasterExclusion = toggleMasterExclusion;
 window.updateCriterion = updateCriterion;

@@ -52,6 +52,14 @@
                 <div class="meta-pill owner-pill" aria-label="Ownership">Copyright 2025 DIALEX trial project office</div>
                 <button id="theme-toggle" class="meta-pill theme-toggle" onclick="toggleTheme()" aria-pressed="true" type="button">Dark theme</button>
             </div>
+            <div class="header-admin hidden" id="admin-actions">
+                <div class="header-admin-label">Administration</div>
+                <div class="header-admin-actions">
+                    <button id="manage-users-btn" class="secondary hidden" disabled>Manage users</button>
+                    <button id="sign-out-btn" class="secondary hidden" disabled>Switch user</button>
+                    <button id="rotate-central-btn" class="secondary hidden" disabled>Rotate central password</button>
+                </div>
+            </div>
             
             <!-- Status Bar -->
             <div class="status-bar">
@@ -103,12 +111,6 @@
                             </div>
                         </div>
                 </div>
-                    <div class="action-group hidden" id="admin-actions">
-                        <div class="action-group-label">Administration</div>
-                        <button id="manage-users-btn" class="secondary hidden" disabled>Manage users</button>
-                        <button id="sign-out-btn" class="secondary hidden" disabled>Switch user</button>
-                        <button id="rotate-central-btn" class="secondary hidden" disabled>Rotate central password</button>
-                    </div>
                 </div>
 
                 <!-- Patient Data Card -->

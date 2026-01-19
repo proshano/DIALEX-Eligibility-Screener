@@ -129,6 +129,29 @@ body.browser-warning-active footer {
     align-items: center;
     margin-top: 10px;
 }
+.header-admin {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+    margin-top: 12px;
+}
+.header-admin.hidden {
+    display: none;
+}
+.header-admin-label {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+.header-admin-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+}
 .meta-pill {
     display: inline-flex;
     align-items: center;
@@ -207,14 +230,9 @@ body.browser-warning-active footer {
 /* Control Panel Grid Layout */
 .control-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    grid-template-columns: 1fr;
     gap: 16px;
     margin-top: 16px;
-}
-@media (max-width: 900px) {
-    .control-grid {
-        grid-template-columns: 1fr;
-    }
 }
 .control-card {
     background: var(--card);

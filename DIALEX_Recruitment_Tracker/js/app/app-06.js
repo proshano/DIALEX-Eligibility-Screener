@@ -32,6 +32,27 @@ function parseBoolean(value) {
     return ['yes', 'true', '1', 'y'].includes(normalized);
 }
 
+function buildDateFromParts(year, month, day) {
+    if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return null;
+    if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+    const date = new Date(0);
+    date.setFullYear(year, month - 1, day);
+    date.setHours(0, 0, 0, 0);
+    if (Number.isNaN(date.getTime())) return null;
+    if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) {
+        return null;
+    }
+    return date;
+}
+
+function resolveTwoDigitYear(value) {
+    const year = Number(value);
+    if (!Number.isFinite(year)) return null;
+    if (year >= 100) return year;
+    const current = new Date().getFullYear() % 100;
+    return (year <= current ? 2000 : 1900) + year;
+}
+
 function parseLegacyDate(value) {
     if (!value) return null;
     const trimmed = String(value).trim();
@@ -41,15 +62,20 @@ function parseLegacyDate(value) {
     }
     const parts = trimmed.split(/[\/\-]/).map(Number);
     if (parts.length !== 3) return null;
+    const [first, second, third] = parts;
     let day, month, year;
-    if (parts[2] > 1900) {
-        [day, month, year] = parts;
+    if (first > 1900) {
+        year = first;
+        month = second;
+        day = third;
+    } else if (third > 1900 || (third >= 0 && third < 100)) {
+        year = resolveTwoDigitYear(third);
+        day = first;
+        month = second;
     } else {
-        [year, month, day] = parts;
+        return null;
     }
-    if (!day || !month || !year) return null;
-    const date = new Date(year, month - 1, day);
-    return Number.isNaN(date.getTime()) ? null : date;
+    return buildDateFromParts(year, month, day);
 }
 
 function normalizeLegacyDate(value) {
@@ -392,8 +418,7 @@ function parseISODate(value) {
     const parts = value.split('-').map(Number);
     if (parts.length !== 3) return null;
     const [y, m, d] = parts;
-    const date = new Date(y, m - 1, d);
-    return Number.isNaN(date.getTime()) ? null : date;
+    return buildDateFromParts(y, m, d);
 }
 
 function addDays(date, days) {
@@ -410,17 +435,37 @@ function formatISODate(date) {
     return `${y}-${m}-${d}`;
 }
 
-const FRIENDLY_FORMAT = new Intl.DateTimeFormat(undefined, {
-    month: 'short',
-    day: '2-digit',
-    year: 'numeric'
-});
+function formatEntryDate(value) {
+    if (!value) return '';
+    const date = parseISODate(value) || parseLegacyDate(value);
+    if (!date) return value;
+    const d = String(date.getDate()).padStart(2, '0');
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const y = date.getFullYear();
+    return `${d}/${m}/${y}`;
+}
+
+function formatDateEntryInput(value) {
+    if (value === null || value === undefined) return '';
+    const raw = String(value);
+    if (raw.includes('-') || /^\d{4}\//.test(raw)) {
+        return raw;
+    }
+    const digits = raw.replace(/\D/g, '').slice(0, 8);
+    if (!digits) return '';
+    if (digits.length <= 2) return digits;
+    if (digits.length <= 4) return `${digits.slice(0, 2)}/${digits.slice(2)}`;
+    return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}`;
+}
 
 function formatFriendlyDate(value) {
     if (!value) return '';
     const date = parseISODate(value);
     if (!date) return '';
-    return FRIENDLY_FORMAT.format(date);
+    const d = String(date.getDate()).padStart(2, '0');
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const y = date.getFullYear();
+    return `${d}/${m}/${y}`;
 }
 
 function formatDisplayDateTime(value) {
@@ -433,7 +478,15 @@ function formatDisplayDateTime(value) {
 function normalizeISODateString(value) {
     const trimmed = (value || '').trim();
     if (!trimmed) return '';
-    if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
+    const isoMatch = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (isoMatch) {
+        const year = Number(isoMatch[1]);
+        const month = Number(isoMatch[2]);
+        const day = Number(isoMatch[3]);
+        const resolvedYear = year < 100 ? resolveTwoDigitYear(year) : year;
+        const date = buildDateFromParts(resolvedYear, month, day);
+        return date ? formatISODate(date) : '';
+    }
     const parsed = parseLegacyDate(trimmed);
     return parsed ? formatISODate(parsed) : '';
 }

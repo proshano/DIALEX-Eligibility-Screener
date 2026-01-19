@@ -284,7 +284,7 @@ function buildPatientSummaryRow(patient, isExpanded) {
 
     const isLocked = !!patient.locked_at;
     const ageValue = Number.isFinite(patient.age) ? patient.age : '';
-    const birthDateValue = patient.birth_date || '';
+    const birthDateValue = formatEntryDate(patient.birth_date || '');
     const dialysisUnitCanonical = getDialysisUnitCanonical(patient);
     const dialysisUnitOptions = buildLocationOptionsHtml(dialysisUnitCanonical);
     const provinceOptions = buildProvinceOptions(patient.health_card_province || '');
@@ -306,7 +306,7 @@ function buildPatientSummaryRow(patient, isExpanded) {
                 </div>
                 <div class="compact-field compact-dob" data-field="birth_date">
                     <label>DOB</label>
-                    <input type="date" class="table-input" value="${birthDateValue}" ${isLocked ? 'disabled' : ''} onchange="updatePatientBirthDate(${patient._index}, this.value)">
+                    <input type="text" class="table-input" value="${birthDateValue}" placeholder="DD/MM/YYYY" title="DD/MM/YYYY or YYYY-MM-DD" inputmode="numeric" autocomplete="off" spellcheck="false" data-date-entry="true" ${isLocked ? 'disabled' : ''} onchange="updatePatientBirthDate(${patient._index}, this.value)">
                 </div>
                 <div class="compact-field compact-age">
                     <label>Age</label>
@@ -338,11 +338,13 @@ function buildPatientSummaryRow(patient, isExpanded) {
                         ${dialysisUnitOptions}
                     </select>
                 </div>
-                ${statusBadge}
                 <div class="expand-indicator right ${expandedClass}" onclick="togglePatientRow(${patient._index})">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <polyline points="9 18 15 12 9 6"></polyline>
                     </svg>
+                </div>
+                <div class="status-badge-wrap">
+                    ${statusBadge}
                 </div>
             </div>
         </td>
@@ -368,10 +370,10 @@ function buildPatientDetailsRow(patient) {
     const isRandomized = !!patient.randomized;
     const isLocked = !!patient.locked_at;
     const ageValue = Number.isFinite(patient.age) ? patient.age : '';
-    const notificationDisplay = patient.notification_date || '';
+    const notificationDisplay = formatEntryDate(patient.notification_date || '');
     const notificationFriendly = formatFriendlyDate(patient.notification_date);
     const optOutStatus = patient.opt_out_status || OPT_OUT_STATUS.PENDING;
-    const optOutDateDisplay = patient.opt_out_date || '';
+    const optOutDateDisplay = formatEntryDate(patient.opt_out_date || '');
     const optOutFriendly = formatFriendlyDate(patient.opt_out_date);
     const hasEligibleDate = Boolean(patient.first_ready_iso);
     const eligibleWindowStarted = Boolean(patient.first_ready_date && patient.first_ready_date.getTime() <= startOfToday().getTime());
@@ -392,7 +394,7 @@ function buildPatientDetailsRow(patient) {
         { value: OPT_OUT_STATUS.DID_NOT, label: 'Did not opt out' },
         { value: OPT_OUT_STATUS.OPTED_OUT, label: 'Opted out' }
     ].map(opt => `<option value="${opt.value}" ${opt.value === optOutStatus ? 'selected' : ''}>${opt.label}</option>`).join('');
-    const dialysisStartDisplay = patient.dialysis_start_date || '';
+    const dialysisStartDisplay = formatEntryDate(patient.dialysis_start_date || '');
     const dialysisStartFriendly = formatFriendlyDate(patient.dialysis_start_date);
     const notifiedCopyButton = `<button class="copy-btn" ${patient.notification_date ? '' : 'disabled'} onclick="copyPatientField(${patient._index}, 'notification_date')">Copy date</button>`;
     const dialysisConfirmControls = patient.dialysis_start_date ? '' : `
@@ -487,7 +489,7 @@ function buildPatientDetailsRow(patient) {
                             <span class="date-display ${dialysisStartFriendly ? 'has-value' : ''}">${dialysisStartFriendly || 'Not set'}</span>
                         </div>
                         <div class="date-input-row">
-                            <input type="date" class="table-input inline-date" value="${dialysisStartDisplay}" ${isLocked ? 'disabled' : ''} onchange="updateDialysisStartDate(${patient._index}, this.value)">
+                            <input type="text" class="table-input inline-date" value="${dialysisStartDisplay}" placeholder="DD/MM/YYYY" title="DD/MM/YYYY or YYYY-MM-DD" inputmode="numeric" autocomplete="off" spellcheck="false" data-date-entry="true" ${isLocked ? 'disabled' : ''} onchange="updateDialysisStartDate(${patient._index}, this.value)">
                         </div>
                     </div>
                     ${dialysisConfirmControls}
@@ -515,7 +517,7 @@ function buildPatientDetailsRow(patient) {
                         <span class="date-display ${notificationFriendly ? 'has-value' : ''}">${notificationFriendly || 'Not set'}</span>
                     </div>
                     <div class="date-input-row">
-                        <input type="date" class="table-input inline-date" value="${notificationDisplay}" placeholder="Select date" ${isLocked ? 'disabled' : ''} onchange="updateInlineNotification(${patient._index}, this.value)">
+                        <input type="text" class="table-input inline-date" value="${notificationDisplay}" placeholder="DD/MM/YYYY" title="DD/MM/YYYY or YYYY-MM-DD" inputmode="numeric" autocomplete="off" spellcheck="false" data-date-entry="true" ${isLocked ? 'disabled' : ''} onchange="updateInlineNotification(${patient._index}, this.value)">
                         ${notifiedCopyButton}
                     </div>
                 </div>
@@ -537,7 +539,7 @@ function buildPatientDetailsRow(patient) {
                             <span class="date-display ${optOutFriendly ? 'has-value' : ''}">${optOutFriendly || 'Not set'}</span>
                         </div>
                         <div class="date-input-row">
-                            <input type="date" class="table-input inline-date" value="${optOutDateDisplay}" placeholder="Select date" ${optOutDateDisabled} onchange="updateOptOutDate(${patient._index}, this.value)">
+                            <input type="text" class="table-input inline-date" value="${optOutDateDisplay}" placeholder="DD/MM/YYYY" title="DD/MM/YYYY or YYYY-MM-DD" inputmode="numeric" autocomplete="off" spellcheck="false" data-date-entry="true" ${optOutDateDisabled} onchange="updateOptOutDate(${patient._index}, this.value)">
                             <button class="copy-btn" ${optOutCopyDisabled} onclick="copyPatientField(${patient._index}, 'opt_out_date')">Copy date</button>
                         </div>
                     </div>
@@ -837,8 +839,8 @@ function updateInlineNotification(index, value) {
             return;
         }
         const normalized = normalizeISODateString(newDate);
-        if (!normalized) {
-            showRecordWarning('Enter notification date as YYYY-MM-DD (or MM/DD/YYYY).', 'error');
+            if (!normalized) {
+        showRecordWarning('Enter notification date as DD/MM/YYYY (or YYYY-MM-DD).', 'error');
             renderPatientTable();
             return;
         }
@@ -923,7 +925,7 @@ function updateOptOutDate(index, value) {
     }
     const normalized = normalizeISODateString(dateVal);
     if (!normalized) {
-        showRecordWarning('Enter opt-out date as YYYY-MM-DD (or MM/DD/YYYY).', 'error');
+        showRecordWarning('Enter opt-out date as DD/MM/YYYY (or YYYY-MM-DD).', 'error');
         renderPatientTable();
         return;
     }
