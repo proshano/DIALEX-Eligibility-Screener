@@ -26,19 +26,24 @@ function computeBucketFlags(patient = {}) {
     }
     const hasHealthCard = Boolean((patient.health_card || '').trim());
     const hcnProvince = (patient.health_card_province || '').trim();
+    const ageValue = Number.isFinite(patient.age) ? patient.age : null;
+    const missingAge = !Number.isFinite(ageValue);
+    const needsDiabetesStatus = Number.isFinite(ageValue) && ageValue >= 45 && ageValue < 60;
+    const missingDiabetes = needsDiabetesStatus && Number(patient.diabetes_known) !== 1;
     const requiresDialysisUnit = patient.incl_incentre_hd === 1;
     const locationValue = requiresDialysisUnit ? getDialysisUnitCanonical(patient) : '';
     const hasDialysisUnit = requiresDialysisUnit && Boolean(normalizeLocationValue(locationValue));
     const hasDialysisHistory = Boolean(patient.dialysis_start_date) || Boolean(patient.dialysis_duration_confirmed);
     const missingHcnInfo = !hasHealthCard || !hcnProvince;
     const hcnFormatError = hasHealthCard ? validateHealthCardFormat(patient.health_card, hcnProvince || '') : '';
-    flags.missing = !hasHealthCard || !hcnProvince || !!hcnFormatError || (requiresDialysisUnit && !hasDialysisUnit) || !hasDialysisHistory;
+    flags.missing = missingAge || missingDiabetes || !hasHealthCard || !hcnProvince || !!hcnFormatError || (requiresDialysisUnit && !hasDialysisUnit) || !hasDialysisHistory;
 
     const optOutStatus = patient.opt_out_status || OPT_OUT_STATUS.PENDING;
     const isOptedOutStatus = optOutStatus === OPT_OUT_STATUS.OPTED_OUT;
     flags.opted_out = isOptedOutStatus;
     const hasAnyExclusion = patient.hasAnyExclusion || false;
-    flags.ineligible = isOptedOutStatus || hasAnyExclusion || (!patient.inclusionMet && (!flags.missing || missingHcnInfo));
+    const missingIneligibleInfo = missingHcnInfo || missingAge || missingDiabetes || !!hcnFormatError;
+    flags.ineligible = isOptedOutStatus || hasAnyExclusion || (!patient.inclusionMet && (!flags.missing || missingIneligibleInfo));
 
     const today = startOfToday();
     const hasNotification = Boolean(patient.notification_date);
@@ -284,7 +289,6 @@ function buildPatientSummaryRow(patient, isExpanded) {
 
     const isLocked = !!patient.locked_at;
     const ageValue = Number.isFinite(patient.age) ? patient.age : '';
-    const birthDateValue = formatEntryDate(patient.birth_date || '');
     const dialysisUnitCanonical = getDialysisUnitCanonical(patient);
     const dialysisUnitOptions = buildLocationOptionsHtml(dialysisUnitCanonical);
     const provinceOptions = buildProvinceOptions(patient.health_card_province || '');
@@ -304,13 +308,9 @@ function buildPatientSummaryRow(patient, isExpanded) {
                     <label>Name</label>
                     <input type="text" class="table-input" placeholder="Patient name" value="${escapeHtml(patient.patient_name || '')}" ${isLocked ? 'disabled' : ''} onchange="updatePatientName(${patient._index}, this.value)">
                 </div>
-                <div class="compact-field compact-dob" data-field="birth_date">
-                    <label>DOB</label>
-                    <input type="text" class="table-input" value="${birthDateValue}" placeholder="DD/MM/YYYY" title="DD/MM/YYYY or YYYY-MM-DD" inputmode="numeric" autocomplete="off" spellcheck="false" data-date-entry="true" ${isLocked ? 'disabled' : ''} onchange="updatePatientBirthDate(${patient._index}, this.value)">
-                </div>
-                <div class="compact-field compact-age">
+                <div class="compact-field compact-age" data-field="age">
                     <label>Age</label>
-                    <input type="text" class="table-input" placeholder="Age" value="${ageValue}" readonly aria-readonly="true">
+                    <input type="text" class="table-input" placeholder="Age" value="${ageValue}" inputmode="numeric" autocomplete="off" spellcheck="false" ${isLocked ? 'disabled' : ''} onblur="updatePatientAge(${patient._index}, this.value)">
                 </div>
                 <div class="compact-field compact-mrn">
                     <label>MRN</label>
@@ -489,7 +489,7 @@ function buildPatientDetailsRow(patient) {
                             <span class="date-display ${dialysisStartFriendly ? 'has-value' : ''}">${dialysisStartFriendly || 'Not set'}</span>
                         </div>
                         <div class="date-input-row">
-                            <input type="text" class="table-input inline-date" value="${dialysisStartDisplay}" placeholder="DD/MM/YYYY" title="DD/MM/YYYY or YYYY-MM-DD" inputmode="numeric" autocomplete="off" spellcheck="false" data-date-entry="true" ${isLocked ? 'disabled' : ''} onchange="updateDialysisStartDate(${patient._index}, this.value)">
+                            <input type="text" class="table-input inline-date" value="${dialysisStartDisplay}" placeholder="DD/MM/YYYY" title="DD/MM/YYYY or YYYY-MM-DD" inputmode="numeric" autocomplete="off" spellcheck="false" data-date-entry="true" ${isLocked ? 'disabled' : ''} onblur="updateDialysisStartDate(${patient._index}, this.value)">
                         </div>
                     </div>
                     ${dialysisConfirmControls}
@@ -517,7 +517,7 @@ function buildPatientDetailsRow(patient) {
                         <span class="date-display ${notificationFriendly ? 'has-value' : ''}">${notificationFriendly || 'Not set'}</span>
                     </div>
                     <div class="date-input-row">
-                        <input type="text" class="table-input inline-date" value="${notificationDisplay}" placeholder="DD/MM/YYYY" title="DD/MM/YYYY or YYYY-MM-DD" inputmode="numeric" autocomplete="off" spellcheck="false" data-date-entry="true" ${isLocked ? 'disabled' : ''} onchange="updateInlineNotification(${patient._index}, this.value)">
+                        <input type="text" class="table-input inline-date" value="${notificationDisplay}" placeholder="DD/MM/YYYY" title="DD/MM/YYYY or YYYY-MM-DD" inputmode="numeric" autocomplete="off" spellcheck="false" data-date-entry="true" ${isLocked ? 'disabled' : ''} onblur="updateInlineNotification(${patient._index}, this.value)">
                         ${notifiedCopyButton}
                     </div>
                 </div>
@@ -539,7 +539,7 @@ function buildPatientDetailsRow(patient) {
                             <span class="date-display ${optOutFriendly ? 'has-value' : ''}">${optOutFriendly || 'Not set'}</span>
                         </div>
                         <div class="date-input-row">
-                            <input type="text" class="table-input inline-date" value="${optOutDateDisplay}" placeholder="DD/MM/YYYY" title="DD/MM/YYYY or YYYY-MM-DD" inputmode="numeric" autocomplete="off" spellcheck="false" data-date-entry="true" ${optOutDateDisabled} onchange="updateOptOutDate(${patient._index}, this.value)">
+                            <input type="text" class="table-input inline-date" value="${optOutDateDisplay}" placeholder="DD/MM/YYYY" title="DD/MM/YYYY or YYYY-MM-DD" inputmode="numeric" autocomplete="off" spellcheck="false" data-date-entry="true" ${optOutDateDisabled} onblur="updateOptOutDate(${patient._index}, this.value)">
                             <button class="copy-btn" ${optOutCopyDisabled} onclick="copyPatientField(${patient._index}, 'opt_out_date')">Copy date</button>
                         </div>
                     </div>
@@ -754,7 +754,7 @@ function toggleMasterInclusion(index, checkbox) {
     }
     // Prevent unchecking - user must uncheck individual criteria instead
     checkbox.checked = true;
-    showRecordWarning('Inclusion criteria are calculated from DOB, dialysis dates, dialysis unit, and health card info. Update those fields to change inclusion.', 'error');
+    showRecordWarning('Inclusion criteria are calculated from age, dialysis dates, dialysis unit, and health card info. Update those fields to change inclusion.', 'error');
     highlightPatientFields(patient._index, INCLUSION_FIELD_LIST);
 }
 
@@ -831,16 +831,24 @@ function updateInlineNotification(index, value) {
     if (!ensureEditablePatient(patient)) return;
     const newDate = (value || '').trim();
     if (!newDate) {
+        if (!patient.notification_date) {
+            showRecordWarning('');
+            return;
+        }
         patient.notification_date = '';
     } else {
+        const normalized = normalizeISODateString(newDate);
+        if (normalized && normalized === patient.notification_date) {
+            showRecordWarning('');
+            return;
+        }
         if (!patient.no_exclusions_confirmed) {
             showRecordWarning('Confirm "No exclusions" before recording a notification date.', 'error');
             renderPatientTable();
             return;
         }
-        const normalized = normalizeISODateString(newDate);
-            if (!normalized) {
-        showRecordWarning('Enter notification date as DD/MM/YYYY.', 'error');
+        if (!normalized) {
+            showRecordWarning('Enter notification date as DD/MM/YYYY.', 'error');
             renderPatientTable();
             return;
         }
@@ -863,9 +871,16 @@ function updateInlineNotification(index, value) {
         patient.therapy_prescribed = 0;
         patient.enrollment_status = (patient.noExclusions && patient.inclusionMet && patient.no_exclusions_confirmed && patient.hasHealthCard) ? 'eligible' : 'pending';
     }
-    showRecordWarning('');
     persistPatient(patient, false);
     refreshPatientRow(patient);
+    if (patient.notification_date) {
+        const notification = parseISODate(patient.notification_date);
+        if (notification && isDateOlderThanDays(notification, NOTIFICATION_WARNING_DAYS)) {
+            showRecordWarning(`Check notification date: more than ${NOTIFICATION_WARNING_DAYS} days ago.`, 'status');
+            return;
+        }
+    }
+    showRecordWarning('');
 }
 
 function updateOptOutStatus(index, value) {
@@ -918,6 +933,10 @@ function updateOptOutDate(index, value) {
     }
     const dateVal = (value || '').trim();
     if (!dateVal) {
+        if (!patient.opt_out_date) {
+            showRecordWarning('');
+            return;
+        }
         patient.opt_out_date = '';
         persistPatient(patient, false);
         refreshPatientRow(patient);
@@ -927,6 +946,10 @@ function updateOptOutDate(index, value) {
     if (!normalized) {
         showRecordWarning('Enter opt-out date as DD/MM/YYYY.', 'error');
         renderPatientTable();
+        return;
+    }
+    if (normalized === patient.opt_out_date) {
+        showRecordWarning('');
         return;
     }
     const notification = parseISODate(patient.notification_date);

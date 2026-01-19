@@ -54,12 +54,12 @@
                     <input type="password" id="admin-confirm" autocomplete="new-password" required data-password-field>
                 </div>
 
-                <h2>Study ID list (optional)</h2>
+                <h2>Study ID list (required)</h2>
                 <div class="field">
                     <label for="study-id-file">Import available study IDs (CSV)</label>
-                    <input type="file" id="study-id-file" accept=".csv,text/csv">
-                    <div class="help">CSV must include a <code>study_id</code> column from REDCap.</div>
-                    <div id="study-id-status" class="inline-status">No study IDs loaded.</div>
+                    <input type="file" id="study-id-file" accept=".csv,text/csv" required aria-required="true">
+                    <div class="help">CSV must include a <code>study_id</code> column from REDCap. This list is required to create the database.</div>
+                    <div id="study-id-status" class="inline-status">Study ID list required. Import a CSV to continue.</div>
                     <div id="study-id-preview" class="inline-status hidden"></div>
                     <div class="inline-actions">
                         <button type="button" id="clear-study-ids" class="secondary" disabled>Clear study ID list</button>

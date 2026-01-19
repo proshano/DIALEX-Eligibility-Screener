@@ -25,8 +25,14 @@ function getAutosaveBlockingMessage() {
     return '';
 }
 
-function formatTimestampForFilename(date = new Date()) {
-    return date.toISOString().replace(/[:T]/g, '-').split('.')[0];
+function formatTimestampForFilename(date = getTorontoNow()) {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    const hh = String(date.getHours()).padStart(2, '0');
+    const mm = String(date.getMinutes()).padStart(2, '0');
+    const ss = String(date.getSeconds()).padStart(2, '0');
+    return `${y}-${m}-${d}-${hh}-${mm}-${ss}`;
 }
 
 function sanitizeBackupLabel(value) {
@@ -736,15 +742,18 @@ async function createUserRecord({ username, firstName, lastName, password, role 
     const existingCount = getUserCount();
     const record = await createPasswordRecord(password);
     const stmt = db.prepare(`
-        INSERT INTO users (username, display_name, password_salt, password_hash, role, active)
-        VALUES (?, ?, ?, ?, ?, 1)
+        INSERT INTO users (username, display_name, password_salt, password_hash, role, active, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, 1, ?, ?)
     `);
+    const timestamp = getSqlTimestamp();
     stmt.run([
         normalized,
         displayName,
         record.salt,
         record.hash,
-        role || 'user'
+        role || 'user',
+        timestamp,
+        timestamp
     ]);
     stmt.free();
     await upsertUserWrap(normalized, password);
@@ -769,10 +778,10 @@ async function updateUserPassword(username, newPassword) {
     const record = await createPasswordRecord(newPassword);
     const stmt = db.prepare(`
         UPDATE users
-        SET password_salt = ?, password_hash = ?, updated_at = datetime('now')
+        SET password_salt = ?, password_hash = ?, updated_at = ?
         WHERE username = ?
     `);
-    stmt.run([record.salt, record.hash, normalized]);
+    stmt.run([record.salt, record.hash, getSqlTimestamp(), normalized]);
     stmt.free();
     await upsertUserWrap(normalized, newPassword);
     logAuditEvent('user_password_reset', { username: normalized }, {
@@ -856,11 +865,11 @@ async function handleUserManagementAction(action, username) {
         }
         const nextActive = Number(target.active) ? 0 : 1;
         const stmt = db.prepare(`
-            UPDATE users
-            SET active = ?, updated_at = datetime('now')
-            WHERE username = ?
+        UPDATE users
+        SET active = ?, updated_at = ?
+        WHERE username = ?
         `);
-        stmt.run([nextActive, target.username]);
+        stmt.run([nextActive, getSqlTimestamp(), target.username]);
         stmt.free();
         if (!nextActive) {
             removeUserWrap(target.username);

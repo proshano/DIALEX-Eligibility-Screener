@@ -32,6 +32,87 @@ function parseBoolean(value) {
     return ['yes', 'true', '1', 'y'].includes(normalized);
 }
 
+const TORONTO_TIME_ZONE = 'America/Toronto';
+const TORONTO_PARTS_FORMATTER = new Intl.DateTimeFormat('en-CA', {
+    timeZone: TORONTO_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false
+});
+const DOB_WARNING_YEARS = 100;
+const DIALYSIS_WARNING_YEARS = 10;
+const NOTIFICATION_WARNING_DAYS = 30;
+
+function getTorontoDateParts(date = new Date()) {
+    const parts = TORONTO_PARTS_FORMATTER.formatToParts(date);
+    const values = {};
+    parts.forEach(part => {
+        if (part.type !== 'literal') {
+            values[part.type] = part.value;
+        }
+    });
+    return {
+        year: Number(values.year),
+        month: Number(values.month),
+        day: Number(values.day),
+        hour: Number(values.hour || 0),
+        minute: Number(values.minute || 0),
+        second: Number(values.second || 0)
+    };
+}
+
+function getTorontoNow() {
+    const parts = getTorontoDateParts();
+    return new Date(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute, parts.second, 0);
+}
+
+function getTorontoTodayParts() {
+    const parts = getTorontoDateParts();
+    return {
+        year: parts.year,
+        month: parts.month,
+        day: parts.day
+    };
+}
+
+function getTorontoTodayUtcMs() {
+    const today = getTorontoTodayParts();
+    return Date.UTC(today.year, today.month - 1, today.day);
+}
+
+function getDateUtcMs(date) {
+    return Date.UTC(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+function getTorontoNowTimestamp() {
+    return getTorontoNow().getTime();
+}
+
+function isDateOlderThanYears(date, years) {
+    if (!date || !Number.isFinite(years)) return false;
+    const today = getTorontoTodayParts();
+    const cutoffYear = today.year - years;
+    const dateYear = date.getFullYear();
+    if (dateYear < cutoffYear) return true;
+    if (dateYear > cutoffYear) return false;
+    const dateMonth = date.getMonth() + 1;
+    if (dateMonth < today.month) return true;
+    if (dateMonth > today.month) return false;
+    return date.getDate() < today.day;
+}
+
+function isDateOlderThanDays(date, days) {
+    if (!date || !Number.isFinite(days)) return false;
+    const diff = getTorontoTodayUtcMs() - getDateUtcMs(date);
+    if (Number.isNaN(diff)) return false;
+    const diffDays = Math.floor(diff / MS_PER_DAY);
+    return diffDays > days;
+}
+
 function buildDateFromParts(year, month, day) {
     if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return null;
     if (month < 1 || month > 12 || day < 1 || day > 31) return null;
@@ -49,7 +130,7 @@ function resolveTwoDigitYear(value) {
     const year = Number(value);
     if (!Number.isFinite(year)) return null;
     if (year >= 100) return year;
-    const current = new Date().getFullYear() % 100;
+    const current = getTorontoTodayParts().year % 100;
     return (year <= current ? 2000 : 1900) + year;
 }
 
@@ -85,13 +166,28 @@ function normalizeLegacyDate(value) {
 
 function calculateAgeFromDate(date) {
     if (!date) return null;
-    const today = new Date();
-    let age = today.getFullYear() - date.getFullYear();
-    const m = today.getMonth() - date.getMonth();
-    if (m < 0 || (m === 0 && today.getDate() < date.getDate())) {
+    const today = getTorontoTodayParts();
+    let age = today.year - date.getFullYear();
+    const month = date.getMonth() + 1;
+    if (today.month < month || (today.month === month && today.day < date.getDate())) {
         age--;
     }
     return age;
+}
+
+function buildBirthDateFromAge(age) {
+    if (!Number.isFinite(age)) return null;
+    const today = getTorontoTodayParts();
+    const year = today.year - Math.floor(age);
+    let month = today.month;
+    let day = today.day;
+    let date = buildDateFromParts(year, month, day);
+    while (!date && day > 1) {
+        day -= 1;
+        date = buildDateFromParts(year, month, day);
+    }
+    if (date) return date;
+    return buildDateFromParts(year, 1, 1);
 }
 
 function normalizeHealthCardValue(value = '') {
@@ -272,7 +368,7 @@ function analyzePreScreeningRows(rows) {
 
 function calculateDaysOnDialysis(startDate) {
     if (!startDate) return null;
-    const diff = Date.now() - startDate.getTime();
+    const diff = getTorontoTodayUtcMs() - getDateUtcMs(startDate);
     if (Number.isNaN(diff)) return null;
     return Math.floor(diff / MS_PER_DAY);
 }
@@ -358,7 +454,7 @@ function recalcDialysisInclusion(patient) {
 function meetsDialysisDays(dialysisStartIso) {
     const start = parseISODate(dialysisStartIso);
     if (!start) return 0;
-    const diff = (Date.now() - start.getTime()) / MS_PER_DAY;
+    const diff = (getTorontoTodayUtcMs() - getDateUtcMs(start)) / MS_PER_DAY;
     return diff >= MIN_DIALYSIS_DAYS ? 1 : 0;
 }
 
@@ -407,7 +503,7 @@ function getRandomizationIssues(patient) {
         issues.push('Enter dialysis start date or confirm ≥90 days');
     }
     const firstEligible = computeFirstEligibleDate(patient);
-    if (firstEligible && firstEligible.getTime() > Date.now()) {
+    if (firstEligible && firstEligible.getTime() > getTorontoNowTimestamp()) {
         issues.push(`Eligible on ${formatISODate(firstEligible)}`);
     }
     return issues;
@@ -542,8 +638,8 @@ function handleStudyIdInput(index, input) {
 }
 
 function startOfToday() {
-    const now = new Date();
-    return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const today = getTorontoTodayParts();
+    return new Date(today.year, today.month - 1, today.day);
 }
 
 function isDateInFuture(date) {
@@ -687,9 +783,9 @@ function writeSiteSetting(key, value) {
     try {
         const stmt = db.prepare(`
             INSERT OR REPLACE INTO site_settings (key, value, updated_at)
-            VALUES (?, ?, datetime('now'))
+            VALUES (?, ?, ?)
         `);
-        stmt.run([key, value]);
+        stmt.run([key, value, getSqlTimestamp()]);
         stmt.free();
         markDatabaseChanged();
     } catch (error) {

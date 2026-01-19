@@ -925,12 +925,16 @@ const PRIMARY_BUCKET_ORDER = [
 
 function computeMissingEligibilityReasons(patient = {}) {
     const reasons = [];
+    const ageValue = Number.isFinite(patient.age) ? patient.age : null;
+    const needsDiabetesStatus = Number.isFinite(ageValue) && ageValue >= 45 && ageValue < 60;
     const hasHealthCard = Boolean((patient.health_card || '').trim());
     const hcnProvince = (patient.health_card_province || '').trim();
     const requiresDialysisUnit = patient.incl_incentre_hd === 1;
     const locationValue = requiresDialysisUnit ? getDialysisUnitCanonical(patient) : '';
     const hasDialysisUnit = requiresDialysisUnit && Boolean(normalizeLocationValue(locationValue));
     const hasDialysisHistory = Boolean(patient.dialysis_start_date) || Boolean(patient.dialysis_duration_confirmed);
+    if (!Number.isFinite(ageValue)) reasons.push('Age missing');
+    if (needsDiabetesStatus && Number(patient.diabetes_known) !== 1) reasons.push('Diabetes status missing (age 45-59)');
     if (!hasHealthCard) reasons.push('Health card number missing');
     if (hasHealthCard && !hcnProvince) reasons.push('HCN province/territory missing');
     const hcnFormatError = hasHealthCard ? validateHealthCardFormat(patient.health_card, hcnProvince || '') : '';

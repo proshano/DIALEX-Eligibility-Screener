@@ -331,7 +331,7 @@ async function verifyPassword(password, saltBase64, hashBase64) {
 
 const INCLUSION_KEYS = ['incl_age', 'incl_dialysis_90d', 'incl_incentre_hd', 'incl_health_card'];
 const INCLUSION_FIELD_MAP = {
-    incl_age: ['birth_date'],
+    incl_age: ['age'],
     incl_dialysis_90d: ['dialysis_start_date'],
     incl_incentre_hd: ['dialysis_unit'],
     incl_health_card: ['health_card', 'health_card_province']
@@ -339,7 +339,7 @@ const INCLUSION_FIELD_MAP = {
 const INCLUSION_FIELD_LIST = Object.values(INCLUSION_FIELD_MAP)
     .reduce((acc, fields) => acc.concat(fields), []);
 const INCLUSION_FIELD_MESSAGES = {
-    incl_age: 'Update Date of Birth to recalculate the age criterion.',
+    incl_age: 'Update age to recalculate the age criterion.',
     incl_dialysis_90d: 'Update the dialysis start date or ≥90-day confirmation.',
     incl_incentre_hd: 'Update the dialysis unit selection to reflect in-centre HD.',
     incl_health_card: 'Update the health card number and province/territory.'

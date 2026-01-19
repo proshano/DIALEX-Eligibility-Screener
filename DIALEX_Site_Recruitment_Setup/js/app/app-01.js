@@ -9,6 +9,17 @@ const ENCRYPTION_HEADER = `${ENCRYPTION_MAGIC}
 const MIN_PASSWORD_LENGTH = 8;
 const USERNAME_PATTERN = /^[a-z0-9._-]{3,}$/i;
 const STUDY_ID_PATTERN = /^[0-9]{4}-[A-Z]{3}-[0-9]{3}$/;
+const TORONTO_TIME_ZONE = 'America/Toronto';
+const TORONTO_PARTS_FORMATTER = new Intl.DateTimeFormat('en-CA', {
+    timeZone: TORONTO_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false
+});
 
 let SQL;
 let importedStudyIds = [];
@@ -38,6 +49,49 @@ function showStatus(message, type) {
     if (type) {
         statusEl.classList.add(type);
     }
+}
+
+function getTorontoDateParts(date = new Date()) {
+    const parts = TORONTO_PARTS_FORMATTER.formatToParts(date);
+    const values = {};
+    parts.forEach(part => {
+        if (part.type !== 'literal') {
+            values[part.type] = part.value;
+        }
+    });
+    return {
+        year: Number(values.year),
+        month: Number(values.month),
+        day: Number(values.day),
+        hour: Number(values.hour || 0),
+        minute: Number(values.minute || 0),
+        second: Number(values.second || 0)
+    };
+}
+
+function getTorontoNow() {
+    const parts = getTorontoDateParts();
+    return new Date(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute, parts.second, 0);
+}
+
+function formatTorontoFilenameTimestamp(date = getTorontoNow()) {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    const hh = String(date.getHours()).padStart(2, '0');
+    const mm = String(date.getMinutes()).padStart(2, '0');
+    const ss = String(date.getSeconds()).padStart(2, '0');
+    return `${y}-${m}-${d}-${hh}-${mm}-${ss}`;
+}
+
+function formatTorontoSqlTimestamp(date = getTorontoNow()) {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    const hh = String(date.getHours()).padStart(2, '0');
+    const mm = String(date.getMinutes()).padStart(2, '0');
+    const ss = String(date.getSeconds()).padStart(2, '0');
+    return `${y}-${m}-${d} ${hh}:${mm}:${ss}`;
 }
 
 function clearStatus() {
@@ -201,7 +255,7 @@ function renderStudyIdPreview(ids) {
 function clearStudyIdImport() {
     importedStudyIds = [];
     studyIdInput.value = '';
-    setStudyIdStatus('No study IDs loaded.');
+    setStudyIdStatus('Study ID list required. Import a CSV to continue.');
     studyIdPreview.textContent = '';
     studyIdPreview.classList.add('hidden');
     clearStudyIdsBtn.disabled = true;
@@ -443,21 +497,23 @@ function setupDatabase(db) {
 
 function insertAdminUser(db, username, firstName, lastName, passwordRecord) {
     const displayName = buildDisplayName(firstName, lastName);
+    const timestamp = formatTorontoSqlTimestamp();
     const stmt = db.prepare(`
-        INSERT INTO users (username, display_name, password_salt, password_hash, role, active)
-        VALUES (?, ?, ?, ?, 'admin', 1)
+        INSERT INTO users (username, display_name, password_salt, password_hash, role, active, created_at, updated_at)
+        VALUES (?, ?, ?, ?, 'admin', 1, ?, ?)
     `);
-    stmt.run([username, displayName, passwordRecord.salt, passwordRecord.hash]);
+    stmt.run([username, displayName, passwordRecord.salt, passwordRecord.hash, timestamp, timestamp]);
     stmt.free();
 }
 
 function insertStudyIds(db, studyIds) {
     if (!studyIds || !studyIds.length) return;
-    const stmt = db.prepare(`INSERT INTO study_ids (study_id) VALUES (?)`);
+    const stmt = db.prepare(`INSERT INTO study_ids (study_id, created_at) VALUES (?, ?)`);
+    const timestamp = formatTorontoSqlTimestamp();
     db.run('BEGIN');
     try {
         studyIds.forEach(studyId => {
-            stmt.run([studyId]);
+            stmt.run([studyId, timestamp]);
         });
         db.run('COMMIT');
     } catch (error) {
@@ -480,7 +536,7 @@ function triggerDownload(blob, filename) {
 }
 
 function buildFilename(siteLabel) {
-    const timestamp = new Date().toISOString().replace(/[:T]/g, '-').split('.')[0];
+    const timestamp = formatTorontoFilenameTimestamp();
     const base = siteLabel ? `dialex-${siteLabel}-initial` : 'dialex-site-initial';
     return `${base}-${timestamp}.enc`;
 }
@@ -547,6 +603,12 @@ async function handleProvision(event) {
         return;
     }
 
+    if (!importedStudyIds.length) {
+        showStatus('Import a study ID CSV before creating the database.', 'error');
+        studyIdInput.focus();
+        return;
+    }
+
     createBtn.disabled = true;
 
     try {
@@ -567,8 +629,7 @@ async function handleProvision(event) {
         const blob = new Blob([encrypted], { type: 'application/octet-stream' });
         triggerDownload(blob, filename);
 
-        const studyIdNote = importedStudyIds.length ? ` Included ${importedStudyIds.length} study IDs.` : '';
-        showStatus(`Encrypted starter database created. Keep the central recovery password private and share the admin credentials with the site.${studyIdNote}`, 'success');
+        showStatus(`Encrypted starter database created. Keep the central recovery password private and share the admin credentials with the site. Included ${importedStudyIds.length} study IDs.`, 'success');
         form.reset();
         clearStudyIdImport();
     } catch (error) {

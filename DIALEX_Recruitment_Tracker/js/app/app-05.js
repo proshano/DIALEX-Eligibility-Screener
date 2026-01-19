@@ -16,6 +16,10 @@ function updatePatientBirthDate(index, value) {
     if (!ensureEditablePatient(patient)) return;
     const raw = (value || '').trim();
     if (!raw) {
+        if (!patient.birth_date) {
+            showRecordWarning('');
+            return;
+        }
         patient.birth_date = '';
         patient.age = null;
         patient.incl_age = 0;
@@ -28,6 +32,10 @@ function updatePatientBirthDate(index, value) {
     if (!normalized) {
         showRecordWarning('Enter birth date as DD/MM/YYYY.', 'error');
         renderPatientTable();
+        return;
+    }
+    if (normalized === patient.birth_date) {
+        showRecordWarning('');
         return;
     }
     const birth = parseISODate(normalized);
@@ -61,15 +69,75 @@ function updatePatientBirthDate(index, value) {
     patient.incl_age = meetsAgeCriteria ? 1 : 0;
     persistPatient(patient, false);
     refreshPatientRow(patient);
-    showRecordWarning('');
+    if (isDateOlderThanYears(birth, DOB_WARNING_YEARS)) {
+        showRecordWarning(`Check birth date: more than ${DOB_WARNING_YEARS} years ago.`, 'status');
+    } else {
+        showRecordWarning('');
+    }
 }
 
 function updatePatientAge(index, value) {
     const patient = patientsData[index];
     if (!patient) return;
+    if (!ensureEditablePatient(patient)) return;
+    const raw = (value || '').trim();
+    const hasStoredAge = Number.isFinite(patient.age);
+    if (!raw) {
+        if (!hasStoredAge && !patient.birth_date) {
+            showRecordWarning('');
+            return;
+        }
+        patient.age = null;
+        patient.birth_date = '';
+        patient.incl_age = 0;
+        persistPatient(patient, false);
+        refreshPatientRow(patient);
+        showRecordWarning('');
+        return;
+    }
+    const cleaned = raw.replace(/\s+/g, '');
+    if (!/^\d{1,3}$/.test(cleaned)) {
+        showRecordWarning('Enter age as a whole number between 0 and 130.', 'error');
+        renderPatientTable();
+        return;
+    }
+    const age = Number(cleaned);
+    if (!Number.isFinite(age) || age < 0 || age > 130) {
+        showRecordWarning('Enter age as a whole number between 0 and 130.', 'error');
+        renderPatientTable();
+        return;
+    }
+    const derivedBirth = buildBirthDateFromAge(age);
+    if (!derivedBirth) {
+        showRecordWarning('Unable to set age. Please try again.', 'error');
+        renderPatientTable();
+        return;
+    }
+    const derivedIso = formatISODate(derivedBirth);
+    const currentAge = Number.isFinite(patient.age) ? patient.age : null;
+    if (currentAge === age && derivedIso === (patient.birth_date || '')) {
+        showRecordWarning('');
+        return;
+    }
+    if (patient.dialysis_start_date) {
+        const start = parseISODate(patient.dialysis_start_date);
+        if (start && start.getTime() <= derivedBirth.getTime()) {
+            showRecordWarning("Dialysis start date must be after the patient's birth year.", 'error');
+            renderPatientTable();
+            return;
+        }
+    }
+    patient.age = age;
+    patient.birth_date = derivedIso;
+    const meetsAgeCriteria = age >= 60 || (age >= 45 && age < 60 && patient.diabetes_known === 1);
+    patient.incl_age = meetsAgeCriteria ? 1 : 0;
+    persistPatient(patient, false);
     refreshPatientRow(patient);
-    showRecordWarning('Age is calculated from Date of Birth. Update DOB to change age.', 'error');
-    highlightInclusionSource(patient._index, 'incl_age');
+    if (age > DOB_WARNING_YEARS) {
+        showRecordWarning(`Check age: ${age} years.`, 'status');
+    } else {
+        showRecordWarning('');
+    }
 }
 
 function updatePatientMrn(index, value) {
@@ -257,7 +325,7 @@ function updateRandomizedStatus(index, value) {
         renderPatientTable();
         return;
     }
-    if (firstEligible.getTime() > Date.now()) {
+    if (firstEligible.getTime() > getTorontoNowTimestamp()) {
         showRecordWarning(`Eligible on ${formatISODate(firstEligible)}.`, 'error');
         renderPatientTable();
         return;
@@ -278,6 +346,10 @@ function updateDialysisStartDate(index, value) {
     if (!ensureEditablePatient(patient)) return;
     const raw = (value || '').trim();
     if (!raw) {
+        if (!patient.dialysis_start_date) {
+            showRecordWarning('');
+            return;
+        }
         patient.dialysis_start_date = '';
         patient.dialysis_duration_confirmed = 0;
     } else {
@@ -287,11 +359,15 @@ function updateDialysisStartDate(index, value) {
             renderPatientTable();
             return;
         }
+        if (normalized === patient.dialysis_start_date) {
+            showRecordWarning('');
+            return;
+        }
         if (patient.birth_date) {
             const birth = parseISODate(patient.birth_date);
             const start = parseISODate(normalized);
             if (birth && start && start.getTime() <= birth.getTime()) {
-                showRecordWarning('Dialysis start date must be after birth date.', 'error');
+                showRecordWarning("Dialysis start date must be after the patient's birth year.", 'error');
                 renderPatientTable();
                 return;
             }
@@ -302,6 +378,14 @@ function updateDialysisStartDate(index, value) {
     recalcDialysisInclusion(patient);
     persistPatient(patient, false);
     refreshPatientRow(patient);
+    if (patient.dialysis_start_date) {
+        const start = parseISODate(patient.dialysis_start_date);
+        if (start && isDateOlderThanYears(start, DIALYSIS_WARNING_YEARS)) {
+            showRecordWarning(`Check dialysis start date: more than ${DIALYSIS_WARNING_YEARS} years ago.`, 'status');
+            return;
+        }
+    }
+    showRecordWarning('');
 }
 
 function setDialysisDurationConfirmed(index, flag) {
@@ -458,7 +542,7 @@ function assignStudyId(index) {
         renderPatientTable();
         return;
     }
-    if (firstEligible.getTime() > Date.now()) {
+    if (firstEligible.getTime() > getTorontoNowTimestamp()) {
         showRecordWarning(`Eligible on ${formatISODate(firstEligible)}.`, 'error');
         renderPatientTable();
         return;
@@ -525,8 +609,8 @@ function releaseStudyId(studyId) {
     const normalized = (studyId || '').trim();
     if (!normalized) return;
     try {
-        const stmt = db.prepare('INSERT OR IGNORE INTO study_ids (study_id) VALUES (?)');
-        stmt.run([normalized]);
+        const stmt = db.prepare('INSERT OR IGNORE INTO study_ids (study_id, created_at) VALUES (?, ?)');
+        stmt.run([normalized, getSqlTimestamp()]);
         stmt.free();
     } catch (error) {
         console.warn('Unable to release Study ID', error);
@@ -539,7 +623,7 @@ function toggleRecordLocked(index, checked) {
     const patient = patientsData[index];
     if (!patient) return;
     if (checked) {
-        patient.locked_at = new Date().toISOString();
+        patient.locked_at = getTorontoNow().toISOString();
         showStatus('Record locked. Only notes remain editable.', 'success');
     } else {
         patient.locked_at = '';
@@ -568,7 +652,14 @@ function copyPatientField(index, field) {
 }
 
 function getSqlTimestamp() {
-    return new Date().toISOString().replace('T', ' ').replace(/\.\d+Z$/, '');
+    const now = getTorontoNow();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, '0');
+    const d = String(now.getDate()).padStart(2, '0');
+    const hh = String(now.getHours()).padStart(2, '0');
+    const mm = String(now.getMinutes()).padStart(2, '0');
+    const ss = String(now.getSeconds()).padStart(2, '0');
+    return `${y}-${m}-${d} ${hh}:${mm}:${ss}`;
 }
 
 function logAuditEvent(action, details = null, options = {}) {
@@ -590,10 +681,10 @@ function logAuditEvent(action, details = null, options = {}) {
             INSERT INTO audit_log (
                 event_time, actor_username, actor_role, action, target_type, target_id, details
             ) VALUES (
-                datetime('now'), ?, ?, ?, ?, ?, ?
+                ?, ?, ?, ?, ?, ?, ?
             )
         `);
-        stmt.run([actorUsername, actorRole, action, targetType, targetId, detailText]);
+        stmt.run([getSqlTimestamp(), actorUsername, actorRole, action, targetType, targetId, detailText]);
         stmt.free();
         markDatabaseChanged();
     } catch (error) {
@@ -622,8 +713,10 @@ function persistPatient(patient, refresh = true) {
             patient.created_by = createdByFallback;
         }
         if (!patient.created_at) {
-            patient.created_at = createdAtValue || getSqlTimestamp();
+            patient.created_at = getSqlTimestamp();
         }
+        const createdAtForSql = patient.created_at || getSqlTimestamp();
+        const updatedAtForSql = getSqlTimestamp();
         patient.updated_by = updatedByValue;
         patient.entry_source = entrySourceValue;
         const stmt = db.prepare(`
@@ -640,7 +733,7 @@ function persistPatient(patient, refresh = true) {
                 ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                 COALESCE(?, ?), ?,
                 ${criteriaPlaceholders},
-                COALESCE(?, datetime('now')), datetime('now')
+                ?, ?
             )
         `);
         const values = [
@@ -675,7 +768,8 @@ function persistPatient(patient, refresh = true) {
             updatedByValue,
             ...INCLUSION_KEYS.map(key => patient[key] || 0),
             ...EXCLUSION_KEYS.map(key => patient[key] || 0),
-            createdAtValue
+            createdAtForSql,
+            updatedAtForSql
         ];
         stmt.run(values);
         stmt.free();
@@ -714,7 +808,7 @@ function generateTemporaryMrn() {
     let attempts = 0;
     let candidate = '';
     do {
-        candidate = `${TEMP_MRN_PREFIX}${Date.now()}-${attempts++}`;
+        candidate = `${TEMP_MRN_PREFIX}${getTorontoNowTimestamp()}-${attempts++}`;
     } while (existing.has(candidate));
     return candidate;
 }
@@ -926,10 +1020,11 @@ const stmt = db.prepare(`
         ${Array(26).fill('?').join(', ')},
             ?, ?,
             ${Array(INCLUSION_KEYS.length + EXCLUSION_KEYS.length).fill('?').join(', ')},
-            datetime('now'), datetime('now')
+            ?, ?
         )
     `);
     const importUsername = getCurrentUsername();
+    const importTimestamp = getSqlTimestamp();
     let imported = 0;
     rows.forEach(original => {
         if (!original) return;
@@ -1009,7 +1104,7 @@ const stmt = db.prepare(`
             ENTRY_SOURCE_IMPORT,               // entry_source
             importUsername,                    // created_by
             importUsername                     // updated_by
-        ].concat(inclusionValues, exclusionValues);
+        ].concat(inclusionValues, exclusionValues, [importTimestamp, importTimestamp]);
         try {
             stmt.run(values);
             imported++;
