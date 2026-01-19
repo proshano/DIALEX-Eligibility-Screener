@@ -60,7 +60,102 @@
                     <button id="rotate-central-btn" class="secondary hidden" disabled>Rotate central password</button>
                 </div>
             </div>
-            
+
+            <div class="instructions">
+                <div class="instructions-header" onclick="toggleInstructions()">
+                    <span>How to use this tool</span>
+                    <span id="instructions-chevron" style="transform: rotate(0deg);">▼</span>
+                </div>
+                <div id="instructions-content" class="instructions-content">
+                <ol>
+                    <li>
+                        <div class="step-badge">1</div>
+                        <div class="step-content">Set the save folder for continuous backups, then click <strong>"Load database"</strong> and open the encrypted recruitment database for your site. Enter your account password (or the central recovery password) to decrypt.</div>
+                    </li>
+                    <li>
+                        <div class="step-badge">2</div>
+                        <div class="step-content"><strong>Sign in</strong> with your username and password. Admin users can open <strong>"Manage users"</strong> to add or disable accounts.</div>
+                    </li>
+                    <li>
+                        <div class="step-badge">3</div>
+                        <div class="step-content">The software <strong>continuously writes</strong> two timestamped files in the save folder (<code>dialex-secure-latest-a-YYYY-MM-DD-HH-MM-SS.enc</code> and <code>dialex-secure-latest-b-YYYY-MM-DD-HH-MM-SS.enc</code>) to prevent data loss. Load the newest timestamp when resuming work.</div>
+                    </li>
+                    <li>
+                        <div class="step-badge">4</div>
+                        <div class="step-content"><strong>Import</strong> the Registration Data Extract CSV for automated pre-screening; this is the preferred method because it is the fastest way to add many patients at once and imports health card numbers directly to minimize the chance for errors. Before each import, you will be prompted to create a <strong>named backup</strong>; only load backups if the current version of the data is clearly wrong (for example, a bad import). If needed, you can also add individual patients manually by clicking <strong>"Add individual patient"</strong>.</div>
+                    </li>
+                    <li>
+                        <div class="step-badge">5</div>
+                        <div class="step-content">For each patient, <strong>assess eligibility</strong> using the eligibility criteria. You will find pre-populated answers (based on Ontario Renal Reporting System data) which should be verified. To proceed to notification and randomization, a patient must meet <strong>all inclusion criteria</strong> and <strong>none of the exclusion criteria</strong>.</div>
+                    </li>
+                    <li>
+                        <div class="step-badge">6</div>
+                        <div class="step-content">You must confirm that the patient has met all inclusion criteria and none of the exclusion criteria before proceeding. The tool requires that you check the <strong>"No exclusions"</strong> checkbox before proceeding to notification and randomization.</div>
+                    </li>
+                    <li>
+                        <div class="step-badge">7</div>
+                        <div class="step-content">For eligible patients, <strong>track notification and opt-out periods</strong>. Status flow: <code>Deliver notification</code> &rarr; <code>Notified and waiting</code> (15 days) &rarr; <code>Ready to Randomize</code> (if no opt-out) or <code>Opted Out</code>.</div>
+                    </li>
+                    <li>
+                        <div class="step-badge">8</div>
+                        <div class="step-content">When a patient is ready to randomize, assign a <strong>Study ID</strong> from the site list, then set <strong>Randomized = Yes</strong>.</div>
+                    </li>
+                    <li>
+                        <div class="step-badge">9</div>
+                        <div class="step-content">You can <strong>lock</strong> patient records to prevent accidental changes and unlock them later when needed.</div>
+                    </li>
+                </ol>
+
+
+
+                    <div id="prescreen-results" class="hidden" style="margin-top: 12px;">
+                        <h3>Pre-screening results</h3>
+                        <div class="stats-container">
+                            <div class="stat-card">
+                                <div>Total Patients</div>
+                                <div class="stat-number" id="ps-total">0</div>
+                            </div>
+                            <div class="stat-card">
+                                <div>Potentially Eligible</div>
+                                <div class="stat-number" id="ps-eligible">0</div>
+                            </div>
+                            <div class="stat-card">
+                                <div>Ineligible</div>
+                                <div class="stat-number" id="ps-ineligible">0</div>
+                            </div>
+                            <div class="stat-card">
+                                <div>Age < 45</div>
+                                <div class="stat-number" id="ps-age-under45">0</div>
+                            </div>
+                            <div class="stat-card">
+                                <div>45–59 w/o Diabetes</div>
+                                <div class="stat-number" id="ps-age45-59-nodm">0</div>
+                            </div>
+                            <div class="stat-card">
+                                <div>< 90 Days on Dialysis</div>
+                                <div class="stat-number" id="ps-days-under">0</div>
+                            </div>
+                            <div class="stat-card">
+                                <div>Invalid Modality</div>
+                                <div class="stat-number" id="ps-invalid-modality">0</div>
+                            </div>
+                            <div class="stat-card">
+                                <div>Missing Health Card</div>
+                                <div class="stat-number" id="ps-missing-hcn">0</div>
+                            </div>
+                            <div class="stat-card">
+                                <div>Invalid/Missing Dates</div>
+                                <div class="stat-number" id="ps-invalid-dates">0</div>
+                            </div>
+                        </div>
+                        <div class="tabs" id="ps-tabs" style="display:none;"></div>
+                        <div id="ps-tabpanels" style="display:none;">
+                            <div id="ps-panel-ineligible" class="tab-panel" style="display:none;"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Status Bar -->
             <div class="status-bar">
                 <div class="status-item">
@@ -149,102 +244,6 @@
                 </div>
             </div>
         </div>
-        
-            <div class="instructions">
-                <div class="instructions-header" onclick="toggleInstructions()">
-                    <span>How to use this tool</span>
-                    <span id="instructions-chevron" style="transform: rotate(0deg);">▼</span>
-                </div>
-                <div id="instructions-content" class="instructions-content">
-                <ol>
-                    <li>
-                        <div class="step-badge">1</div>
-                        <div class="step-content">Set the save folder for continuous backups, then click <strong>"Load database"</strong> and open the encrypted recruitment database for your site. Enter your account password (or the central recovery password) to decrypt.</div>
-                    </li>
-                    <li>
-                        <div class="step-badge">2</div>
-                        <div class="step-content"><strong>Sign in</strong> with your username and password. Admin users can open <strong>"Manage users"</strong> to add or disable accounts.</div>
-                    </li>
-                    <li>
-                        <div class="step-badge">3</div>
-                        <div class="step-content">The software <strong>continuously writes</strong> two timestamped files in the save folder (<code>dialex-secure-latest-a-YYYY-MM-DD-HH-MM-SS.enc</code> and <code>dialex-secure-latest-b-YYYY-MM-DD-HH-MM-SS.enc</code>) to prevent data loss. Load the newest timestamp when resuming work.</div>
-                    </li>
-                    <li>
-                        <div class="step-badge">4</div>
-                        <div class="step-content"><strong>Import</strong> the Registration Data Extract CSV for automated pre-screening; this is the preferred method because it is the fastest way to add many patients at once and imports health card numbers directly to minimize the chance for errors. Before each import, you will be prompted to create a <strong>named backup</strong>; only load backups if the current version of the data is clearly wrong (for example, a bad import). If needed, you can also add individual patients manually by clicking <strong>"Add individual patient"</strong>.</div>
-                    </li>
-                    <li>
-                        <div class="step-badge">5</div>
-                        <div class="step-content">For each patient, <strong>assess eligibility</strong> using the eligibility criteria. You will find pre-populated answers (based on Ontario Renal Reporting System data) which should be verified. To proceed to notification and randomization, a patient must meet <strong>all inclusion criteria</strong> and <strong>none of the exclusion criteria</strong>.</div>
-                    </li>
-                    <li>
-                        <div class="step-badge">6</div>
-                        <div class="step-content">You must confirm that the patient has met all inclusion criteria and none of the exclusion criteria before proceeding. The tool requires that you check the <strong>"No exclusions"</strong> checkbox before proceeding to notification and randomization.</div>
-                    </li>
-                    <li>
-                        <div class="step-badge">7</div>
-                        <div class="step-content">For eligible patients, <strong>track notification and opt-out periods</strong>. Status flow: <code>Deliver notification</code> &rarr; <code>Notified and waiting</code> (15 days) &rarr; <code>Ready to Randomize</code> (if no opt-out) or <code>Opted Out</code>.</div>
-                    </li>
-                    <li>
-                        <div class="step-badge">8</div>
-                        <div class="step-content">When a patient is ready to randomize, assign a <strong>Study ID</strong> from the site list, then set <strong>Randomized = Yes</strong>.</div>
-                    </li>
-                    <li>
-                        <div class="step-badge">9</div>
-                        <div class="step-content">You can <strong>lock</strong> patient records to prevent accidental changes and unlock them later when needed.</div>
-                    </li>
-                </ol>
-                
-                
-                    
-                    <div id="prescreen-results" class="hidden" style="margin-top: 12px;">
-                        <h3>Pre-screening results</h3>
-                        <div class="stats-container">
-                            <div class="stat-card">
-                                <div>Total Patients</div>
-                                <div class="stat-number" id="ps-total">0</div>
-                            </div>
-                            <div class="stat-card">
-                                <div>Potentially Eligible</div>
-                                <div class="stat-number" id="ps-eligible">0</div>
-                            </div>
-                            <div class="stat-card">
-                                <div>Ineligible</div>
-                                <div class="stat-number" id="ps-ineligible">0</div>
-                            </div>
-                            <div class="stat-card">
-                                <div>Age < 45</div>
-                                <div class="stat-number" id="ps-age-under45">0</div>
-                            </div>
-                            <div class="stat-card">
-                                <div>45–59 w/o Diabetes</div>
-                                <div class="stat-number" id="ps-age45-59-nodm">0</div>
-                            </div>
-                            <div class="stat-card">
-                                <div>< 90 Days on Dialysis</div>
-                                <div class="stat-number" id="ps-days-under">0</div>
-                            </div>
-                            <div class="stat-card">
-                                <div>Invalid Modality</div>
-                                <div class="stat-number" id="ps-invalid-modality">0</div>
-                            </div>
-                            <div class="stat-card">
-                                <div>Missing Health Card</div>
-                                <div class="stat-number" id="ps-missing-hcn">0</div>
-                            </div>
-                            <div class="stat-card">
-                                <div>Invalid/Missing Dates</div>
-                                <div class="stat-number" id="ps-invalid-dates">0</div>
-                            </div>
-                        </div>
-                        <div class="tabs" id="ps-tabs" style="display:none;"></div>
-                        <div id="ps-tabpanels" style="display:none;">
-                            <div id="ps-panel-ineligible" class="tab-panel" style="display:none;"></div>
-                        </div>
-                    </div>
-            </div>
-        </div>
-
         <div class="criteria-reference-card">
             <div class="criteria-header" onclick="toggleCriteriaReference()">
                 <span>Eligibility criteria</span>
@@ -309,10 +308,10 @@
 
         <div id="assessment-controls" class="header hidden">
             <div class="search-container" style="margin-bottom:8px;">
-                <input type="text" id="search-input" placeholder="Search by name, MRN, or Health Card... (space-separated to match multiple)" style="min-width: 320px;">
+                <input type="text" id="search-input" placeholder="Search by name, MRN, health card, or unit. Use spaces to require multiple matches.">
             </div>
             <div class="unit-filter-bar">
-                <div class="unit-filter-label">Recruiting units:</div>
+                <div class="unit-filter-label">Filter by dialysis unit:</div>
                 <div id="unit-filter-summary" class="unit-filter-summary">All units</div>
                 <button type="button" id="unit-filter-btn" class="secondary small" disabled>Select units</button>
             </div>

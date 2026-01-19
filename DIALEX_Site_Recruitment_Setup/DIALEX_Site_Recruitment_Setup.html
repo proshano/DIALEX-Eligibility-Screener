@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DIALEX Site Recruitment Setup</title>
+    <link rel="stylesheet" href="css/app-01.css">
+    <script src="../DIALEX_Recruitment_Tracker/js/lib/sql.js"></script>
+</head>
+<body>
+    <div class="container">
+        <div class="card">
+            <h1>DIALEX Site Recruitment Setup</h1>
+            <p>Create the encrypted starter database and the first admin account for a site.</p>
+
+            <form id="provision-form" novalidate>
+                <h2>Recovery password</h2>
+                <div class="password-toggle">
+                    <input type="checkbox" id="toggle-passwords">
+                    <label for="toggle-passwords">Show passwords while typing</label>
+                </div>
+                <div class="field">
+                    <label for="central-password">Central recovery password</label>
+                    <input type="password" id="central-password" autocomplete="new-password" required data-password-field>
+                    <div class="help">Keep this password with the central study team only for recovery.</div>
+                </div>
+                <div class="field">
+                    <label for="central-confirm">Confirm central recovery password</label>
+                    <input type="password" id="central-confirm" autocomplete="new-password" required data-password-field>
+                </div>
+
+                <h2>Initial admin account</h2>
+                <div class="field">
+                    <label for="admin-username">Admin username</label>
+                    <input type="text" id="admin-username" autocomplete="username" required>
+                    <div class="help">Example: admin</div>
+                </div>
+                <div class="field">
+                    <label for="admin-first-name">Admin first name</label>
+                    <input type="text" id="admin-first-name" autocomplete="given-name" required>
+                    <div class="help">Used for audit logs and to identify the site admin.</div>
+                </div>
+                <div class="field">
+                    <label for="admin-last-name">Admin last name</label>
+                    <input type="text" id="admin-last-name" autocomplete="family-name" required>
+                </div>
+                <div class="field">
+                    <label for="admin-password">Admin password</label>
+                    <input type="password" id="admin-password" autocomplete="new-password" required data-password-field>
+                    <div class="help">This password unlocks the database for the admin account.</div>
+                </div>
+                <div class="field">
+                    <label for="admin-confirm">Confirm admin password</label>
+                    <input type="password" id="admin-confirm" autocomplete="new-password" required data-password-field>
+                </div>
+
+                <h2>Study ID list (optional)</h2>
+                <div class="field">
+                    <label for="study-id-file">Import available study IDs (CSV)</label>
+                    <input type="file" id="study-id-file" accept=".csv,text/csv">
+                    <div class="help">CSV must include a <code>study_id</code> column from REDCap.</div>
+                    <div id="study-id-status" class="inline-status">No study IDs loaded.</div>
+                    <div id="study-id-preview" class="inline-status hidden"></div>
+                    <div class="inline-actions">
+                        <button type="button" id="clear-study-ids" class="secondary" disabled>Clear study ID list</button>
+                    </div>
+                </div>
+
+                <h2>Output file</h2>
+                <div class="field">
+                    <label for="site-label">Site label (optional)</label>
+                    <input type="text" id="site-label" autocomplete="off" placeholder="Site code or name">
+                    <div class="help">Used only to label the filename.</div>
+                </div>
+
+                <div class="actions">
+                    <button type="submit" id="create-btn" disabled>Create encrypted starter database</button>
+                </div>
+            </form>
+            <div id="status" class="status hidden"></div>
+        </div>
+    </div>
+
+    <script src="js/app/app-01.js"></script>
+</body>
+</html>
