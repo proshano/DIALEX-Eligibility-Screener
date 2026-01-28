@@ -110,15 +110,64 @@ setupSaveLocationControls();
 setupUserManagementControls();
 window.addEventListener('beforeunload', handleBeforeUnload);
 
+function countDigitsInRange(value, endIndex) {
+    if (!value || endIndex <= 0) return 0;
+    const limit = Math.min(value.length, endIndex);
+    let count = 0;
+    for (let i = 0; i < limit; i++) {
+        const code = value.charCodeAt(i);
+        if (code >= 48 && code <= 57) {
+            count += 1;
+        }
+    }
+    return count;
+}
+
+function caretIndexFromDigits(value, digitCount) {
+    if (!value || digitCount <= 0) return 0;
+    let count = 0;
+    for (let i = 0; i < value.length; i++) {
+        const code = value.charCodeAt(i);
+        if (code >= 48 && code <= 57) {
+            count += 1;
+        }
+        if (count >= digitCount) {
+            return i + 1;
+        }
+    }
+    return value.length;
+}
+
 document.addEventListener('input', event => {
     const target = event.target;
     if (!target || !target.dataset || target.dataset.dateEntry !== 'true') return;
-    const formatted = formatDateEntryInput(target.value);
-    if (formatted === target.value) return;
+    const rawValue = target.value;
+    const formatted = formatDateEntryInput(rawValue);
+    if (formatted === rawValue) return;
+    const selectionStart = typeof target.selectionStart === 'number' ? target.selectionStart : rawValue.length;
+    const selectionEnd = typeof target.selectionEnd === 'number' ? target.selectionEnd : selectionStart;
+    const digitsBeforeStart = countDigitsInRange(rawValue, selectionStart);
+    const digitsBeforeEnd = countDigitsInRange(rawValue, selectionEnd);
     target.value = formatted;
     if (typeof target.setSelectionRange === 'function') {
-        const end = formatted.length;
-        target.setSelectionRange(end, end);
+        const newStart = caretIndexFromDigits(formatted, digitsBeforeStart);
+        const newEnd = caretIndexFromDigits(formatted, digitsBeforeEnd);
+        target.setSelectionRange(newStart, newEnd);
+    }
+});
+
+document.addEventListener('keydown', event => {
+    if (event.key !== 'Enter') return;
+    const target = event.target;
+    if (!target) return;
+    const tagName = target.tagName;
+    if (tagName === 'TEXTAREA' || tagName === 'SELECT') return;
+    const isDateEntry = target.dataset && target.dataset.dateEntry === 'true';
+    const isTableInput = target.classList && target.classList.contains('table-input');
+    if (!isDateEntry && !isTableInput) return;
+    event.preventDefault();
+    if (typeof target.blur === 'function') {
+        target.blur();
     }
 });
 
@@ -142,6 +191,8 @@ window.toggleRecordLocked = toggleRecordLocked;
 window.handleStudyIdInput = handleStudyIdInput;
 window.updatePatientBirthDate = updatePatientBirthDate;
 window.updatePatientAge = updatePatientAge;
+window.updateDiabetesStatus = updateDiabetesStatus;
 window.updatePatientMrn = updatePatientMrn;
 window.updatePatientHcn = updatePatientHcn;
+window.togglePatientRow = togglePatientRow;
 window.deleteManualPatient = deleteManualPatient;

@@ -48,7 +48,7 @@
         <div class="header">
             <h1>DIALEX eligibility, notification, and randomization tracker</h1>
             <div class="meta-row">
-                <div class="meta-pill version-pill" aria-label="Version date">Version: 2025-12-01</div>
+                <div class="meta-pill version-pill" aria-label="Version date">Version: Jan 28 2026</div>
                 <div class="meta-pill owner-pill" aria-label="Ownership">Copyright 2025 DIALEX trial project office</div>
                 <button id="theme-toggle" class="meta-pill theme-toggle" onclick="toggleTheme()" aria-pressed="true" type="button">Dark theme</button>
             </div>
@@ -70,11 +70,11 @@
                 <ol>
                     <li>
                         <div class="step-badge">1</div>
-                        <div class="step-content">Set the save folder for continuous backups, then click <strong>"Load database"</strong> and open the encrypted recruitment database for your site. Enter your account password (or the central recovery password) to decrypt.</div>
+                        <div class="step-content">Set the save folder for continuous backups, then click <strong>"Load database"</strong> and open the encrypted recruitment database for your site. Enter your <strong>username</strong> and <strong>password</strong> to unlock it.</div>
                     </li>
                     <li>
                         <div class="step-badge">2</div>
-                        <div class="step-content"><strong>Sign in</strong> with your username and password. Admin users can open <strong>"Manage users"</strong> to add or disable accounts.</div>
+                        <div class="step-content">If you do not know your password, choose <strong>"Use central recovery password"</strong> to unlock the file and reset your account. Admin users can open <strong>"Manage users"</strong> to add or disable accounts.</div>
                     </li>
                     <li>
                         <div class="step-badge">3</div>
@@ -261,7 +261,11 @@
                             </li>
                             <li>Receiving any form of dialysis regularly for previous 90 days (at randomization)</li>
                             <li>Currently receiving HD in-centre (main or satellite unit)</li>
-                            <li>Valid provincial/territorial health insurance card number</li>
+                            <li>
+                                Valid provincial/territorial health insurance card number
+                                <br>
+                                <small style="color: var(--muted); display:block; margin-top:4px;">Quebec HCNs and federal CF (M########), RCMP (R########), and VAC (K#######) numbers are not eligible.</small>
+                            </li>
                         </ul>
                     </div>
                     <div>
@@ -433,12 +437,13 @@
             </div>
             <div class="modal-body">
                 <p id="login-modal-message" class="modal-message">Database loaded. Sign in to continue.</p>
+                <div id="login-recovery-banner" class="modal-banner hidden" role="status" aria-live="polite"></div>
                 <form id="login-form">
                     <div>
                         <label for="login-username">Username</label>
                         <input type="text" id="login-username" class="modal-input" autocomplete="username" required>
                     </div>
-                    <div>
+                    <div id="login-password-group">
                         <label for="login-password">Password</label>
                         <input type="password" id="login-password" class="modal-input" autocomplete="current-password" required>
                     </div>
@@ -446,6 +451,7 @@
                     <div class="modal-footer">
                         <button type="button" class="secondary hidden" id="login-cancel-btn">Cancel</button>
                         <button type="button" class="secondary" id="login-unload-btn">Unload database</button>
+                        <button type="button" class="secondary" id="login-reset-btn">Reset password</button>
                         <button type="submit" id="login-submit-btn">Sign in</button>
                     </div>
                 </form>

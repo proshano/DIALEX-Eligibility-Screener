@@ -439,6 +439,26 @@
 .font-medium { font-weight: 500; }
 .text-sm { font-size: 15px; }
 
+.diabetes-status-row {
+    margin-top: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.diabetes-status-row .patient-sub {
+    margin: 0;
+}
+.diabetes-toggle {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+.diabetes-btn.active {
+    background: var(--brand);
+    border-color: var(--brand-600);
+    color: var(--primary-btn-text);
+}
+
 /* Section labels for expanded patient view */
 .section-label {
     font-size: 11px;

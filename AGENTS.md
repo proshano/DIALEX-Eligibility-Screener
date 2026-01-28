@@ -17,6 +17,24 @@ This repository contains a self-contained, offline, browser-based screening tool
 - Store any needed data locally (e.g., in the HTML/JS) and avoid APIs.
 - Ensure compatibility with common hospital browser setups (avoid bleeding-edge features).
 
+## Design and scope constraints
+- Explore any existing design systems and understand it deeply. 
+- Implement EXACTLY and ONLY what the user requests.
+- No extra features, no added components, no UX embellishments.
+- Style aligned to the design system at hand. 
+- Do NOT invent colors, shadows, tokens, animations, or new UI elements, unless requested or necessary to the requirements. 
+- If any instruction is ambiguous, choose the simplest valid interpretation.
+
+
+# Ucertainty and ambiguity
+- If the question is ambiguous or underspecified, explicitly call this out and:
+  - Ask up to 1–3 precise clarifying questions, OR
+  - Present 2–3 plausible interpretations with clearly labeled assumptions.
+- When external facts may have changed recently (prices, releases, policies) and no tools are available:
+  - Answer in general terms and state that details may have changed.
+- Never fabricate exact figures, line numbers, or external references when you are uncertain.
+- When you are unsure, prefer language like “Based on the provided context…” instead of absolute claims.
+
 ## Output & Review
 - Changes must be easy to audit: small, focused edits and clear variable/function names.
 - If a change adds risk or assumes network availability, call it out and propose an offline alternative.

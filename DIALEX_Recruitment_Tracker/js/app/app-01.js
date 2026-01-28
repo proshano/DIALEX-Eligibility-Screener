@@ -159,8 +159,12 @@ async function unwrapDataKey(password, wrapEntry) {
     return new Uint8Array(rawKey);
 }
 
-async function findDataKeyForPassword(password, wraps = []) {
-    for (const wrapEntry of wraps) {
+async function findDataKeyForPassword(password, wraps = [], options = {}) {
+    const wrapId = options && options.wrapId ? options.wrapId : '';
+    const candidates = wrapId
+        ? wraps.filter(entry => entry && entry.id === wrapId)
+        : wraps;
+    for (const wrapEntry of candidates) {
         try {
             const dataKey = await unwrapDataKey(password, wrapEntry);
             return { dataKey, unlockId: wrapEntry.id || '' };
@@ -190,12 +194,12 @@ async function encryptDatabaseV2(dataBytes, encryptionState) {
     return serializeEncryptedPayloadV2(payload);
 }
 
-async function decryptDatabaseV2(bytes, password) {
+async function decryptDatabaseV2(bytes, password, options = {}) {
     const payload = parseEncryptedPayloadV2(bytes);
     if (!payload || !Array.isArray(payload.wraps)) {
         throw new Error("Invalid encrypted file format.");
     }
-    const { dataKey, unlockId } = await findDataKeyForPassword(password, payload.wraps);
+    const { dataKey, unlockId } = await findDataKeyForPassword(password, payload.wraps, options);
     const dataIv = base64ToBytes(payload.data.iv);
     const ciphertext = base64ToBytes(payload.data.ciphertext);
     const aesKey = await importAesKey(dataKey, ["decrypt"]);
@@ -227,15 +231,11 @@ async function createEncryptionState(centralPassword, userWraps) {
     };
 }
 
-async function decryptDatabasePayload(packedData, password) {
-    if (isV2EncryptedPayload(packedData)) {
-        return await decryptDatabaseV2(packedData, password);
+async function decryptDatabasePayload(packedData, password, options = {}) {
+    if (!isV2EncryptedPayload(packedData)) {
+        throw new Error('Legacy encrypted databases are no longer supported.');
     }
-    const dataBytes = await decryptData(packedData, password);
-    return {
-        dataBytes,
-        encryptionState: { mode: 'legacy', unlockId: 'legacy' }
-    };
+    return await decryptDatabaseV2(packedData, password, options);
 }
 
 async function ensureEncryptionStateForSave() {
@@ -281,7 +281,8 @@ async function ensureEncryptionStateForSave() {
             : 'Create and confirm the central password used for recovery if user passwords are lost.',
         requireConfirmation: true,
         submitLabel: 'Continue',
-        autocomplete: 'new-password'
+        autocomplete: 'new-password',
+        minLength: MIN_PASSWORD_LENGTH
     });
     if (!centralPassword) return false;
 
@@ -331,7 +332,7 @@ async function verifyPassword(password, saltBase64, hashBase64) {
 
 const INCLUSION_KEYS = ['incl_age', 'incl_dialysis_90d', 'incl_incentre_hd', 'incl_health_card'];
 const INCLUSION_FIELD_MAP = {
-    incl_age: ['age'],
+    incl_age: ['age', 'diabetes_status'],
     incl_dialysis_90d: ['dialysis_start_date'],
     incl_incentre_hd: ['dialysis_unit'],
     incl_health_card: ['health_card', 'health_card_province']
@@ -339,7 +340,7 @@ const INCLUSION_FIELD_MAP = {
 const INCLUSION_FIELD_LIST = Object.values(INCLUSION_FIELD_MAP)
     .reduce((acc, fields) => acc.concat(fields), []);
 const INCLUSION_FIELD_MESSAGES = {
-    incl_age: 'Update age to recalculate the age criterion.',
+    incl_age: 'Update age or diabetes status to recalculate the age criterion.',
     incl_dialysis_90d: 'Update the dialysis start date or ≥90-day confirmation.',
     incl_incentre_hd: 'Update the dialysis unit selection to reflect in-centre HD.',
     incl_health_card: 'Update the health card number and province/territory.'
@@ -406,6 +407,38 @@ const START_DATE_HEADER = "Dialysis Start Date DD/MM/YYYY";
 const MODALITY_HEADER = "Modality";
 const DIAB_TYPE1_HEADER = "Diabetes Type I?";
 const DIAB_TYPE2_HEADER = "Diabetes Type II?";
+
+const DIABETES_STATUS = {
+    UNKNOWN: 0,
+    NO: -1,
+    YES: 1
+};
+
+function normalizeDiabetesStatus(value) {
+    const num = Number(value);
+    if (num === DIABETES_STATUS.YES) return DIABETES_STATUS.YES;
+    if (num === DIABETES_STATUS.NO) return DIABETES_STATUS.NO;
+    return DIABETES_STATUS.UNKNOWN;
+}
+
+function parseDiabetesField(value) {
+    if (value === null || value === undefined) return DIABETES_STATUS.UNKNOWN;
+    const normalized = String(value).trim().toLowerCase();
+    if (!normalized) return DIABETES_STATUS.UNKNOWN;
+    if (['yes', 'true', '1', 'y'].includes(normalized)) return DIABETES_STATUS.YES;
+    if (['no', 'false', '0', 'n'].includes(normalized)) return DIABETES_STATUS.NO;
+    if (['unknown', 'unk', 'u', 'na', 'n/a'].includes(normalized)) return DIABETES_STATUS.UNKNOWN;
+    return DIABETES_STATUS.UNKNOWN;
+}
+
+function resolveDiabetesStatus(type1Value, type2Value) {
+    const statuses = [parseDiabetesField(type1Value), parseDiabetesField(type2Value)];
+    if (statuses.includes(DIABETES_STATUS.YES)) return DIABETES_STATUS.YES;
+    const hasKnownNo = statuses.includes(DIABETES_STATUS.NO);
+    const hasUnknown = statuses.includes(DIABETES_STATUS.UNKNOWN);
+    if (hasKnownNo && !hasUnknown) return DIABETES_STATUS.NO;
+    return DIABETES_STATUS.UNKNOWN;
+}
 
 const VALID_MODALITY_CODES = ['111', '121', '211', '221', '311', '321'];
 

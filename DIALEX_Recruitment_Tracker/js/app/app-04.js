@@ -24,26 +24,41 @@ function computeBucketFlags(patient = {}) {
     if (!patient) {
         return flags;
     }
-    const hasHealthCard = Boolean((patient.health_card || '').trim());
-    const hcnProvince = (patient.health_card_province || '').trim();
+    const hasHealthCard = Boolean(String(patient.health_card || '').trim());
+    const hcnProvince = normalizeProvinceCode(patient.health_card_province || '');
+    const invalidProvince = hcnProvince && !isProvinceTerritoryCode(hcnProvince);
+    const hcnIneligible = invalidProvince || isIneligibleHealthCardValue(patient.health_card, hcnProvince);
     const ageValue = Number.isFinite(patient.age) ? patient.age : null;
     const missingAge = !Number.isFinite(ageValue);
     const needsDiabetesStatus = Number.isFinite(ageValue) && ageValue >= 45 && ageValue < 60;
-    const missingDiabetes = needsDiabetesStatus && Number(patient.diabetes_known) !== 1;
+    const diabetesStatus = normalizeDiabetesStatus(patient.diabetes_known);
+    const missingDiabetes = needsDiabetesStatus && diabetesStatus === DIABETES_STATUS.UNKNOWN;
+    const ageIneligible = !missingAge && !missingDiabetes && Number.isFinite(ageValue)
+        ? (ageValue < 45 || (needsDiabetesStatus && diabetesStatus === DIABETES_STATUS.NO))
+        : false;
     const requiresDialysisUnit = patient.incl_incentre_hd === 1;
     const locationValue = requiresDialysisUnit ? getDialysisUnitCanonical(patient) : '';
     const hasDialysisUnit = requiresDialysisUnit && Boolean(normalizeLocationValue(locationValue));
     const hasDialysisHistory = Boolean(patient.dialysis_start_date) || Boolean(patient.dialysis_duration_confirmed);
-    const missingHcnInfo = !hasHealthCard || !hcnProvince;
+    const dialysisIneligible = hasDialysisHistory && Number(patient.incl_dialysis_90d) !== 1;
+    const inCentreIneligible = Number(patient.incl_incentre_hd) !== 1;
+    const missingHcnInfo = (!hasHealthCard && !invalidProvince) || (hasHealthCard && !hcnProvince);
     const hcnFormatError = hasHealthCard ? validateHealthCardFormat(patient.health_card, hcnProvince || '') : '';
-    flags.missing = missingAge || missingDiabetes || !hasHealthCard || !hcnProvince || !!hcnFormatError || (requiresDialysisUnit && !hasDialysisUnit) || !hasDialysisHistory;
+    const hcnMissingError = !!hcnFormatError && !hcnIneligible;
+    const missingData = missingAge || missingDiabetes || missingHcnInfo || hcnMissingError || (requiresDialysisUnit && !hasDialysisUnit) || !hasDialysisHistory;
 
     const optOutStatus = patient.opt_out_status || OPT_OUT_STATUS.PENDING;
     const isOptedOutStatus = optOutStatus === OPT_OUT_STATUS.OPTED_OUT;
     flags.opted_out = isOptedOutStatus;
     const hasAnyExclusion = patient.hasAnyExclusion || false;
-    const missingIneligibleInfo = missingHcnInfo || missingAge || missingDiabetes || !!hcnFormatError;
-    flags.ineligible = isOptedOutStatus || hasAnyExclusion || (!patient.inclusionMet && (!flags.missing || missingIneligibleInfo));
+    const hasNonMissingIneligible = isOptedOutStatus
+        || hasAnyExclusion
+        || hcnIneligible
+        || ageIneligible
+        || dialysisIneligible
+        || inCentreIneligible;
+    flags.ineligible = hasNonMissingIneligible;
+    flags.missing = !hasNonMissingIneligible && !hcnIneligible && missingData;
 
     const today = startOfToday();
     const hasNotification = Boolean(patient.notification_date);
@@ -289,6 +304,8 @@ function buildPatientSummaryRow(patient, isExpanded) {
 
     const isLocked = !!patient.locked_at;
     const ageValue = Number.isFinite(patient.age) ? patient.age : '';
+    const diabetesStatus = normalizeDiabetesStatus(patient.diabetes_known);
+    const needsDiabetesStatus = Number.isFinite(patient.age) && patient.age >= 45 && patient.age < 60;
     const dialysisUnitCanonical = getDialysisUnitCanonical(patient);
     const dialysisUnitOptions = buildLocationOptionsHtml(dialysisUnitCanonical);
     const provinceOptions = buildProvinceOptions(patient.health_card_province || '');
@@ -370,6 +387,8 @@ function buildPatientDetailsRow(patient) {
     const isRandomized = !!patient.randomized;
     const isLocked = !!patient.locked_at;
     const ageValue = Number.isFinite(patient.age) ? patient.age : '';
+    const diabetesStatus = normalizeDiabetesStatus(patient.diabetes_known);
+    const needsDiabetesStatus = Number.isFinite(patient.age) && patient.age >= 45 && patient.age < 60;
     const notificationDisplay = formatEntryDate(patient.notification_date || '');
     const notificationFriendly = formatFriendlyDate(patient.notification_date);
     const optOutStatus = patient.opt_out_status || OPT_OUT_STATUS.PENDING;
@@ -406,9 +425,29 @@ function buildPatientDetailsRow(patient) {
         </div>
     `;
     const missingReasons = computeMissingEligibilityReasons(patient);
-    const missingMessage = missingReasons.length
+    const flags = patient.bucketFlags || computeBucketFlags(patient);
+    const missingMessage = flags.missing && !flags.ineligible && missingReasons.length
         ? `<div class="status-subtext" style="color:#ffcc66; font-weight:700; margin-top:10px;">Missing: ${missingReasons.join('; ')}</div>`
         : '';
+    const diabetesButton = (status, label) => {
+        const isActive = diabetesStatus === status;
+        return `
+            <button type="button" class="copy-btn diabetes-btn ${isActive ? 'active' : ''}" ${isLocked ? 'disabled' : ''} aria-pressed="${isActive ? 'true' : 'false'}" onclick="updateDiabetesStatus(${patient._index}, ${status})">
+                ${label}
+            </button>
+        `;
+    };
+    const diabetesStatusRow = needsDiabetesStatus ? `
+        <div class="diabetes-status-row" data-field="diabetes_status">
+            <label class="patient-sub">Diabetes status (age 45-59):</label>
+            <div class="diabetes-toggle">
+                ${diabetesButton(DIABETES_STATUS.YES, 'Yes')}
+                ${diabetesButton(DIABETES_STATUS.NO, 'No')}
+                ${diabetesButton(DIABETES_STATUS.UNKNOWN, 'Unknown')}
+            </div>
+            ${diabetesStatus === DIABETES_STATUS.UNKNOWN ? '<div class="status-subtext">Select yes/no to complete the age 45-59 criterion.</div>' : ''}
+        </div>
+    ` : '';
     let eligibleMessage;
     if (patient.first_ready_iso) {
         eligibleMessage = `<div id="first-eligible-${patient._index}" class="text-sm font-medium" style="color:var(--brand);">${firstEligibleDisplay}</div>`;
@@ -460,11 +499,12 @@ function buildPatientDetailsRow(patient) {
     const lockHelper = '<div class="status-subtext">Lock prevents editing fields above; notes remain editable.</div>';
     const lockDisplay = lockIndicator || lockHelper;
     const isManualRecord = isManualPatientRecord(patient);
+    const hasNotificationDate = Boolean(patient.notification_date);
     const deleteDisabled = isLocked ? 'disabled' : '';
     const deleteHelper = isLocked
         ? '<div class="status-subtext">Unlock record to delete.</div>'
         : '<div class="status-subtext">This cannot be undone.</div>';
-    const manualDeleteHtml = isManualRecord ? `
+    const manualDeleteHtml = (isManualRecord && !hasNotificationDate) ? `
         <div class="record-actions">
             <button class="danger small" ${deleteDisabled} onclick="deleteManualPatient(${patient._index})">Delete manual record</button>
             ${deleteHelper}
@@ -483,6 +523,7 @@ function buildPatientDetailsRow(patient) {
                     <div class="inline-criteria-list">
                         ${INCLUSION_KEYS.map(key => renderCheckbox(patient, key, isLocked)).join('')}
                     </div>
+                    ${diabetesStatusRow}
                     <div class="date-field" data-field="dialysis_start_date" style="margin-top: 10px;">
                         <div class="date-field-header">
                             <label class="patient-sub">Dialysis start date:</label>
@@ -545,10 +586,10 @@ function buildPatientDetailsRow(patient) {
                     </div>
                 </div>
                 <div class="inline-field-row" style="${studyRowStyle}">
+                    <button class="copy-btn" ${isLocked || hasStudyId || !canAssignStudyId ? 'disabled' : ''} onclick="assignStudyId(${patient._index})">Eligible and ready to randomize now</button>
                     <label class="patient-sub">Study ID:</label>
                     <span class="date-display ${studyIdValue ? 'has-value' : ''}">${studyIdValue || 'Not assigned'}</span>
                     <button class="copy-btn" ${studyCopyDisabled} onclick="copyPatientField(${patient._index}, 'study_id')">Copy</button>
-                    <button class="copy-btn" ${isLocked || hasStudyId || !canAssignStudyId ? 'disabled' : ''} onclick="assignStudyId(${patient._index})">Assign Study ID</button>
                 </div>
                 ${studyHelper}
                 ${randomizationHelper}
@@ -724,7 +765,7 @@ function labelForKey(key) {
         incl_age: 'Age ≥60 or 45-59 with history of diabetes',
         incl_dialysis_90d: '≥90 days of dialysis at randomization',
         incl_incentre_hd: 'Receiving in-centre HD',
-        incl_health_card: 'Valid provincial/territorial health card number',
+        incl_health_card: 'Valid provincial/territorial health card number (excluding Quebec, CF, RCMP, VAC)',
         excl_hd_less3: 'Prescribed HD less than 3 times per week',
         excl_intolerance: 'Known/anticipated intolerance to Nipro Elisio HX',
         excl_hdf_planned: 'Planned hemodiafiltration',
@@ -814,7 +855,7 @@ function updateCriterion(index, key, checked) {
     if (key === 'incl_age') {
         const ageValue = typeof patient.age === 'number' ? patient.age : Number(patient.age);
         if (Number.isFinite(ageValue) && ageValue >= 45 && ageValue < 60) {
-            patient.diabetes_known = 1;
+            patient.diabetes_known = DIABETES_STATUS.YES;
         }
     }
     if (EXCLUSION_KEYS.includes(key) && checked) {

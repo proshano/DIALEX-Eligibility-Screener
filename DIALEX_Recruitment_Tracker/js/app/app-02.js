@@ -298,6 +298,10 @@ function promptPasswordModal(options = {}) {
         const submitBtn = $('password-submit-btn');
         const closeBtn = $('password-modal-close');
         const requireConfirmation = Boolean(options.requireConfirmation);
+        const validate = typeof options.validate === 'function' ? options.validate : null;
+        const minLength = Number.isFinite(options.minLength) ? options.minLength : 0;
+        const minLengthMessage = options.minLengthMessage
+            || (minLength ? `Passwords must be at least ${minLength} characters.` : '');
         const submitLabel = options.submitLabel || (requireConfirmation ? 'Save' : 'Continue');
         const autocompleteValue = options.autocomplete || (requireConfirmation ? 'new-password' : 'current-password');
         const previouslyFocused = document.activeElement;
@@ -343,13 +347,19 @@ function promptPasswordModal(options = {}) {
             errorEl.classList.remove('hidden');
         };
 
-        const onSubmit = (event) => {
+        const onSubmit = async (event) => {
             event.preventDefault();
             errorEl.classList.add('hidden');
             const password = passwordInput.value;
             if (!password.length) {
                 showError('Password is required.');
                 passwordInput.focus();
+                return;
+            }
+            if (minLength && password.length < minLength) {
+                showError(minLengthMessage);
+                passwordInput.focus();
+                passwordInput.select();
                 return;
             }
             if (requireConfirmation) {
@@ -363,6 +373,22 @@ function promptPasswordModal(options = {}) {
                     showError('Passwords do not match.');
                     confirmInput.focus();
                     confirmInput.select();
+                    return;
+                }
+            }
+            if (validate) {
+                submitBtn.disabled = true;
+                let validationResult = null;
+                try {
+                    validationResult = await validate(password);
+                } catch (error) {
+                    validationResult = null;
+                }
+                submitBtn.disabled = false;
+                if (!validationResult || !validationResult.ok) {
+                    showError(validationResult && validationResult.message ? validationResult.message : 'Wrong password');
+                    passwordInput.focus();
+                    passwordInput.select();
                     return;
                 }
             }
@@ -658,6 +684,9 @@ function unloadDatabase() {
     showStatus('No database loaded.', 'status');
 }
 
+const MAX_LOGIN_ATTEMPTS = 3;
+const LOCKOUT_DURATION_MS = 5 * 60 * 1000;
+
 function getUserCount() {
     if (!db) return 0;
     const stmt = db.prepare('SELECT COUNT(*) AS count FROM users');
@@ -680,6 +709,114 @@ function fetchUserByUsername(username) {
     }
     stmt.free();
     return user;
+}
+
+function getFailedAttemptsValue(value) {
+    const attempts = Number(value);
+    return Number.isFinite(attempts) && attempts > 0 ? attempts : 0;
+}
+
+function parseLockoutUntil(value) {
+    if (value === null || value === undefined || value === '') return 0;
+    const asNumber = Number(value);
+    if (Number.isFinite(asNumber)) return asNumber;
+    const parsed = new Date(value);
+    const time = parsed.getTime();
+    return Number.isNaN(time) ? 0 : time;
+}
+
+function formatLockoutRemaining(ms) {
+    const totalSeconds = Math.max(1, Math.ceil(ms / 1000));
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    if (minutes <= 0) {
+        return `${seconds}s`;
+    }
+    return `${minutes}m ${String(seconds).padStart(2, '0')}s`;
+}
+
+function clearUserLock(username) {
+    if (!db) return;
+    const normalized = normalizeUsername(username);
+    if (!normalized) return;
+    const stmt = db.prepare(`
+        UPDATE users
+        SET failed_attempts = 0, locked = 0, locked_until = NULL, updated_at = ?
+        WHERE username = ?
+    `);
+    stmt.run([getSqlTimestamp(), normalized]);
+    stmt.free();
+    markDatabaseChanged();
+}
+
+function recordFailedLoginAttempt(user) {
+    if (!db || !user) return { attempts: 0, locked: false };
+    const normalized = normalizeUsername(user.username || '');
+    if (!normalized) return { attempts: 0, locked: false };
+    const attempts = getFailedAttemptsValue(user.failed_attempts) + 1;
+    const locked = attempts >= MAX_LOGIN_ATTEMPTS;
+    const lockedUntil = locked ? Date.now() + LOCKOUT_DURATION_MS : null;
+    const stmt = db.prepare(`
+        UPDATE users
+        SET failed_attempts = ?, locked = ?, locked_until = ?, updated_at = ?
+        WHERE username = ?
+    `);
+    stmt.run([attempts, locked ? 1 : 0, lockedUntil, getSqlTimestamp(), normalized]);
+    stmt.free();
+    markDatabaseChanged();
+    if (locked) {
+        logAuditEvent('user_locked_out', { username: normalized, attempts }, {
+            targetType: 'user',
+            targetId: normalized
+        });
+    }
+    return { attempts, locked: Boolean(locked), lockedUntil };
+}
+
+function getLockoutState(user, options = {}) {
+    if (!user) return { locked: false, remainingMs: 0 };
+    const now = Date.now();
+    let lockedUntil = parseLockoutUntil(user.locked_until);
+    if (!lockedUntil && Number(user.locked)) {
+        lockedUntil = now + LOCKOUT_DURATION_MS;
+        if (options.refreshDb) {
+            const stmt = db.prepare(`
+                UPDATE users
+                SET locked = 1, locked_until = ?, updated_at = ?
+                WHERE username = ?
+            `);
+            stmt.run([lockedUntil, getSqlTimestamp(), normalizeUsername(user.username || '')]);
+            stmt.free();
+            markDatabaseChanged();
+        }
+    }
+    if (lockedUntil && lockedUntil > now) {
+        return { locked: true, remainingMs: lockedUntil - now };
+    }
+    if (lockedUntil && lockedUntil <= now && options.refreshDb) {
+        clearUserLock(user.username);
+    }
+    return { locked: false, remainingMs: 0 };
+}
+
+async function verifyCentralRecoveryPassword(password) {
+    if (!password) {
+        return { ok: false, message: 'Central recovery password is required.' };
+    }
+    if (!encryptionState || encryptionState.mode !== 'multi') {
+        return { ok: false, message: 'Central recovery password is unavailable for this database.' };
+    }
+    const wraps = Array.isArray(encryptionState.wraps) ? encryptionState.wraps : [];
+    const centralWrap = wraps.find(entry => entry && entry.id === 'central');
+    if (!centralWrap) {
+        return { ok: false, message: 'Central recovery password is unavailable for this database.' };
+    }
+    try {
+        await unwrapDataKey(password, centralWrap);
+        return { ok: true };
+    } catch (error) {
+        return { ok: false, message: 'Central recovery password is incorrect.' };
+    }
 }
 
 function sanitizeUserRecord(user) {
@@ -705,10 +842,34 @@ async function authenticateUser(username, password) {
     if (!Number(user.active)) {
         return { ok: false, message: 'This account is disabled.' };
     }
+    const lockoutState = getLockoutState(user, { refreshDb: true });
+    if (lockoutState.locked) {
+        return {
+            ok: false,
+            message: `This account is locked. Try again in ${formatLockoutRemaining(lockoutState.remainingMs)} or sign in as a different user.`,
+            locked: true,
+            remainingMs: lockoutState.remainingMs
+        };
+    }
     const valid = await verifyPassword(password, user.password_salt, user.password_hash);
     if (!valid) {
-        return { ok: false, message: 'Invalid username or password.' };
+        const attemptState = recordFailedLoginAttempt(user);
+        if (attemptState.locked) {
+            const remainingMs = attemptState.lockedUntil ? Math.max(attemptState.lockedUntil - Date.now(), 0) : LOCKOUT_DURATION_MS;
+            return {
+                ok: false,
+                message: `Account locked. Try again in ${formatLockoutRemaining(remainingMs)} or sign in as a different user.`,
+                locked: true,
+                remainingMs
+            };
+        }
+        const remaining = Math.max(MAX_LOGIN_ATTEMPTS - attemptState.attempts, 0);
+        return {
+            ok: false,
+            message: `Invalid username or password. ${remaining} attempt${remaining === 1 ? '' : 's'} remaining.`
+        };
     }
+    clearUserLock(normalized);
     if (encryptionState && encryptionState.mode === 'multi') {
         const wrapId = getUserWrapId(normalized);
         const wraps = Array.isArray(encryptionState.wraps) ? encryptionState.wraps : [];
@@ -720,6 +881,17 @@ async function authenticateUser(username, password) {
                 showStatus('Encryption access updated. Autosave will update the latest file.', 'status');
             }
         }
+    }
+    const resetRequired = Number(user.password_reset_required) ? true : false;
+    const centralRecoveryAdmin = Boolean(
+        encryptionState
+        && encryptionState.mode === 'multi'
+        && encryptionState.unlockId === 'central'
+        && user.role === 'admin'
+    );
+    if (resetRequired || centralRecoveryAdmin) {
+        const reason = centralRecoveryAdmin ? 'central_recovery' : 'admin_reset';
+        return { ok: true, action: 'force_reset', reason, user: sanitizeUserRecord(user) };
     }
     return { ok: true, user: sanitizeUserRecord(user) };
 }
@@ -773,26 +945,32 @@ async function createUserRecord({ username, firstName, lastName, password, role 
     return createdUser;
 }
 
-async function updateUserPassword(username, newPassword) {
+async function updateUserPassword(username, newPassword, options = {}) {
     const normalized = normalizeUsername(username);
     const record = await createPasswordRecord(newPassword);
+    const resetRequired = options.resetRequired ? 1 : 0;
     const stmt = db.prepare(`
         UPDATE users
-        SET password_salt = ?, password_hash = ?, updated_at = ?
+        SET password_salt = ?, password_hash = ?, failed_attempts = 0, locked = 0, locked_until = NULL,
+            password_reset_required = ?, updated_at = ?
         WHERE username = ?
     `);
-    stmt.run([record.salt, record.hash, getSqlTimestamp(), normalized]);
+    stmt.run([record.salt, record.hash, resetRequired, getSqlTimestamp(), normalized]);
     stmt.free();
     await upsertUserWrap(normalized, newPassword);
-    logAuditEvent('user_password_reset', { username: normalized }, {
+    const action = options.action || (resetRequired ? 'user_password_reset' : 'user_password_changed');
+    const details = options.details || { username: normalized };
+    logAuditEvent(action, details, {
         targetType: 'user',
-        targetId: normalized
+        targetId: normalized,
+        actorUsername: options.actorUsername,
+        actorRole: options.actorRole
     });
 }
 
 function loadUsers() {
     if (!db) return [];
-    const stmt = db.prepare('SELECT username, display_name, role, active FROM users ORDER BY username');
+    const stmt = db.prepare('SELECT username, display_name, role, active, locked, locked_until FROM users ORDER BY username');
     const users = [];
     while (stmt.step()) {
         users.push(stmt.getAsObject());
@@ -813,7 +991,10 @@ function renderUserManagementList() {
     users.forEach(user => {
         const row = document.createElement('tr');
         const roleLabel = user.role === 'admin' ? 'Admin' : 'User';
-        const statusLabel = Number(user.active) ? 'Active' : 'Disabled';
+        const lockoutState = getLockoutState(user, { refreshDb: true });
+        const statusLabel = Number(user.active)
+            ? (lockoutState.locked ? 'Locked' : 'Active')
+            : 'Disabled';
         row.innerHTML = `
             <td>${escapeHtml(user.username || '')}</td>
             <td>${escapeHtml(user.display_name || '')}</td>
@@ -898,16 +1079,17 @@ async function handleUserManagementAction(action, username) {
             message: `Create a new password for ${target.username}.`,
             requireConfirmation: true,
             submitLabel: 'Reset password',
-            autocomplete: 'new-password'
+            autocomplete: 'new-password',
+            minLength: MIN_PASSWORD_LENGTH
         });
         if (!newPassword) return;
-        if (newPassword.length < MIN_PASSWORD_LENGTH) {
-            showStatus(`Passwords must be at least ${MIN_PASSWORD_LENGTH} characters.`, 'error');
-            return;
-        }
-        await updateUserPassword(target.username, newPassword);
+        await updateUserPassword(target.username, newPassword, {
+            resetRequired: true,
+            action: 'user_password_reset',
+            details: { username: target.username, reset_required: true }
+        });
         markDatabaseChanged();
-        showStatus('Password updated.', 'success');
+        showStatus('Temporary password set. The user will be prompted to set a new password at sign-in.', 'success');
         return;
     }
 }
@@ -919,29 +1101,63 @@ async function promptLoginModal(options = {}) {
         const messageEl = $('login-modal-message');
         const form = $('login-form');
         const usernameInput = $('login-username');
+        const passwordGroup = $('login-password-group');
         const passwordInput = $('login-password');
         const errorEl = $('login-error');
+        const recoveryBanner = $('login-recovery-banner');
         const cancelBtn = $('login-cancel-btn');
         const unloadBtn = $('login-unload-btn');
+        const resetBtn = $('login-reset-btn');
         const submitBtn = $('login-submit-btn');
         const closeBtn = $('login-modal-close');
         const previouslyFocused = document.activeElement;
         const allowCancel = Boolean(options.allowCancel);
+        const authenticate = typeof options.authenticate === 'function' ? options.authenticate : authenticateUser;
+        const recover = typeof options.recover === 'function' ? options.recover : null;
+        const submitLabel = options.submitLabel || 'Sign in';
+        const recoveryLabel = options.recoveryLabel || (recover ? 'Use central recovery password' : 'Reset password');
+        const showReset = options.showReset !== false;
+        const unloadLabel = options.unloadLabel || 'Unload database';
+        const passwordAutocomplete = options.passwordAutocomplete || 'current-password';
+        const recoveryMode = Boolean(options.recoveryMode);
+        const recoveryMessage = options.recoveryMessage || 'Recovery mode: reset your password to continue.';
+        const showPassword = options.showPassword !== false;
         let resolved = false;
+        let lockoutTimer = null;
+        let lockoutExpiresAt = 0;
+
+        const clearLockoutTimer = () => {
+            if (lockoutTimer) {
+                clearInterval(lockoutTimer);
+                lockoutTimer = null;
+            }
+            lockoutExpiresAt = 0;
+            if (passwordInput && showPassword) {
+                passwordInput.disabled = false;
+            }
+            if (submitBtn) {
+                submitBtn.disabled = false;
+            }
+        };
 
         const cleanup = (result) => {
             if (resolved) return;
             resolved = true;
             modal.classList.remove('active');
+            clearLockoutTimer();
             form.removeEventListener('submit', onSubmit);
             if (cancelBtn) cancelBtn.removeEventListener('click', onCancel);
             if (unloadBtn) unloadBtn.removeEventListener('click', onUnload);
+            if (resetBtn) resetBtn.removeEventListener('click', onReset);
             if (closeBtn) {
                 closeBtn.removeEventListener('click', onCancel);
                 closeBtn.removeEventListener('keydown', onCloseKeydown);
             }
             modal.removeEventListener('click', onBackdropClick);
             document.removeEventListener('keydown', onKeyDown);
+            if (usernameInput) {
+                usernameInput.removeEventListener('input', onUsernameInput);
+            }
             if (previouslyFocused && typeof previouslyFocused.focus === 'function') {
                 previouslyFocused.focus();
             }
@@ -953,22 +1169,197 @@ async function promptLoginModal(options = {}) {
             errorEl.classList.remove('hidden');
         };
 
+        const updateLockoutMessage = () => {
+            if (!lockoutExpiresAt) return;
+            const remainingMs = lockoutExpiresAt - Date.now();
+            if (remainingMs <= 0) {
+                clearLockoutTimer();
+                errorEl.textContent = '';
+                errorEl.classList.add('hidden');
+                return;
+            }
+            showError(`This account is locked. Try again in ${formatLockoutRemaining(remainingMs)} or sign in as a different user.`);
+        };
+
+        const runForcedPasswordReset = async (user, reason) => {
+            if (!user || !user.username) {
+                showError('Unable to update the password.');
+                return null;
+            }
+            const normalized = normalizeUsername(user.username);
+            const displayName = user.display_name ? `${user.display_name} (${normalized})` : normalized;
+            const isCentralRecovery = reason === 'central_recovery';
+            const message = isCentralRecovery
+                ? 'Central recovery was used to unlock this database. Set a new admin password now.'
+                : `Your password was reset by an admin. Create a new password for ${displayName}.`;
+            while (true) {
+                let newPassword = await promptPasswordModal({
+                    title: 'Set new password',
+                    message,
+                    requireConfirmation: true,
+                    submitLabel: 'Update password',
+                    autocomplete: 'new-password',
+                    minLength: MIN_PASSWORD_LENGTH
+                });
+                if (!newPassword) {
+                    showError('Password reset is required to continue.');
+                    return null;
+                }
+                await updateUserPassword(normalized, newPassword, {
+                    action: 'user_password_changed',
+                    details: { username: normalized, reason: isCentralRecovery ? 'central_recovery' : 'admin_reset' },
+                    actorUsername: normalized,
+                    actorRole: user.role
+                });
+                markDatabaseChanged();
+                clearLockoutTimer();
+                newPassword = null;
+                const refreshed = sanitizeUserRecord(fetchUserByUsername(normalized));
+                if (!refreshed) {
+                    showError('Password updated, but the account could not be loaded.');
+                    return null;
+                }
+                return refreshed;
+            }
+        };
+
+        const startLockoutTimer = (remainingMs) => {
+            if (!remainingMs || remainingMs <= 0) return;
+            clearLockoutTimer();
+            lockoutExpiresAt = Date.now() + remainingMs;
+            if (passwordInput && showPassword) {
+                passwordInput.disabled = true;
+            }
+            if (submitBtn) {
+                submitBtn.disabled = true;
+            }
+            updateLockoutMessage();
+            lockoutTimer = setInterval(updateLockoutMessage, 1000);
+        };
+
         const onSubmit = async (event) => {
             event.preventDefault();
             errorEl.textContent = '';
             errorEl.classList.add('hidden');
             const username = usernameInput.value;
             const password = passwordInput.value;
+            clearLockoutTimer();
             submitBtn.disabled = true;
-            const result = await authenticateUser(username, password);
+            const result = await authenticate(username, password);
             submitBtn.disabled = false;
             if (!result.ok) {
                 showError(result.message || 'Unable to sign in.');
-                passwordInput.focus();
-                passwordInput.select();
+                if (result.locked && result.remainingMs) {
+                    startLockoutTimer(result.remainingMs);
+                }
+                if (showPassword) {
+                    passwordInput.focus();
+                    passwordInput.select();
+                } else if (usernameInput) {
+                    usernameInput.focus();
+                    usernameInput.select();
+                }
                 return;
             }
-            cleanup({ action: 'login', user: result.user });
+            if (result.action === 'force_reset') {
+                const updatedUser = await runForcedPasswordReset(result.user, result.reason);
+                if (!updatedUser) {
+                    return;
+                }
+                cleanup({ action: 'login', user: updatedUser });
+                return;
+            }
+            cleanup({ action: result.action || 'login', user: result.user });
+        };
+
+        const onReset = async () => {
+            errorEl.textContent = '';
+            errorEl.classList.add('hidden');
+            if (recover) {
+                resetBtn.disabled = true;
+                const recoveryResult = await recover({
+                    username: usernameInput ? usernameInput.value : ''
+                });
+                resetBtn.disabled = false;
+                if (recoveryResult && recoveryResult.canceled) {
+                    return;
+                }
+                if (!recoveryResult || !recoveryResult.ok) {
+                    if (recoveryResult && recoveryResult.message) {
+                        showError(recoveryResult.message);
+                    } else {
+                        showError('Unable to verify recovery password.');
+                    }
+                    return;
+                }
+                cleanup({ action: recoveryResult.action || 'recovery', user: recoveryResult.user });
+                return;
+            }
+            const username = usernameInput ? usernameInput.value : '';
+            const normalized = normalizeUsername(username);
+            if (!normalized) {
+                showError('Enter a username to reset.');
+                if (usernameInput) {
+                    usernameInput.focus();
+                }
+                return;
+            }
+            const target = fetchUserByUsername(normalized);
+            if (!target) {
+                showError('That username was not found.');
+                if (usernameInput) {
+                    usernameInput.focus();
+                }
+                return;
+            }
+            let centralPassword = await promptPasswordModal({
+                title: 'Central recovery password',
+                message: `Ask your local administrator (usually the site PI) to reset your password first. If the admin has lost their password, the admin should contact the project office at fixdialysis@lhsc.on.ca to obtain a recovery password. Enter the central recovery password to reset ${normalized}.`,
+                requireConfirmation: false,
+                submitLabel: 'Verify',
+                autocomplete: 'current-password',
+                validate: async (password) => {
+                    const check = await verifyCentralRecoveryPassword(password);
+                    if (!check.ok) {
+                        return { ok: false, message: 'Wrong password' };
+                    }
+                    return { ok: true };
+                }
+            });
+            if (!centralPassword) return;
+            centralPassword = null;
+            let newPassword = await promptPasswordModal({
+                title: `Reset password for ${normalized}`,
+                message: `Create and confirm a new password for ${normalized}.`,
+                requireConfirmation: true,
+                submitLabel: 'Reset password',
+                autocomplete: 'new-password',
+                minLength: MIN_PASSWORD_LENGTH
+            });
+            if (!newPassword) return;
+            await updateUserPassword(normalized, newPassword, {
+                action: 'user_password_changed',
+                details: { username: normalized, reason: 'central_recovery' },
+                actorUsername: normalized,
+                actorRole: target.role
+            });
+            markDatabaseChanged();
+            newPassword = null;
+            clearLockoutTimer();
+            if (passwordInput) {
+                passwordInput.value = '';
+                passwordInput.focus();
+            }
+            showStatus('Password updated. Sign in with the new password.', 'success');
+        };
+
+        const onUsernameInput = () => {
+            clearLockoutTimer();
+            errorEl.textContent = '';
+            errorEl.classList.add('hidden');
+            if (passwordInput) {
+                passwordInput.value = '';
+            }
         };
 
         const onCancel = () => cleanup({ action: 'cancel' });
@@ -999,24 +1390,44 @@ async function promptLoginModal(options = {}) {
 
         if (titleEl) titleEl.textContent = options.title || 'Sign in';
         if (messageEl) messageEl.textContent = options.message || 'Database loaded. Sign in to continue.';
+        if (recoveryBanner) {
+            recoveryBanner.textContent = recoveryMessage;
+            recoveryBanner.classList.toggle('hidden', !recoveryMode);
+        }
+        if (passwordGroup) {
+            passwordGroup.classList.toggle('hidden', !showPassword);
+        }
         usernameInput.value = '';
         passwordInput.value = '';
+        passwordInput.setAttribute('autocomplete', passwordAutocomplete);
+        passwordInput.required = showPassword;
+        passwordInput.disabled = !showPassword;
         errorEl.textContent = '';
         errorEl.classList.add('hidden');
 
         if (cancelBtn) cancelBtn.classList.toggle('hidden', !allowCancel);
         if (closeBtn) closeBtn.classList.toggle('hidden', !allowCancel);
+        if (resetBtn) {
+            resetBtn.classList.toggle('hidden', !showReset);
+            resetBtn.textContent = recoveryLabel;
+        }
+        if (submitBtn) submitBtn.textContent = submitLabel;
+        if (unloadBtn) unloadBtn.textContent = unloadLabel;
         modal.classList.add('active');
 
         form.addEventListener('submit', onSubmit);
         if (cancelBtn) cancelBtn.addEventListener('click', onCancel);
         if (unloadBtn) unloadBtn.addEventListener('click', onUnload);
+        if (resetBtn) resetBtn.addEventListener('click', onReset);
         if (closeBtn) {
             closeBtn.addEventListener('click', onCancel);
             closeBtn.addEventListener('keydown', onCloseKeydown);
         }
         modal.addEventListener('click', onBackdropClick);
         document.addEventListener('keydown', onKeyDown);
+        if (usernameInput) {
+            usernameInput.addEventListener('input', onUsernameInput);
+        }
         requestAnimationFrame(() => usernameInput.focus());
     });
 }

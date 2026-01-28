@@ -65,7 +65,7 @@ function updatePatientBirthDate(index, value) {
     }
     patient.birth_date = normalized;
     patient.age = age;
-    const meetsAgeCriteria = age >= 60 || (age >= 45 && age < 60 && patient.diabetes_known === 1);
+    const meetsAgeCriteria = age >= 60 || (age >= 45 && age < 60 && patient.diabetes_known === DIABETES_STATUS.YES);
     patient.incl_age = meetsAgeCriteria ? 1 : 0;
     persistPatient(patient, false);
     refreshPatientRow(patient);
@@ -129,7 +129,7 @@ function updatePatientAge(index, value) {
     }
     patient.age = age;
     patient.birth_date = derivedIso;
-    const meetsAgeCriteria = age >= 60 || (age >= 45 && age < 60 && patient.diabetes_known === 1);
+    const meetsAgeCriteria = age >= 60 || (age >= 45 && age < 60 && patient.diabetes_known === DIABETES_STATUS.YES);
     patient.incl_age = meetsAgeCriteria ? 1 : 0;
     persistPatient(patient, false);
     refreshPatientRow(patient);
@@ -138,6 +138,31 @@ function updatePatientAge(index, value) {
     } else {
         showRecordWarning('');
     }
+}
+
+function updateDiabetesStatus(index, value) {
+    const patient = patientsData[index];
+    if (!patient) return;
+    if (!ensureEditablePatient(patient)) return;
+    const nextStatus = normalizeDiabetesStatus(value);
+    if (patient.diabetes_known === nextStatus) {
+        showRecordWarning('');
+        return;
+    }
+    patient.diabetes_known = nextStatus;
+    const ageValue = Number.isFinite(patient.age) ? patient.age : null;
+    if (Number.isFinite(ageValue)) {
+        if (ageValue >= 60) {
+            patient.incl_age = 1;
+        } else if (ageValue >= 45 && ageValue < 60) {
+            patient.incl_age = nextStatus === DIABETES_STATUS.YES ? 1 : 0;
+        } else {
+            patient.incl_age = 0;
+        }
+    }
+    persistPatient(patient, false);
+    refreshPatientRow(patient);
+    showRecordWarning('');
 }
 
 function updatePatientMrn(index, value) {
@@ -793,7 +818,9 @@ function isTemporaryMrn(value) {
 
 function isManualPatientRecord(patient) {
     if (!patient) return false;
-    if (patient.entry_source === ENTRY_SOURCE_MANUAL) return true;
+    if (patient.entry_source) {
+        return patient.entry_source === ENTRY_SOURCE_MANUAL;
+    }
     return isTemporaryMrn(patient.mrn);
 }
 
@@ -839,7 +866,7 @@ function createBlankPatientRecord(mrn) {
         did_not_opt_out: 0,
         dialysis_duration_confirmed: 0,
         locked_at: '',
-        diabetes_known: 0,
+        diabetes_known: DIABETES_STATUS.UNKNOWN,
         no_exclusions_confirmed: 0,
         entry_source: ENTRY_SOURCE_MANUAL,
         created_by: currentUsername,
@@ -883,6 +910,10 @@ function deleteManualPatient(index) {
     if (!ensureEditablePatient(patient)) return;
     if (!isManualPatientRecord(patient)) {
         showRecordWarning('Only manually added records can be deleted.', 'error');
+        return;
+    }
+    if (patient.notification_date) {
+        showRecordWarning('Notified records cannot be deleted.', 'error');
         return;
     }
     if (!patient.mrn) {
@@ -1007,6 +1038,15 @@ function ingestRegistrationRows(rows) {
     const seenMrns = new Set(existingMrns);
     const seenHcns = new Set(existingHcns);
     const duplicates = [];
+    const missingMrnSeed = getTorontoNowTimestamp();
+    let missingMrnCounter = 0;
+    const nextMissingMrn = () => {
+        let candidate = '';
+        do {
+            candidate = `${TEMP_MRN_PREFIX}${missingMrnSeed}-${missingMrnCounter++}`;
+        } while (seenMrns.has(candidate));
+        return candidate;
+    };
 const stmt = db.prepare(`
         INSERT OR REPLACE INTO patient_assessments (
             mrn, patient_name, age, location, location_at_notification, location_at_randomization,
@@ -1028,8 +1068,7 @@ const stmt = db.prepare(`
     let imported = 0;
     rows.forEach(original => {
         if (!original) return;
-        const mrn = (original[MRN_HEADER] || '').toString().trim();
-        if (!mrn) return;
+        const rawMrn = (original[MRN_HEADER] || '').toString().trim();
         const patientName = getPatientNameFromRow(original);
         const locationCode = getField(original, [LOCATION_HEADER]) || '';
         const locationName = LOCATION_CODES[locationCode] || locationCode || '';
@@ -1038,15 +1077,16 @@ const stmt = db.prepare(`
         const healthCardProvince = getField(original, [HCN_PROVINCE_HEADER]) || '';
         const normalizedHealthCard = normalizeHealthCardValue(healthCard);
         let duplicateReason = '';
-        if (seenMrns.has(mrn)) {
+        if (rawMrn && seenMrns.has(rawMrn)) {
             duplicateReason = 'MRN';
         } else if (normalizedHealthCard && seenHcns.has(normalizedHealthCard)) {
             duplicateReason = 'Health card';
         }
         if (duplicateReason) {
-            duplicates.push({ mrn, healthCard, reason: duplicateReason });
+            duplicates.push({ mrn: rawMrn, healthCard, reason: duplicateReason });
             return;
         }
+        const mrn = rawMrn || nextMissingMrn();
         const province = healthCardProvince;
         let modalityCode = getField(original, [MODALITY_HEADER, 'Current Modality', 'Latest Modality']) || '';
         if (!VALID_MODALITY_CODES.includes(modalityCode) && DISPLAY_TO_PREFERRED_CODE[modalityCode]) {
@@ -1065,9 +1105,8 @@ const stmt = db.prepare(`
         }
         const diabetesType1 = getField(original, [DIAB_TYPE1_HEADER]);
         const diabetesType2 = getField(original, [DIAB_TYPE2_HEADER]);
-        const hasDiabetesData = Boolean(diabetesType1 || diabetesType2);
-        const hasDiabetes = parseBoolean(diabetesType1) || parseBoolean(diabetesType2);
-        const diabetesKnown = hasDiabetesData ? 1 : 0;
+        const diabetesStatus = resolveDiabetesStatus(diabetesType1, diabetesType2);
+        const hasDiabetes = diabetesStatus === DIABETES_STATUS.YES;
         const inclusionValues = [
             computeInclusionAge(age, hasDiabetes),
             startIsoValid ? meetsDialysisDays(startIsoValid) : 0,
@@ -1099,7 +1138,7 @@ const stmt = db.prepare(`
             0,                                 // did_not_opt_out
             0,                                 // dialysis_duration_confirmed
             '',                                // locked_at
-            diabetesKnown,                     // diabetes_known
+            diabetesStatus,                    // diabetes_known
             0,                                 // no_exclusions_confirmed
             ENTRY_SOURCE_IMPORT,               // entry_source
             importUsername,                    // created_by

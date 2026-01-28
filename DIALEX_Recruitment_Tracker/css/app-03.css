@@ -156,7 +156,7 @@
 }
 
 /* Ensure nested/secondary dialogs appear above primary modals (e.g., reset password from user management). */
-#password-modal { z-index: 1200; }
+#password-modal { z-index: 1400; }
 #login-modal { z-index: 1200; }
 #admin-setup-modal { z-index: 1200; }
 #import-backup-modal { z-index: 1200; }
@@ -240,6 +240,20 @@
 }
 
 .modal-message.hidden {
+    display: none;
+}
+
+.modal-banner {
+    margin: 0 0 10px 0;
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: 1px solid var(--brand);
+    background: color-mix(in srgb, var(--brand) 12%, var(--card));
+    color: var(--text);
+    font-size: 14px;
+}
+
+.modal-banner.hidden {
     display: none;
 }
 

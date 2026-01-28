@@ -483,6 +483,9 @@ function setupDatabase(db) {
             password_hash TEXT NOT NULL,
             role TEXT DEFAULT 'user',
             active INTEGER DEFAULT 1,
+            failed_attempts INTEGER DEFAULT 0,
+            locked INTEGER DEFAULT 0,
+            locked_until INTEGER,
             created_at TEXT DEFAULT CURRENT_TIMESTAMP,
             updated_at TEXT DEFAULT CURRENT_TIMESTAMP
         )

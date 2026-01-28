@@ -104,7 +104,7 @@ async function promptInitialAdminSetup() {
     });
 }
 
-async function handlePostLoadLogin() {
+async function handlePostLoadLogin(options = {}) {
     if (!db) return;
     currentUser = null;
     updateAppAccessState();
@@ -123,7 +123,7 @@ async function handlePostLoadLogin() {
         }
         return;
     }
-    const result = await promptLoginModal({ allowCancel: false });
+    const result = await promptLoginModal({ allowCancel: false, ...options });
     if (result && result.action === 'unload') {
         unloadDatabase();
         return;
@@ -153,13 +153,10 @@ async function handleRotateCentralPassword() {
         message: 'Create and confirm a new central recovery password.',
         requireConfirmation: true,
         submitLabel: 'Update password',
-        autocomplete: 'new-password'
+        autocomplete: 'new-password',
+        minLength: MIN_PASSWORD_LENGTH
     });
     if (!newPassword) return;
-    if (newPassword.length < MIN_PASSWORD_LENGTH) {
-        showStatus(`Passwords must be at least ${MIN_PASSWORD_LENGTH} characters.`, 'error');
-        return;
-    }
     const newWrap = await wrapDataKey(encryptionState.dataKey, newPassword);
     const wraps = Array.isArray(encryptionState.wraps) ? encryptionState.wraps : [];
     const index = wraps.findIndex(entry => entry.id === 'central');
@@ -375,6 +372,10 @@ function setupDatabase() {
             password_hash TEXT NOT NULL,
             role TEXT DEFAULT 'user',
             active INTEGER DEFAULT 1,
+            failed_attempts INTEGER DEFAULT 0,
+            locked INTEGER DEFAULT 0,
+            locked_until INTEGER,
+            password_reset_required INTEGER DEFAULT 0,
             created_at TEXT DEFAULT CURRENT_TIMESTAMP,
             updated_at TEXT DEFAULT CURRENT_TIMESTAMP
         )
@@ -544,10 +545,185 @@ function setupDatabase() {
             console.warn('Unable to add active column', error);
         }
     }
+    try {
+        db.run(`ALTER TABLE users ADD COLUMN failed_attempts INTEGER DEFAULT 0`);
+    } catch (error) {
+        if (!/duplicate column/i.test((error && error.message) || '')) {
+            console.warn('Unable to add failed_attempts column', error);
+        }
+    }
+    try {
+        db.run(`ALTER TABLE users ADD COLUMN locked INTEGER DEFAULT 0`);
+    } catch (error) {
+        if (!/duplicate column/i.test((error && error.message) || '')) {
+            console.warn('Unable to add locked column', error);
+        }
+    }
+    try {
+        db.run(`ALTER TABLE users ADD COLUMN locked_until INTEGER`);
+    } catch (error) {
+        if (!/duplicate column/i.test((error && error.message) || '')) {
+            console.warn('Unable to add locked_until column', error);
+        }
+    }
+    try {
+        db.run(`ALTER TABLE users ADD COLUMN password_reset_required INTEGER DEFAULT 0`);
+    } catch (error) {
+        if (!/duplicate column/i.test((error && error.message) || '')) {
+            console.warn('Unable to add password_reset_required column', error);
+        }
+    }
 }
 
 function enableAppControls() {
     updateAppAccessState();
+}
+
+const UNLOCK_LOCKOUT_PREFIX = 'dialex-unlock-lockout:';
+const unlockLockoutCache = {};
+
+function buildUnlockSignature(file) {
+    const name = file && file.name ? file.name : 'unknown';
+    const size = file && Number.isFinite(file.size) ? file.size : 0;
+    const modified = file && Number.isFinite(file.lastModified) ? file.lastModified : 0;
+    return `${name}|${size}|${modified}`;
+}
+
+function buildUnlockLockoutKey(signature, username) {
+    const normalized = normalizeUsername(username);
+    if (!normalized) return '';
+    const safeSignature = (signature || '').replace(/\s+/g, '_');
+    return `${UNLOCK_LOCKOUT_PREFIX}${safeSignature}:${normalized}`;
+}
+
+function readUnlockLockoutState(key) {
+    if (!key) return null;
+    if (unlockLockoutCache[key]) {
+        return unlockLockoutCache[key];
+    }
+    let raw = null;
+    try {
+        raw = window.localStorage.getItem(key);
+    } catch (error) {
+        raw = null;
+    }
+    if (!raw) return null;
+    try {
+        const parsed = JSON.parse(raw);
+        if (!parsed || typeof parsed !== 'object') {
+            return null;
+        }
+        unlockLockoutCache[key] = parsed;
+        return parsed;
+    } catch (error) {
+        return null;
+    }
+}
+
+function writeUnlockLockoutState(key, state) {
+    if (!key) return;
+    unlockLockoutCache[key] = state;
+    try {
+        window.localStorage.setItem(key, JSON.stringify(state));
+    } catch (error) {
+        // ignore storage failures
+    }
+}
+
+function clearUnlockLockoutState(key) {
+    if (!key) return;
+    delete unlockLockoutCache[key];
+    try {
+        window.localStorage.removeItem(key);
+    } catch (error) {
+        // ignore storage failures
+    }
+}
+
+function getUnlockLockoutStatus(signature, username) {
+    const key = buildUnlockLockoutKey(signature, username);
+    if (!key) {
+        return { key: '', attempts: 0, locked: false, remainingMs: 0 };
+    }
+    const state = readUnlockLockoutState(key);
+    const attempts = state && Number.isFinite(state.attempts) ? Math.max(state.attempts, 0) : 0;
+    const lockedUntil = state && Number.isFinite(state.lockedUntil) ? state.lockedUntil : 0;
+    if (lockedUntil && lockedUntil > Date.now()) {
+        return { key, attempts, locked: true, remainingMs: lockedUntil - Date.now() };
+    }
+    if (lockedUntil && lockedUntil <= Date.now()) {
+        clearUnlockLockoutState(key);
+        return { key, attempts: 0, locked: false, remainingMs: 0 };
+    }
+    return { key, attempts, locked: false, remainingMs: 0 };
+}
+
+function recordUnlockFailedAttempt(signature, username) {
+    const status = getUnlockLockoutStatus(signature, username);
+    if (!status.key) {
+        return { attempts: 0, locked: false, remainingMs: 0 };
+    }
+    const attempts = status.attempts + 1;
+    let lockedUntil = 0;
+    let locked = false;
+    if (attempts >= MAX_LOGIN_ATTEMPTS) {
+        lockedUntil = Date.now() + LOCKOUT_DURATION_MS;
+        locked = true;
+    }
+    writeUnlockLockoutState(status.key, { attempts, lockedUntil });
+    return { attempts, locked, remainingMs: locked ? Math.max(lockedUntil - Date.now(), 0) : 0 };
+}
+
+function clearUnlockLockout(signature, username) {
+    const key = buildUnlockLockoutKey(signature, username);
+    clearUnlockLockoutState(key);
+}
+
+function clearUnlockLockoutsForSignature(signature) {
+    const safeSignature = (signature || '').replace(/\s+/g, '_');
+    const prefix = `${UNLOCK_LOCKOUT_PREFIX}${safeSignature}:`;
+    const keysToClear = [];
+    try {
+        for (let i = 0; i < window.localStorage.length; i += 1) {
+            const key = window.localStorage.key(i);
+            if (key && key.startsWith(prefix)) {
+                keysToClear.push(key);
+            }
+        }
+    } catch (error) {
+        return;
+    }
+    keysToClear.forEach(key => clearUnlockLockoutState(key));
+}
+
+async function initializeLoadedDatabase(decrypted) {
+    db = new SQL.Database(decrypted.dataBytes);
+    encryptionState = decrypted.encryptionState;
+    currentUser = null;
+    setupDatabase();
+    loadRecruitingUnitState();
+    refreshPatientData();
+    resetAutosaveTracking();
+    saveDirectoryReady = false;
+    await restoreSavedDirectoryHandle();
+    await validateSaveDirectoryForAutosave({ showStatus: false, requestPermission: true });
+    updateAppAccessState();
+}
+
+function showLoadedDatabaseStatus(filename, isBackupFile) {
+    const autosaveMessage = getAutosaveBlockingMessage();
+    const backupWarning = isBackupFile
+        ? 'Backup file loaded. Backups can be outdated; use them only to correct a known problem.'
+        : '';
+    const fileLabel = filename ? `: ${filename}` : '';
+    if (autosaveMessage) {
+        const combined = backupWarning ? `${autosaveMessage} ${backupWarning}` : autosaveMessage;
+        showStatus(`Loaded secure database${fileLabel}. ${combined}`, 'error');
+    } else if (backupWarning) {
+        showStatus(`Loaded secure database${fileLabel}. ${backupWarning}`, 'status');
+    } else {
+        showStatus(`Loaded secure database${fileLabel}.`, 'success');
+    }
 }
 
 async function loadDatabase(event) {
@@ -555,6 +731,8 @@ async function loadDatabase(event) {
     if (!file) return;
     event.target.value = '';
     const filename = file.name || '';
+    const unlockSignature = buildUnlockSignature(file);
+    clearUnlockLockoutsForSignature(unlockSignature);
     const isBackupFile = isImportBackupFilename(filename);
     if (isBackupFile) {
         const proceed = window.confirm(
@@ -584,55 +762,225 @@ async function loadDatabase(event) {
     }
 
     const isV2 = isV2EncryptedPayload(data);
-    let password = await promptPasswordModal({
-        title: 'Decrypt database',
-        message: isV2
-            ? (file.name
-                ? `Enter your account password (or the central recovery password) for "${file.name}".`
-                : 'Enter your account password (or the central recovery password) to decrypt this database.')
-            : (file.name
-                ? `Enter the database encryption password for "${file.name}".`
-                : 'Enter the database encryption password to decrypt this database.'),
-        submitLabel: 'Decrypt',
-        autocomplete: 'current-password'
-    });
-    if (!password) return;
-
-    try {
-        showStatus('Decrypting...', 'status');
-        const decrypted = await decryptDatabasePayload(data, password);
-        password = null;
-
-        db = new SQL.Database(decrypted.dataBytes);
-        encryptionState = decrypted.encryptionState;
-        currentUser = null;
-        setupDatabase();
-        loadRecruitingUnitState();
-        refreshPatientData();
-        resetAutosaveTracking();
-        saveDirectoryReady = false;
-        await restoreSavedDirectoryHandle();
-        await validateSaveDirectoryForAutosave({ showStatus: false, requestPermission: true });
-        updateAppAccessState();
-        const autosaveMessage = getAutosaveBlockingMessage();
-        const backupWarning = isBackupFile
-            ? 'Backup file loaded. Backups can be outdated; use them only to correct a known problem.'
-            : '';
-        if (autosaveMessage) {
-            const combined = backupWarning ? `${autosaveMessage} ${backupWarning}` : autosaveMessage;
-            showStatus(`Loaded secure database: ${file.name}. ${combined}`, 'error');
-        } else if (backupWarning) {
-            showStatus(`Loaded secure database: ${file.name}. ${backupWarning}`, 'status');
-        } else {
-            showStatus(`Loaded secure database: ${file.name}`, 'success');
-        }
-        await handlePostLoadLogin();
-    } catch (error) {
-        console.error(error);
-        showStatus('Error: ' + error.message, 'error');
-    } finally {
-        password = null;
+    if (!isV2) {
+        showStatus('Legacy encrypted databases are no longer supported. Load a multi-user encrypted file.', 'error');
+        return;
     }
+    if (isV2) {
+        let wrapIds = null;
+        try {
+            const payload = parseEncryptedPayloadV2(data);
+            if (payload && Array.isArray(payload.wraps)) {
+                wrapIds = new Set(payload.wraps.map(entry => entry && entry.id).filter(Boolean));
+            }
+        } catch (error) {
+            console.error('Unable to parse encrypted payload', error);
+        }
+        let initialized = false;
+        const ensureInitialized = async (decrypted) => {
+            if (initialized) return;
+            await initializeLoadedDatabase(decrypted);
+            showLoadedDatabaseStatus(filename, isBackupFile);
+            initialized = true;
+        };
+
+        const result = await promptLoginModal({
+            allowCancel: false,
+            title: 'Unlock database',
+            message: filename
+                ? `Enter your username and password to unlock "${filename}".`
+                : 'Enter your username and password to unlock this database.',
+            submitLabel: 'Unlock',
+            recoveryLabel: 'Use central recovery password',
+            unloadLabel: 'Cancel load',
+            authenticate: async (username, password) => {
+                const normalized = normalizeUsername(username);
+                if (!normalized) {
+                    return { ok: false, message: 'Username is required.' };
+                }
+                if (!password) {
+                    return { ok: false, message: 'Password is required.' };
+                }
+                const lockoutState = getUnlockLockoutStatus(unlockSignature, normalized);
+                if (lockoutState.locked) {
+                    return {
+                        ok: false,
+                        message: `This account is locked. Try again in ${formatLockoutRemaining(lockoutState.remainingMs)} or use the central recovery password.`,
+                        locked: true,
+                        remainingMs: lockoutState.remainingMs
+                    };
+                }
+                if (wrapIds) {
+                    const wrapId = getUserWrapId(normalized);
+                    if (!wrapId || !wrapIds.has(wrapId)) {
+                        return { ok: false, message: 'Invalid username or password.' };
+                    }
+                }
+                if (!initialized) {
+                    try {
+                        showStatus('Decrypting...', 'status');
+                        const decrypted = await decryptDatabasePayload(data, password, {
+                            wrapId: getUserWrapId(normalized)
+                        });
+                        await ensureInitialized(decrypted);
+                    } catch (error) {
+                        console.error(error);
+                        const attemptState = recordUnlockFailedAttempt(unlockSignature, normalized);
+                        if (attemptState.locked) {
+                            return {
+                                ok: false,
+                                message: `Account locked. Try again in ${formatLockoutRemaining(attemptState.remainingMs)} or use the central recovery password.`,
+                                locked: true,
+                                remainingMs: attemptState.remainingMs
+                            };
+                        }
+                        const remaining = Math.max(MAX_LOGIN_ATTEMPTS - attemptState.attempts, 0);
+                        return {
+                            ok: false,
+                            message: `Invalid username or password. ${remaining} attempt${remaining === 1 ? '' : 's'} remaining.`
+                        };
+                    }
+                }
+                const result = await authenticateUser(normalized, password);
+                if (result.ok) {
+                    clearUnlockLockout(unlockSignature, normalized);
+                }
+                return result;
+            },
+            recover: async () => {
+                let validatedDecrypt = null;
+                let centralPassword = await promptPasswordModal({
+                    title: 'Central recovery password',
+                    message: filename
+                        ? `Ask your local administrator (usually the site PI) to reset your password first. If the admin has lost their password, the admin should contact the project office at fixdialysis@lhsc.on.ca to obtain a recovery password. Enter the central recovery password for "${filename}".`
+                        : 'Ask your local administrator (usually the site PI) to reset your password first. If the admin has lost their password, the admin should contact the project office at fixdialysis@lhsc.on.ca to obtain a recovery password. Enter the central recovery password to unlock this database.',
+                    requireConfirmation: false,
+                    submitLabel: 'Unlock',
+                    autocomplete: 'current-password',
+                    validate: async (password) => {
+                        const lockoutState = getUnlockLockoutStatus(unlockSignature, 'central');
+                        if (lockoutState.locked) {
+                            return {
+                                ok: false,
+                                message: `Central recovery is locked. Try again in ${formatLockoutRemaining(lockoutState.remainingMs)}.`
+                            };
+                        }
+                        try {
+                            if (!initialized) {
+                                showStatus('Decrypting...', 'status');
+                                validatedDecrypt = await decryptDatabasePayload(data, password, { wrapId: 'central' });
+                                return { ok: true };
+                            }
+                            const centralCheck = await verifyCentralRecoveryPassword(password);
+                            if (!centralCheck.ok) {
+                                const attemptState = recordUnlockFailedAttempt(unlockSignature, 'central');
+                                if (attemptState.locked) {
+                                    return {
+                                        ok: false,
+                                        message: `Central recovery locked. Try again in ${formatLockoutRemaining(attemptState.remainingMs)}.`
+                                    };
+                                }
+                                return { ok: false, message: 'Wrong password' };
+                            }
+                            return { ok: true };
+                        } catch (error) {
+                            const attemptState = recordUnlockFailedAttempt(unlockSignature, 'central');
+                            if (attemptState.locked) {
+                                return {
+                                    ok: false,
+                                    message: `Central recovery locked. Try again in ${formatLockoutRemaining(attemptState.remainingMs)}.`
+                                };
+                            }
+                            return { ok: false, message: 'Wrong password' };
+                        }
+                    }
+                });
+                if (!centralPassword) return { ok: false, canceled: true };
+                try {
+                    if (!initialized) {
+                        if (!validatedDecrypt) {
+                            showStatus('Decrypting...', 'status');
+                            validatedDecrypt = await decryptDatabasePayload(data, centralPassword, { wrapId: 'central' });
+                        }
+                        await ensureInitialized(validatedDecrypt);
+                    } else {
+                        if (encryptionState) {
+                            encryptionState.unlockId = 'central';
+                        }
+                    }
+                    logAuditEvent('central_recovery_used', { filename: filename || '' }, {
+                        targetType: 'encryption',
+                        targetId: 'central'
+                    });
+                    clearUnlockLockout(unlockSignature, 'central');
+                    return { ok: true, action: 'recovery' };
+                } catch (error) {
+                    console.error(error);
+                    const attemptState = recordUnlockFailedAttempt(unlockSignature, 'central');
+                    if (attemptState.locked) {
+                        return {
+                            ok: false,
+                            message: `Central recovery locked. Try again in ${formatLockoutRemaining(attemptState.remainingMs)}.`
+                        };
+                    }
+                    return { ok: false, message: 'Wrong password' };
+                } finally {
+                    centralPassword = null;
+                }
+            }
+        });
+
+        if (!result || result.action === 'unload') {
+            if (initialized) {
+                unloadDatabase();
+            } else {
+                showStatus('Load canceled.', 'status');
+            }
+            return;
+        }
+        if (result.action === 'recovery') {
+            await handlePostLoadLogin({
+                title: 'Recover account',
+                message: 'Database unlocked with the central recovery password. Enter your username to set a new password.',
+                recoveryMode: true,
+                recoveryMessage: 'Recovery mode is active. Set a new password to continue signing in.',
+                showPassword: false,
+                showReset: false,
+                submitLabel: 'Continue',
+                authenticate: async (username) => {
+                    const normalized = normalizeUsername(username);
+                    if (!normalized) {
+                        return { ok: false, message: 'Username is required.' };
+                    }
+                    const user = fetchUserByUsername(normalized);
+                    if (!user) {
+                        return { ok: false, message: 'That username was not found.' };
+                    }
+                    if (!Number(user.active)) {
+                        return { ok: false, message: 'This account is disabled.' };
+                    }
+                    return {
+                        ok: true,
+                        action: 'force_reset',
+                        reason: 'central_recovery',
+                        user: sanitizeUserRecord(user)
+                    };
+                }
+            });
+            return;
+        }
+        if (result.action === 'login' && result.user) {
+            logAuditEvent('user_signed_in', { username: result.user.username }, {
+                actorUsername: result.user.username,
+                actorRole: result.user.role,
+                targetType: 'user',
+                targetId: result.user.username
+            });
+            setCurrentUser(result.user);
+        }
+        return;
+    }
+
 }
 
 async function saveDatabase() {
@@ -649,23 +997,13 @@ async function saveDatabase() {
     try {
         if (!await ensureEncryptionStateForSave()) return;
 
+        if (!encryptionState || encryptionState.mode !== 'multi') {
+            showStatus('Multi-user encryption is required to save this database.', 'error');
+            return;
+        }
         showStatus('Encrypting...', 'status');
         const sqlData = db.export();
-        let encryptedData;
-        if (encryptionState && encryptionState.mode === 'multi') {
-            encryptedData = await encryptDatabaseV2(sqlData, encryptionState);
-        } else {
-            let password = await promptPasswordModal({
-                title: 'Set encryption password',
-                message: 'Create and confirm a password for this encrypted export. You will need it again to reopen the file.',
-                requireConfirmation: true,
-                submitLabel: 'Encrypt & Save',
-                autocomplete: 'new-password'
-            });
-            if (!password) return;
-            encryptedData = await encryptData(sqlData, password);
-            password = null;
-        }
+        const encryptedData = await encryptDatabaseV2(sqlData, encryptionState);
 
         const blob = new Blob([encryptedData], { type: 'application/octet-stream' });
         const timestamp = formatTimestampForFilename();
@@ -828,7 +1166,7 @@ function normalizePatientRow(row, index) {
     patient.study_id = normalizeStudyIdValue(row.study_id);
     patient.locked_at = row.locked_at || '';
     patient.locked_at = row.locked_at || '';
-    patient.diabetes_known = Number(row.diabetes_known) ? 1 : 0;
+    patient.diabetes_known = normalizeDiabetesStatus(row.diabetes_known);
     patient.location = patient.location || '';
     patient.location_at_notification = patient.location_at_notification || '';
     patient.location_at_randomization = patient.location_at_randomization || '';
@@ -863,8 +1201,9 @@ function normalizePatientRow(row, index) {
         patient.enrollment_status = 'enrolled';
     }
     patient._index = index;
-    patient.health_card = patient.health_card || '';
-    const provinceForHcn = patient.health_card_province || '';
+    const normalizedHcn = String(patient.health_card || '').trim();
+    patient.health_card = normalizedHcn;
+    const provinceForHcn = normalizeProvinceCode(patient.health_card_province || '');
     const locationInfo = getMostRecentLocationInfo(patient);
     patient.mostRecentLocationValue = locationInfo.value;
     patient.mostRecentLocationSource = locationInfo.source;
@@ -874,20 +1213,18 @@ function normalizePatientRow(row, index) {
     patient.noExclusions = !legacyDeclined && EXCLUSION_KEYS.every(key => patient[key] === 0);
     patient.hasAnyExclusion = !patient.noExclusions;
     const needsDiabetesInfo = Number.isFinite(patient.age) && patient.age >= 45 && patient.age < 60;
-    if (needsDiabetesInfo && patient.incl_age === 1) {
-        patient.diabetes_known = 1;
-    }
+    const hasDiabetes = patient.diabetes_known === DIABETES_STATUS.YES;
     if (Number.isFinite(patient.age)) {
         if (patient.age >= 60) {
             patient.incl_age = 1;
-        } else if (patient.age >= 45 && patient.age < 60) {
-            patient.incl_age = patient.diabetes_known ? 1 : 0;
+        } else if (needsDiabetesInfo) {
+            patient.incl_age = hasDiabetes ? 1 : 0;
         } else {
             patient.incl_age = 0;
         }
     }
-    patient.hasHealthCard = patient.health_card.trim().length > 0;
-    const hcnFormatError = validateHealthCardFormat(patient.health_card.trim(), provinceForHcn || '');
+    patient.hasHealthCard = normalizedHcn.length > 0;
+    const hcnFormatError = validateHealthCardFormat(normalizedHcn, provinceForHcn || '');
     patient.incl_health_card = patient.hasHealthCard && !hcnFormatError ? 1 : 0;
     patient.health_card_province = provinceForHcn || '';
     recalcDialysisInclusion(patient);
@@ -923,22 +1260,47 @@ const PRIMARY_BUCKET_ORDER = [
     'pending'
 ];
 
+function normalizeProvinceCode(value) {
+    return String(value || '').trim().toUpperCase();
+}
+
+function isProvinceTerritoryCode(value) {
+    const code = normalizeProvinceCode(value);
+    return code !== '' && Boolean(PROVINCE_LABELS[code]);
+}
+
+function isIneligibleHealthCardValue(hcn, province) {
+    const normalized = String(hcn || '').replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+    if (!normalized) return false;
+    if (/^M[0-9]{8}$/.test(normalized)) return true;
+    if (/^R[0-9]{8}$/.test(normalized)) return true;
+    if (/^K[0-9]{7}$/.test(normalized)) return true;
+    if (/^[A-Z]{4}[0-9]{8}$/.test(normalized)) return true;
+    const provinceCode = normalizeProvinceCode(province);
+    return provinceCode === 'QC';
+}
+
 function computeMissingEligibilityReasons(patient = {}) {
     const reasons = [];
     const ageValue = Number.isFinite(patient.age) ? patient.age : null;
     const needsDiabetesStatus = Number.isFinite(ageValue) && ageValue >= 45 && ageValue < 60;
-    const hasHealthCard = Boolean((patient.health_card || '').trim());
-    const hcnProvince = (patient.health_card_province || '').trim();
+    const hasHealthCard = Boolean(String(patient.health_card || '').trim());
+    const hcnProvince = normalizeProvinceCode(patient.health_card_province || '');
+    const invalidProvince = hcnProvince && !isProvinceTerritoryCode(hcnProvince);
+    const hcnIneligible = invalidProvince || isIneligibleHealthCardValue(patient.health_card, hcnProvince);
     const requiresDialysisUnit = patient.incl_incentre_hd === 1;
     const locationValue = requiresDialysisUnit ? getDialysisUnitCanonical(patient) : '';
     const hasDialysisUnit = requiresDialysisUnit && Boolean(normalizeLocationValue(locationValue));
     const hasDialysisHistory = Boolean(patient.dialysis_start_date) || Boolean(patient.dialysis_duration_confirmed);
     if (!Number.isFinite(ageValue)) reasons.push('Age missing');
-    if (needsDiabetesStatus && Number(patient.diabetes_known) !== 1) reasons.push('Diabetes status missing (age 45-59)');
-    if (!hasHealthCard) reasons.push('Health card number missing');
+    const diabetesStatus = normalizeDiabetesStatus(patient.diabetes_known);
+    if (needsDiabetesStatus && diabetesStatus === DIABETES_STATUS.UNKNOWN) {
+        reasons.push('Diabetes status missing (age 45-59)');
+    }
+    if (!hasHealthCard && !invalidProvince) reasons.push('Health card number missing');
     if (hasHealthCard && !hcnProvince) reasons.push('HCN province/territory missing');
     const hcnFormatError = hasHealthCard ? validateHealthCardFormat(patient.health_card, hcnProvince || '') : '';
-    if (hcnFormatError) reasons.push(hcnFormatError);
+    if (hcnFormatError && !hcnIneligible) reasons.push(hcnFormatError);
     if (requiresDialysisUnit && !hasDialysisUnit) reasons.push('Dialysis unit at randomization missing');
     if (!hasDialysisHistory) reasons.push('Dialysis start date or ≥90-day confirmation missing');
     return reasons;
@@ -970,23 +1332,45 @@ function mod10Check(value) {
 }
 
 function validateHealthCardFormat(hcn, province) {
-    if (!hcn) return '';
-    if (!province) return 'Select province/territory to validate HCN.';
+    const rawValue = String(hcn || '').trim();
+    if (!rawValue) return '';
+    if (/[0-9](?:\.[0-9]+)?e[+-]?[0-9]+/i.test(rawValue)) {
+        return 'HCN appears to be in scientific notation. Enter the full digits.';
+    }
+    const normalized = rawValue.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+    const provinceCode = normalizeProvinceCode(province);
+    if (!normalized) return '';
+    if (/^M[0-9]{8}$/.test(normalized)) {
+        return 'Canadian Forces (CF) health card numbers are not eligible.';
+    }
+    if (/^R[0-9]{8}$/.test(normalized)) {
+        return 'RCMP health card numbers are not eligible.';
+    }
+    if (/^K[0-9]{7}$/.test(normalized)) {
+        return 'Veterans Affairs (VAC) health card numbers are not eligible.';
+    }
+    if (/^[A-Z]{4}[0-9]{8}$/.test(normalized)) {
+        return 'Quebec health card numbers are not eligible.';
+    }
+    if (provinceCode && !isProvinceTerritoryCode(provinceCode)) {
+        return 'Province of Healthcard No. must be blank or a valid province/territory code.';
+    }
+    if (!provinceCode) return 'Select province/territory to validate HCN.';
     const len = hcn.length;
     const isNumeric = /^[0-9]+$/.test(hcn);
-    switch (province) {
+    switch (provinceCode) {
         case 'AB':
         case 'NB':
         case 'SK':
         case 'YT':
             if (!(isNumeric && len === 9)) {
-                return `${PROVINCE_LABELS[province]} HCN must be 9 digits.`;
+                return `${PROVINCE_LABELS[provinceCode]} HCN must be 9 digits.`;
             }
             break;
         case 'BC':
         case 'NS':
             if (!(isNumeric && len === 10)) {
-                return `${PROVINCE_LABELS[province]} HCN must be 10 digits.`;
+                return `${PROVINCE_LABELS[provinceCode]} HCN must be 10 digits.`;
             }
             break;
         case 'ON':
@@ -1023,10 +1407,7 @@ function validateHealthCardFormat(hcn, province) {
             }
             break;
         case 'QC':
-            if (!(/^[A-Z]{4}[0-9]{8}$/.test(hcn))) {
-                return 'Quebec HCN must be 12 characters: 4 letters followed by 8 digits.';
-            }
-            break;
+            return 'Quebec health card numbers are not eligible.';
         default:
             return 'Select a valid province/territory to validate HCN.';
     }

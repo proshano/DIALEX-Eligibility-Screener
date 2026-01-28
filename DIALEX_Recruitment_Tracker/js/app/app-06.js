@@ -191,11 +191,23 @@ function buildBirthDateFromAge(age) {
 }
 
 function normalizeHealthCardValue(value = '') {
-    return (value || '').replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+    return String(value || '').replace(/[^A-Za-z0-9]/g, '').toUpperCase();
 }
 
 function inferProvinceFromHealthCard(value) {
-    // Disabled: do not infer; require explicit entry/import
+    const normalized = normalizeHealthCardValue(value || '');
+    if (/^M[0-9]{8}$/.test(normalized)) {
+        return 'CF';
+    }
+    if (/^R[0-9]{8}$/.test(normalized)) {
+        return 'RCMP';
+    }
+    if (/^K[0-9]{7}$/.test(normalized)) {
+        return 'VAC';
+    }
+    if (/^[A-Z]{4}[0-9]{8}$/.test(normalized)) {
+        return 'QC';
+    }
     return '';
 }
 
@@ -312,6 +324,10 @@ function analyzePreScreeningRows(rows) {
         const locationCode = getField(row, [LOCATION_HEADER]) || '';
         const patientName = getPatientNameFromRow(row);
         const healthCard = getField(row, [LAST_HCN_HEADER, 'Latest Known HCN', HCN_HEADER]) || '';
+        const provinceRaw = getField(row, [HCN_PROVINCE_HEADER]) || '';
+        const provinceCode = normalizeProvinceCode(provinceRaw);
+        const invalidProvince = provinceCode && !isProvinceTerritoryCode(provinceCode);
+        const hcnFormatError = healthCard ? validateHealthCardFormat(healthCard, provinceCode) : '';
         const birthDate = parseLegacyDate(getField(row, [BIRTH_DATE_HEADER]));
         const dialysisStart = parseLegacyDate(getField(row, [START_DATE_HEADER]));
         let modalityCode = getField(row, [MODALITY_HEADER, 'Current Modality', 'Latest Modality']) || '';
@@ -319,16 +335,25 @@ function analyzePreScreeningRows(rows) {
             modalityCode = DISPLAY_TO_PREFERRED_CODE[modalityCode];
         }
         const hasValidModality = VALID_MODALITY_CODES.includes(modalityCode);
-        const hasDiabetes = parseBoolean(getField(row, [DIAB_TYPE1_HEADER])) ||
-                            parseBoolean(getField(row, [DIAB_TYPE2_HEADER]));
+        const diabetesStatus = resolveDiabetesStatus(
+            getField(row, [DIAB_TYPE1_HEADER]),
+            getField(row, [DIAB_TYPE2_HEADER])
+        );
+        const hasDiabetes = diabetesStatus === DIABETES_STATUS.YES;
         const age = calculateAgeFromDate(birthDate);
         const daysOnDialysis = calculateDaysOnDialysis(dialysisStart);
         const reasons = [];
 
-        if (!healthCard) {
+        if (!healthCard && !invalidProvince) {
             summary.breakdown.missingHealthCard++;
             reasons.push('Missing health card number');
-        } else if (!birthDate || !dialysisStart) {
+        }
+        if (invalidProvince) {
+            reasons.push('Invalid HCN province/territory');
+        } else if (hcnFormatError) {
+            reasons.push(hcnFormatError);
+        }
+        if (!birthDate || !dialysisStart) {
             summary.breakdown.invalidDates++;
             reasons.push('Invalid or missing birth/start date');
         } else {
