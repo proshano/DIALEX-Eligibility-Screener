@@ -795,7 +795,20 @@ async function loadDatabase(event) {
                 if (wrapIds) {
                     const wrapId = getUserWrapId(normalized);
                     if (!wrapId || !wrapIds.has(wrapId)) {
-                        return { ok: false, message: 'Invalid username or password.' };
+                        const attemptState = recordUnlockFailedAttempt(unlockSignature, normalized);
+                        if (attemptState.locked) {
+                            return {
+                                ok: false,
+                                message: `Account locked. Try again in ${formatLockoutRemaining(attemptState.remainingMs)} or use the central recovery password.`,
+                                locked: true,
+                                remainingMs: attemptState.remainingMs
+                            };
+                        }
+                        const remaining = Math.max(MAX_LOGIN_ATTEMPTS - attemptState.attempts, 0);
+                        return {
+                            ok: false,
+                            message: `Invalid username or password. ${remaining} attempt${remaining === 1 ? '' : 's'} remaining.`
+                        };
                     }
                 }
                 if (!initialized) {
