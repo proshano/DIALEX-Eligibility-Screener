@@ -679,23 +679,6 @@ function clearUnlockLockout(signature, username) {
     clearUnlockLockoutState(key);
 }
 
-function clearUnlockLockoutsForSignature(signature) {
-    const safeSignature = (signature || '').replace(/\s+/g, '_');
-    const prefix = `${UNLOCK_LOCKOUT_PREFIX}${safeSignature}:`;
-    const keysToClear = [];
-    try {
-        for (let i = 0; i < window.localStorage.length; i += 1) {
-            const key = window.localStorage.key(i);
-            if (key && key.startsWith(prefix)) {
-                keysToClear.push(key);
-            }
-        }
-    } catch (error) {
-        return;
-    }
-    keysToClear.forEach(key => clearUnlockLockoutState(key));
-}
-
 async function initializeLoadedDatabase(decrypted) {
     db = new SQL.Database(decrypted.dataBytes);
     encryptionState = decrypted.encryptionState;
@@ -732,7 +715,6 @@ async function loadDatabase(event) {
     event.target.value = '';
     const filename = file.name || '';
     const unlockSignature = buildUnlockSignature(file);
-    clearUnlockLockoutsForSignature(unlockSignature);
     const isBackupFile = isImportBackupFilename(filename);
     if (isBackupFile) {
         const proceed = window.confirm(
