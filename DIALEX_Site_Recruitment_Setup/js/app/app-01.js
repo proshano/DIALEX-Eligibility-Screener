@@ -34,6 +34,15 @@ const clearStudyIdsBtn = document.getElementById('clear-study-ids');
 const passwordToggle = document.getElementById('toggle-passwords');
 const passwordFields = document.querySelectorAll('[data-password-field]');
 
+function resetPasswordVisibilityToSecureDefault() {
+    if (passwordToggle) {
+        passwordToggle.checked = false;
+    }
+    passwordFields.forEach(field => {
+        field.type = 'password';
+    });
+}
+
 if (passwordToggle) {
     passwordToggle.addEventListener('change', () => {
         const nextType = passwordToggle.checked ? 'text' : 'password';
@@ -42,6 +51,8 @@ if (passwordToggle) {
         });
     });
 }
+
+resetPasswordVisibilityToSecureDefault();
 
 function showStatus(message, type) {
     statusEl.textContent = message;
@@ -634,6 +645,7 @@ async function handleProvision(event) {
 
         showStatus(`Encrypted starter database created. Keep the central recovery password private and share the admin credentials with the site. Included ${importedStudyIds.length} study IDs.`, 'success');
         form.reset();
+        resetPasswordVisibilityToSecureDefault();
         clearStudyIdImport();
     } catch (error) {
         console.error(error);

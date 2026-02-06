@@ -1351,8 +1351,8 @@ function validateHealthCardFormat(hcn, province) {
         return 'Province of Healthcard No. must be blank or a valid province/territory code.';
     }
     if (!provinceCode) return 'Select province/territory to validate HCN.';
-    const len = hcn.length;
-    const isNumeric = /^[0-9]+$/.test(hcn);
+    const len = normalized.length;
+    const isNumeric = /^[0-9]+$/.test(normalized);
     switch (provinceCode) {
         case 'AB':
         case 'NB':
@@ -1372,7 +1372,7 @@ function validateHealthCardFormat(hcn, province) {
             if (!(isNumeric && len === 10)) {
                 return 'Ontario HCN must be 10 digits.';
             }
-            if (!mod10Check(hcn)) {
+            if (!mod10Check(normalized)) {
                 return 'Ontario HCN failed validity check.';
             }
             break;
@@ -1387,7 +1387,7 @@ function validateHealthCardFormat(hcn, province) {
             }
             break;
         case 'NT':
-            if (!(/^[NDMT][0-9]{7}$/.test(hcn))) {
+            if (!(/^[NDMT][0-9]{7}$/.test(normalized))) {
                 return 'Northwest Territories HCN must start with N, D, M, or T followed by 7 digits (8 characters total).';
             }
             break;

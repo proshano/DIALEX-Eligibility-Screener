@@ -584,26 +584,64 @@ function assignStudyId(index) {
         renderPatientTable();
         return;
     }
+    const patientToPersist = { ...patient, study_id: available };
+    if (!normalizeLocationValue(patientToPersist.location_at_randomization)) {
+        patientToPersist.location_at_randomization = getCanonicalLocationValue(patientToPersist.location);
+    }
     try {
-        db.run('BEGIN');
-        const stmt = db.prepare('DELETE FROM study_ids WHERE study_id = ?');
-        stmt.run([available]);
-        stmt.free();
-        db.run('COMMIT');
+        claimStudyIdAndPersistPatient(patientToPersist, available);
     } catch (error) {
-        db.run('ROLLBACK');
         console.warn('Unable to claim Study ID', error);
         showRecordWarning('Unable to assign Study ID. Try again.', 'error');
         renderPatientTable();
         return;
     }
-    patient.study_id = available;
-    if (!normalizeLocationValue(patient.location_at_randomization)) {
-        patient.location_at_randomization = getCanonicalLocationValue(patient.location);
-    }
+    Object.assign(patient, patientToPersist);
     showRecordWarning('');
-    persistPatient(patient, false);
     refreshPatientRow(patient);
+}
+
+function claimStudyIdAndPersistPatient(patient, studyId) {
+    if (!db) {
+        throw new Error('Database not initialized');
+    }
+    const normalizedStudyId = (studyId || '').trim();
+    if (!normalizedStudyId) {
+        throw new Error('Missing Study ID');
+    }
+    let inTransaction = false;
+    let deleteStmt = null;
+    try {
+        db.run('BEGIN');
+        inTransaction = true;
+        deleteStmt = db.prepare('DELETE FROM study_ids WHERE study_id = ?');
+        deleteStmt.run([normalizedStudyId]);
+        const rowsDeleted = typeof db.getRowsModified === 'function' ? db.getRowsModified() : 1;
+        deleteStmt.free();
+        deleteStmt = null;
+        if (rowsDeleted < 1) {
+            throw new Error('Study ID not available');
+        }
+        persistPatient(patient, false, { throwOnError: true, suppressStatus: true });
+        db.run('COMMIT');
+        inTransaction = false;
+    } catch (error) {
+        if (deleteStmt) {
+            try {
+                deleteStmt.free();
+            } catch (freeError) {
+                console.warn('Unable to release Study ID statement', freeError);
+            }
+        }
+        if (inTransaction) {
+            try {
+                db.run('ROLLBACK');
+            } catch (rollbackError) {
+                console.warn('Unable to rollback Study ID claim', rollbackError);
+            }
+        }
+        throw error;
+    }
 }
 
 function getAvailableStudyId(siteCode) {
@@ -717,8 +755,14 @@ function logAuditEvent(action, details = null, options = {}) {
     }
 }
 
-function persistPatient(patient, refresh = true) {
-    if (!db) return;
+function persistPatient(patient, refresh = true, options = {}) {
+    const persistOptions = options && typeof options === 'object' ? options : {};
+    if (!db) {
+        if (persistOptions.throwOnError) {
+            throw new Error('Database not initialized');
+        }
+        return;
+    }
     try {
         const criteriaPlaceholders = Array(INCLUSION_KEYS.length + EXCLUSION_KEYS.length).fill('?').join(', ');
         const currentUsername = getCurrentUsername();
@@ -808,7 +852,12 @@ function persistPatient(patient, refresh = true) {
         }
     } catch (error) {
         console.error(error);
-        showStatus('Error saving patient', 'error');
+        if (!persistOptions.suppressStatus) {
+            showStatus('Error saving patient', 'error');
+        }
+        if (persistOptions.throwOnError) {
+            throw error;
+        }
     }
 }
 
@@ -1111,7 +1160,7 @@ const stmt = db.prepare(`
             computeInclusionAge(age, hasDiabetes),
             startIsoValid ? meetsDialysisDays(startIsoValid) : 0,
             hasValidModality ? 1 : 0,
-            healthCard ? 1 : 0
+            normalizedHealthCard ? 1 : 0
         ];
         const exclusionValues = EXCLUSION_KEYS.map(() => 0);
         const values = [
@@ -1121,7 +1170,7 @@ const stmt = db.prepare(`
             locationDisplay,                   // location
             '',                                // location_at_notification
             '',                                // location_at_randomization
-            healthCard,                        // health_card
+            normalizedHealthCard,              // health_card
             province,                          // health_card_province
             birthDate ? formatISODate(birthDate) : '', // birth_date
             startIsoValid || '',               // dialysis_start_date

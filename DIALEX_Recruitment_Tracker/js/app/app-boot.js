@@ -94,6 +94,19 @@ $('registration-file').addEventListener('change', (event) => {
     registrationFileName.textContent = file ? file.name : 'No file selected';
 });
 
+function bindRoleButtonKeyboardActivation(control) {
+    if (!control || control.tagName === 'BUTTON' || control.getAttribute('role') !== 'button') return;
+    control.addEventListener('keydown', event => {
+        const key = event.key;
+        const isSpace = key === ' ' || key === 'Space' || key === 'Spacebar';
+        if (!isSpace && key !== 'Enter') return;
+        if (isSpace) {
+            event.preventDefault();
+        }
+        control.click();
+    });
+}
+
 $('show-all-btn').addEventListener('click', () => setFilter('all'));
 $('show-missing-btn').addEventListener('click', () => setFilter('missing'));
 $('show-pending-btn').addEventListener('click', () => setFilter('pending'));
@@ -106,6 +119,10 @@ $('show-prescribed-btn').addEventListener('click', () => setFilter('randomized_r
 $('show-ineligible-btn').addEventListener('click', () => setFilter('ineligible'));
 $('show-optedout-btn').addEventListener('click', () => setFilter('opted_out'));
 $('show-notes-btn').addEventListener('click', () => setFilter('notes'));
+const stageRoleButtons = document.querySelectorAll('.stage-pipeline [role="button"]');
+for (let i = 0; i < stageRoleButtons.length; i += 1) {
+    bindRoleButtonKeyboardActivation(stageRoleButtons[i]);
+}
 setupSaveLocationControls();
 setupUserManagementControls();
 window.addEventListener('beforeunload', handleBeforeUnload);

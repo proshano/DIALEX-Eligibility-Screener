@@ -204,7 +204,7 @@ let expandedPatientIndex = null;
 
 function getStatusBadgeHtml(patient) {
     const flags = patient.bucketFlags || computeBucketFlags(patient);
-    const primary = flags.primary;
+    const rawPrimary = flags.primary;
     const statusLabels = {
         missing: 'Missing',
         pending: 'Assess eligibility for notification',
@@ -217,6 +217,7 @@ function getStatusBadgeHtml(patient) {
         ineligible: 'Ineligible',
         opted_out: 'Opted Out'
     };
+    const primary = statusLabels[rawPrimary] ? rawPrimary : 'all';
     let label = statusLabels[primary] || 'All';
     const statusClass = `status-${primary.replace(/_/g, '-')}`;
 
@@ -230,7 +231,7 @@ function getStatusBadgeHtml(patient) {
         label += ` - ${allocationLabel}`;
     }
 
-    return `<div class="status-badge ${statusClass}">${label}</div>`;
+    return `<div class="status-badge ${statusClass}">${escapeHtml(label)}</div>`;
 }
 
 function togglePatientRow(index) {
@@ -378,6 +379,7 @@ function buildPatientDetailsRow(patient) {
     row.dataset.mrn = patient.mrn || '';
 
     const firstEligibleDisplay = patient.first_ready_iso ? formatFriendlyDate(patient.first_ready_iso) : '-';
+    const firstEligibleDisplaySafe = escapeHtml(firstEligibleDisplay);
     const dialysisUnitCanonical = getDialysisUnitCanonical(patient);
     const dialysisUnitOptions = buildLocationOptionsHtml(dialysisUnitCanonical);
     const inclusionLabelClass = patient.inclusionMet ? 'check-success font-medium' : '';
@@ -390,10 +392,14 @@ function buildPatientDetailsRow(patient) {
     const diabetesStatus = normalizeDiabetesStatus(patient.diabetes_known);
     const needsDiabetesStatus = Number.isFinite(patient.age) && patient.age >= 45 && patient.age < 60;
     const notificationDisplay = formatEntryDate(patient.notification_date || '');
+    const notificationDisplaySafe = escapeHtml(notificationDisplay);
     const notificationFriendly = formatFriendlyDate(patient.notification_date);
+    const notificationFriendlyDisplay = escapeHtml(notificationFriendly || 'Not set');
     const optOutStatus = patient.opt_out_status || OPT_OUT_STATUS.PENDING;
     const optOutDateDisplay = formatEntryDate(patient.opt_out_date || '');
+    const optOutDateDisplaySafe = escapeHtml(optOutDateDisplay);
     const optOutFriendly = formatFriendlyDate(patient.opt_out_date);
+    const optOutFriendlyDisplay = escapeHtml(optOutFriendly || 'Not set');
     const hasEligibleDate = Boolean(patient.first_ready_iso);
     const eligibleWindowStarted = Boolean(patient.first_ready_date && patient.first_ready_date.getTime() <= startOfToday().getTime());
     const meetsEligibility = patient.inclusionMet && !patient.hasAnyExclusion && patient.no_exclusions_confirmed;
@@ -414,7 +420,9 @@ function buildPatientDetailsRow(patient) {
         { value: OPT_OUT_STATUS.OPTED_OUT, label: 'Opted out' }
     ].map(opt => `<option value="${opt.value}" ${opt.value === optOutStatus ? 'selected' : ''}>${opt.label}</option>`).join('');
     const dialysisStartDisplay = formatEntryDate(patient.dialysis_start_date || '');
+    const dialysisStartDisplaySafe = escapeHtml(dialysisStartDisplay);
     const dialysisStartFriendly = formatFriendlyDate(patient.dialysis_start_date);
+    const dialysisStartFriendlyDisplay = escapeHtml(dialysisStartFriendly || 'Not set');
     const notifiedCopyButton = `<button class="copy-btn" ${patient.notification_date ? '' : 'disabled'} onclick="copyPatientField(${patient._index}, 'notification_date')">Copy date</button>`;
     const dialysisConfirmControls = patient.dialysis_start_date ? '' : `
         <div class="patient-sub" data-field="dialysis_start_date" style="margin-top:4px;">
@@ -427,7 +435,7 @@ function buildPatientDetailsRow(patient) {
     const missingReasons = computeMissingEligibilityReasons(patient);
     const flags = patient.bucketFlags || computeBucketFlags(patient);
     const missingMessage = flags.missing && !flags.ineligible && missingReasons.length
-        ? `<div class="status-subtext" style="color:#ffcc66; font-weight:700; margin-top:10px;">Missing: ${missingReasons.join('; ')}</div>`
+        ? `<div class="status-subtext" style="color:#ffcc66; font-weight:700; margin-top:10px;">Missing: ${escapeHtml(missingReasons.join('; '))}</div>`
         : '';
     const diabetesButton = (status, label) => {
         const isActive = diabetesStatus === status;
@@ -450,7 +458,7 @@ function buildPatientDetailsRow(patient) {
     ` : '';
     let eligibleMessage;
     if (patient.first_ready_iso) {
-        eligibleMessage = `<div id="first-eligible-${patient._index}" class="text-sm font-medium" style="color:var(--brand);">${firstEligibleDisplay}</div>`;
+        eligibleMessage = `<div id="first-eligible-${patient._index}" class="text-sm font-medium" style="color:var(--brand);">${firstEligibleDisplaySafe}</div>`;
     } else {
         const missing = [];
         if (!patient.dialysis_start_date && !patient.dialysis_duration_confirmed) missing.push('dialysis start date or ≥90 days confirmation');
@@ -468,7 +476,7 @@ function buildPatientDetailsRow(patient) {
         if (canAssignStudyId && !hasStudyId) {
             randomizationHelper = '';
         } else if (optOutStatus === OPT_OUT_STATUS.DID_NOT && hasEligibleDate && !eligibleWindowStarted) {
-            randomizationHelper = `<div class="status-subtext">Eligible on ${firstEligibleDisplay}. Mark randomized once eligible.</div>`;
+            randomizationHelper = `<div class="status-subtext">Eligible on ${firstEligibleDisplaySafe}. Mark randomized once eligible.</div>`;
         } else {
             randomizationHelper = '<div class="status-subtext">Complete eligibility and opt-out steps to mark randomized.</div>';
         }
@@ -495,7 +503,7 @@ function buildPatientDetailsRow(patient) {
     }
     const therapyHelper = allocationRowVisible && therapyHelperMessage ? `<div class="status-subtext">${therapyHelperMessage}</div>` : '';
     const lockToggleDisabled = '';
-    const lockIndicator = patient.locked_at ? `<div class="status-subtext locked-indicator">Locked ${formatDisplayDateTime(patient.locked_at)}</div>` : '';
+    const lockIndicator = patient.locked_at ? `<div class="status-subtext locked-indicator">Locked ${escapeHtml(formatDisplayDateTime(patient.locked_at))}</div>` : '';
     const lockHelper = '<div class="status-subtext">Lock prevents editing fields above; notes remain editable.</div>';
     const lockDisplay = lockIndicator || lockHelper;
     const isManualRecord = isManualPatientRecord(patient);
@@ -527,10 +535,10 @@ function buildPatientDetailsRow(patient) {
                     <div class="date-field" data-field="dialysis_start_date" style="margin-top: 10px;">
                         <div class="date-field-header">
                             <label class="patient-sub">Dialysis start date:</label>
-                            <span class="date-display ${dialysisStartFriendly ? 'has-value' : ''}">${dialysisStartFriendly || 'Not set'}</span>
+                            <span class="date-display ${dialysisStartFriendly ? 'has-value' : ''}">${dialysisStartFriendlyDisplay}</span>
                         </div>
                         <div class="date-input-row">
-                            <input type="text" class="table-input inline-date" value="${dialysisStartDisplay}" placeholder="DD/MM/YYYY" title="DD/MM/YYYY or YYYY-MM-DD" inputmode="numeric" autocomplete="off" spellcheck="false" data-date-entry="true" ${isLocked ? 'disabled' : ''} onblur="updateDialysisStartDate(${patient._index}, this.value)">
+                            <input type="text" class="table-input inline-date" value="${dialysisStartDisplaySafe}" placeholder="DD/MM/YYYY" title="DD/MM/YYYY or YYYY-MM-DD" inputmode="numeric" autocomplete="off" spellcheck="false" data-date-entry="true" ${isLocked ? 'disabled' : ''} onblur="updateDialysisStartDate(${patient._index}, this.value)">
                         </div>
                     </div>
                     ${dialysisConfirmControls}
@@ -555,10 +563,10 @@ function buildPatientDetailsRow(patient) {
                 <div class="date-field">
                     <div class="date-field-header">
                         <label class="patient-sub">Date notified:</label>
-                        <span class="date-display ${notificationFriendly ? 'has-value' : ''}">${notificationFriendly || 'Not set'}</span>
+                        <span class="date-display ${notificationFriendly ? 'has-value' : ''}">${notificationFriendlyDisplay}</span>
                     </div>
                     <div class="date-input-row">
-                        <input type="text" class="table-input inline-date" value="${notificationDisplay}" placeholder="DD/MM/YYYY" title="DD/MM/YYYY or YYYY-MM-DD" inputmode="numeric" autocomplete="off" spellcheck="false" data-date-entry="true" ${isLocked ? 'disabled' : ''} onblur="updateInlineNotification(${patient._index}, this.value)">
+                        <input type="text" class="table-input inline-date" value="${notificationDisplaySafe}" placeholder="DD/MM/YYYY" title="DD/MM/YYYY or YYYY-MM-DD" inputmode="numeric" autocomplete="off" spellcheck="false" data-date-entry="true" ${isLocked ? 'disabled' : ''} onblur="updateInlineNotification(${patient._index}, this.value)">
                         ${notifiedCopyButton}
                     </div>
                 </div>
@@ -577,10 +585,10 @@ function buildPatientDetailsRow(patient) {
                     <div class="date-field">
                         <div class="date-field-header">
                             <label class="patient-sub">Date opted out:</label>
-                            <span class="date-display ${optOutFriendly ? 'has-value' : ''}">${optOutFriendly || 'Not set'}</span>
+                            <span class="date-display ${optOutFriendly ? 'has-value' : ''}">${optOutFriendlyDisplay}</span>
                         </div>
                         <div class="date-input-row">
-                            <input type="text" class="table-input inline-date" value="${optOutDateDisplay}" placeholder="DD/MM/YYYY" title="DD/MM/YYYY or YYYY-MM-DD" inputmode="numeric" autocomplete="off" spellcheck="false" data-date-entry="true" ${optOutDateDisabled} onblur="updateOptOutDate(${patient._index}, this.value)">
+                            <input type="text" class="table-input inline-date" value="${optOutDateDisplaySafe}" placeholder="DD/MM/YYYY" title="DD/MM/YYYY or YYYY-MM-DD" inputmode="numeric" autocomplete="off" spellcheck="false" data-date-entry="true" ${optOutDateDisabled} onblur="updateOptOutDate(${patient._index}, this.value)">
                             <button class="copy-btn" ${optOutCopyDisabled} onclick="copyPatientField(${patient._index}, 'opt_out_date')">Copy date</button>
                         </div>
                     </div>
@@ -588,7 +596,7 @@ function buildPatientDetailsRow(patient) {
                 <div class="inline-field-row" style="${studyRowStyle}">
                     <button class="copy-btn" ${isLocked || hasStudyId || !canAssignStudyId ? 'disabled' : ''} onclick="assignStudyId(${patient._index})">Eligible and ready to randomize now</button>
                     <label class="patient-sub">Study ID:</label>
-                    <span class="date-display ${studyIdValue ? 'has-value' : ''}">${studyIdValue || 'Not assigned'}</span>
+                    <span class="date-display ${studyIdValue ? 'has-value' : ''}">${escapeHtml(studyIdValue || 'Not assigned')}</span>
                     <button class="copy-btn" ${studyCopyDisabled} onclick="copyPatientField(${patient._index}, 'study_id')">Copy</button>
                 </div>
                 ${studyHelper}
@@ -625,12 +633,17 @@ function buildPatientDetailsRow(patient) {
                 </div>
                 <div>
                     <div class="section-label">Notes</div>
-                    <textarea class="table-input" rows="6" style="width:100%; resize:vertical;" placeholder="Notes..." onchange="updateInlineNotes(${patient._index}, this.value)">${patient.notes || ''}</textarea>
+                    <textarea class="table-input inline-notes-textarea" rows="6" style="width:100%; resize:vertical;" placeholder="Notes..." onchange="updateInlineNotes(${patient._index}, this.value)"></textarea>
                     ${manualDeleteHtml}
                 </div>
             </div>
         </td>
     `;
+
+    const notesTextarea = row.querySelector('.inline-notes-textarea');
+    if (notesTextarea) {
+        notesTextarea.value = patient.notes || '';
+    }
 
     return row;
 }

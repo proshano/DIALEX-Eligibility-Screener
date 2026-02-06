@@ -1,0 +1,80 @@
+%PDF-1.4
+%‚„œ”
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 5 0 R /F2 6 0 R >> >> /Contents 4 0 R >>
+endobj
+4 0 obj
+<< /Length 3991 >>
+stream
+0 0 0 rg
+BT /F2 14.90 Tf 48.00 750.00 Td (DIALEX Recruitment Tracker App - One-Page Summary) Tj ET
+BT /F2 11.40 Tf 48.00 730.10 Td (WHAT IT IS) Tj ET
+BT /F1 10.40 Tf 52.00 715.90 Td (- A standalone offline browser app for DIALEX sites to track patient screening, notification,) Tj ET
+BT /F1 10.40 Tf 66.00 702.80 Td (and randomization workflow.) Tj ET
+BT /F1 10.40 Tf 52.00 689.70 Td (- It runs from local HTML, CSS, and JavaScript files and stores data in encrypted local) Tj ET
+BT /F1 10.40 Tf 66.00 676.60 Td (database files.) Tj ET
+BT /F2 11.40 Tf 48.00 661.50 Td (WHO IT IS FOR) Tj ET
+BT /F1 10.40 Tf 52.00 647.30 Td (- Hospital dialysis site research staff and site admins \(for example coordinators and site PI) Tj ET
+BT /F1 10.40 Tf 66.00 634.20 Td (delegates\).) Tj ET
+BT /F2 11.40 Tf 48.00 619.10 Td (WHAT IT DOES) Tj ET
+BT /F1 10.40 Tf 52.00 604.90 Td (- Loads and saves encrypted DIALEX database files \(.enc\); legacy encrypted formats are) Tj ET
+BT /F1 10.40 Tf 66.00 591.80 Td (rejected.) Tj ET
+BT /F1 10.40 Tf 52.00 578.70 Td (- Uses local username/password sign-in with lockout handling, user roles, and central recovery) Tj ET
+BT /F1 10.40 Tf 66.00 565.60 Td (mode.) Tj ET
+BT /F1 10.40 Tf 52.00 552.50 Td (- Imports ORRS registration CSV files for bulk intake with automated pre-screening summaries.) Tj ET
+BT /F1 10.40 Tf 52.00 539.40 Td (- Supports manual patient entry and validation for age, dates, health card format, and) Tj ET
+BT /F1 10.40 Tf 66.00 526.30 Td (duplicate checks.) Tj ET
+BT /F1 10.40 Tf 52.00 513.20 Td (- Tracks recruitment stages from notification assessment through ready-to-randomize and) Tj ET
+BT /F1 10.40 Tf 66.00 500.10 Td (prescribed states.) Tj ET
+BT /F1 10.40 Tf 52.00 487.00 Td (- Requires exclusion confirmation before randomization; supports opt-out status/date and Study) Tj ET
+BT /F1 10.40 Tf 66.00 473.90 Td (ID assignment.) Tj ET
+BT /F1 10.40 Tf 52.00 460.80 Td (- Writes alternating timestamped autosave files plus named import backups, and records events) Tj ET
+BT /F1 10.40 Tf 66.00 447.70 Td (in an audit log.) Tj ET
+BT /F2 11.40 Tf 48.00 432.60 Td (HOW IT WORKS \(REPO EVIDENCE\)) Tj ET
+BT /F1 10.40 Tf 52.00 418.40 Td (- UI layer: single page app \(DIALEX Recruitment Tracker App.html\) with local CSS and) Tj ET
+BT /F1 10.40 Tf 66.00 405.30 Td (modal-driven workflows.) Tj ET
+BT /F1 10.40 Tf 52.00 392.20 Td (- Client modules: app-01.js to app-06.js plus app-boot.js handle crypto, auth, autosave,) Tj ET
+BT /F1 10.40 Tf 66.00 379.10 Td (import, filters, and table updates.) Tj ET
+BT /F1 10.40 Tf 52.00 366.00 Td (- Data layer: in-browser SQLite via sql.js with tables patient_assessments, users, audit_log,) Tj ET
+BT /F1 10.40 Tf 66.00 352.90 Td (study_ids, and site_settings.) Tj ET
+BT /F1 10.40 Tf 52.00 339.80 Td (- Security service: Web Crypto PBKDF2 + AES-GCM, V2 payload header DIALEX-ENC-V2, with data) Tj ET
+BT /F1 10.40 Tf 66.00 326.70 Td (key wraps for central and per-user unlock.) Tj ET
+BT /F1 10.40 Tf 52.00 313.60 Td (- Data flow: load .enc file -> decrypt -> hydrate SQLite/session -> import/edit records ->) Tj ET
+BT /F1 10.40 Tf 66.00 300.50 Td (write audit rows -> save/autosave encrypted .enc.) Tj ET
+BT /F1 10.40 Tf 52.00 287.40 Td (- Remote APIs/services: Not found in repo.) Tj ET
+BT /F2 11.40 Tf 48.00 272.30 Td (HOW TO RUN \(MINIMUM\)) Tj ET
+BT /F1 10.40 Tf 52.00 258.10 Td (- Open DIALEX_Recruitment_Tracker/DIALEX Recruitment Tracker App.html in Google Chrome or) Tj ET
+BT /F1 10.40 Tf 66.00 245.00 Td (Microsoft Edge.) Tj ET
+BT /F1 10.40 Tf 52.00 231.90 Td (- Click Set save folder and grant read/write permission.) Tj ET
+BT /F1 10.40 Tf 52.00 218.80 Td (- Click Load database, choose a V2 encrypted .enc file, then sign in.) Tj ET
+BT /F1 10.40 Tf 52.00 205.70 Td (- If a starter database is needed, use) Tj ET
+BT /F1 10.40 Tf 66.00 192.60 Td (DIALEX_Site_Recruitment_Setup/DIALEX_Site_Recruitment_Setup.html first \(creation is disabled) Tj ET
+BT /F1 10.40 Tf 66.00 179.50 Td (in tracker\).) Tj ET
+endstream
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+6 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>
+endobj
+xref
+0 7
+0000000000 65535 f 
+0000000015 00000 n 
+0000000064 00000 n 
+0000000121 00000 n 
+0000000257 00000 n 
+0000004299 00000 n 
+0000004369 00000 n 
+trailer
+<< /Size 7 /Root 1 0 R >>
+startxref
+4444
+%%EOF
