@@ -486,6 +486,11 @@ function setupDatabase(db) {
         )
     `);
     db.run(`
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_patient_study_id_unique
+        ON patient_assessments(study_id)
+        WHERE TRIM(COALESCE(study_id, '')) <> ''
+    `);
+    db.run(`
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             username TEXT UNIQUE NOT NULL,
