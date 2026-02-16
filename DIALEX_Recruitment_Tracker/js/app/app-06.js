@@ -66,8 +66,7 @@ function getTorontoDateParts(date = new Date()) {
 }
 
 function getTorontoNow() {
-    const parts = getTorontoDateParts();
-    return new Date(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute, parts.second, 0);
+    return new Date();
 }
 
 function getTorontoTodayParts() {
@@ -89,7 +88,7 @@ function getDateUtcMs(date) {
 }
 
 function getTorontoNowTimestamp() {
-    return getTorontoNow().getTime();
+    return Date.now();
 }
 
 function isDateOlderThanYears(date, years) {
@@ -302,6 +301,64 @@ function parseCSVLine(line) {
     }
     values.push(current.replace(/^"|"$/g, '').trim());
     return values;
+}
+
+function parseStudyIdImportCSV(csvText) {
+    if (!csvText || !csvText.trim()) {
+        throw new Error('The CSV file is empty.');
+    }
+    const normalizedText = String(csvText).replace(/^\uFEFF/, '');
+    const rawLines = normalizedText.split(/\r\n|\n/);
+    const records = reconstructCSVFromLines(rawLines)
+        .map(line => String(line || '').replace(/\r/g, ''))
+        .filter(line => line.trim() !== '');
+    if (!records.length) {
+        throw new Error('CSV did not contain any rows.');
+    }
+    const firstValues = parseCSVLine(records[0]);
+    if (!firstValues.length) {
+        throw new Error('CSV did not contain any rows.');
+    }
+    let studyIdColumnIndex = 0;
+    let startIndex = 0;
+    if (firstValues.length === 1) {
+        const firstKey = normalizeKey(firstValues[0]);
+        if (firstKey === 'studyid') {
+            startIndex = 1;
+        }
+    } else {
+        studyIdColumnIndex = firstValues.findIndex(value => normalizeKey(value) === 'studyid');
+        if (studyIdColumnIndex < 0) {
+            throw new Error('CSV must include a study_id column or contain a single Study ID column.');
+        }
+        startIndex = 1;
+    }
+    const counters = {
+        total_rows: 0,
+        invalid: 0,
+        duplicate_in_file: 0
+    };
+    const ids = [];
+    const seen = new Set();
+    for (let i = startIndex; i < records.length; i++) {
+        const values = parseCSVLine(records[i] || '');
+        const hasAnyValue = values.some(value => (value || '').trim() !== '');
+        if (!hasAnyValue) continue;
+        counters.total_rows += 1;
+        const rawValue = studyIdColumnIndex < values.length ? values[studyIdColumnIndex] : '';
+        const normalizedId = normalizeStudyIdValue(rawValue || '');
+        if (!normalizedId) {
+            counters.invalid += 1;
+            continue;
+        }
+        if (seen.has(normalizedId)) {
+            counters.duplicate_in_file += 1;
+            continue;
+        }
+        seen.add(normalizedId);
+        ids.push(normalizedId);
+    }
+    return { ids, counters };
 }
 
 function analyzePreScreeningRows(rows) {
@@ -1072,6 +1129,15 @@ function isPatientLocked(patient) {
 
 function ensureEditablePatient(patient) {
     if (!patient) return false;
+    if (typeof hasStudyIdIntegrityIssue === 'function' && hasStudyIdIntegrityIssue()) {
+        const message = typeof getStudyIdIntegrityBlockingMessage === 'function'
+            ? getStudyIdIntegrityBlockingMessage()
+            : 'Integrity error: duplicate assigned Study IDs detected. Resolve duplicates externally and reload this database.';
+        showStatus(message, 'error');
+        showRecordWarning(message, 'error');
+        renderPatientTable();
+        return false;
+    }
     if (isPatientLocked(patient)) {
         showStatus(READ_ONLY_MESSAGE, 'status');
         renderPatientTable();

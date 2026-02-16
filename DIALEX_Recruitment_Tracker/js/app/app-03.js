@@ -1,4 +1,72 @@
 
+const STUDY_ID_DUPLICATE_CHECK_SQL = `
+    SELECT study_id, COUNT(*) AS n
+    FROM patient_assessments
+    WHERE TRIM(COALESCE(study_id, '')) <> ''
+    GROUP BY study_id
+    HAVING COUNT(*) > 1
+`;
+const STUDY_ID_UNIQUE_INDEX_SQL = `
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_patient_study_id_unique
+    ON patient_assessments(study_id)
+    WHERE TRIM(COALESCE(study_id, '')) <> ''
+`;
+let studyIdIntegrityDuplicates = [];
+
+function hasStudyIdIntegrityIssue() {
+    return Boolean(db && Array.isArray(studyIdIntegrityDuplicates) && studyIdIntegrityDuplicates.length);
+}
+
+function getStudyIdIntegrityBlockingMessage() {
+    const duplicateCount = Array.isArray(studyIdIntegrityDuplicates) ? studyIdIntegrityDuplicates.length : 0;
+    const sample = (studyIdIntegrityDuplicates || [])
+        .slice(0, 3)
+        .map(entry => `${entry.study_id} (${entry.n})`)
+        .join(', ');
+    const sampleSuffix = duplicateCount > 3 ? '...' : '';
+    const base = `Integrity error: duplicate assigned Study IDs detected (${duplicateCount} duplicate value${duplicateCount === 1 ? '' : 's'}). Resolve duplicates externally and reload this database.`;
+    if (!sample) {
+        return base;
+    }
+    return `${base} Examples: ${sample}${sampleSuffix}.`;
+}
+
+function refreshStudyIdIntegrityState(options = {}) {
+    if (!db) {
+        studyIdIntegrityDuplicates = [];
+        return [];
+    }
+    const duplicates = [];
+    let stmt = null;
+    try {
+        stmt = db.prepare(STUDY_ID_DUPLICATE_CHECK_SQL);
+        while (stmt.step()) {
+            const row = stmt.getAsObject();
+            const studyId = normalizeStudyIdValue(row.study_id || '') || String(row.study_id || '').trim();
+            const count = Number(row.n) || 0;
+            if (studyId && count > 1) {
+                duplicates.push({ study_id: studyId, n: count });
+            }
+        }
+    } catch (error) {
+        console.warn('Unable to validate Study ID integrity', error);
+    } finally {
+        if (stmt) stmt.free();
+    }
+    studyIdIntegrityDuplicates = duplicates;
+    if (studyIdIntegrityDuplicates.length && options.showStatus !== false) {
+        const message = getStudyIdIntegrityBlockingMessage();
+        showStatus(message, 'error');
+        if (typeof showRecordWarning === 'function') {
+            showRecordWarning(message, 'error');
+        }
+    }
+    if (options.refreshAccess !== false) {
+        updateAppAccessState();
+    }
+    return studyIdIntegrityDuplicates.slice();
+}
+
 async function promptInitialAdminSetup() {
     return new Promise(resolve => {
         const modal = $('admin-setup-modal');
@@ -300,6 +368,7 @@ async function createNewDatabase() {
     if (db && dbChanged && !confirm('You have unsaved changes. Continue anyway?')) return;
     db = new SQL.Database();
     setupDatabase();
+    refreshStudyIdIntegrityState({ showStatus: false, refreshAccess: false });
     loadRecruitingUnitState();
     resetAutosaveTracking();
     encryptionState = null;
@@ -573,6 +642,13 @@ function setupDatabase() {
             console.warn('Unable to add password_reset_required column', error);
         }
     }
+    try {
+        db.run(STUDY_ID_UNIQUE_INDEX_SQL);
+    } catch (error) {
+        if (!/UNIQUE constraint failed/i.test((error && error.message) || '')) {
+            console.warn('Unable to create unique Study ID index', error);
+        }
+    }
 }
 
 function enableAppControls() {
@@ -684,6 +760,7 @@ async function initializeLoadedDatabase(decrypted) {
     encryptionState = decrypted.encryptionState;
     currentUser = null;
     setupDatabase();
+    refreshStudyIdIntegrityState({ showStatus: false, refreshAccess: false });
     loadRecruitingUnitState();
     refreshPatientData();
     resetAutosaveTracking();
@@ -699,6 +776,25 @@ function showLoadedDatabaseStatus(filename, isBackupFile) {
         ? 'Backup file loaded. Backups can be outdated; use them only to correct a known problem.'
         : '';
     const fileLabel = filename ? `: ${filename}` : '';
+    if (hasStudyIdIntegrityIssue()) {
+        const integrityMessage = getStudyIdIntegrityBlockingMessage();
+        const messageParts = [
+            `Loaded secure database${fileLabel}.`,
+            integrityMessage
+        ];
+        if (autosaveMessage) {
+            messageParts.push(autosaveMessage);
+        }
+        if (backupWarning) {
+            messageParts.push(backupWarning);
+        }
+        const combined = messageParts.join(' ').trim();
+        showStatus(combined, 'error');
+        if (typeof showRecordWarning === 'function') {
+            showRecordWarning(integrityMessage, 'error');
+        }
+        return;
+    }
     if (autosaveMessage) {
         const combined = backupWarning ? `${autosaveMessage} ${backupWarning}` : autosaveMessage;
         showStatus(`Loaded secure database${fileLabel}. ${combined}`, 'error');
@@ -1160,7 +1256,6 @@ function normalizePatientRow(row, index) {
     patient.allocation = row.allocation || '';
     patient.study_id = normalizeStudyIdValue(row.study_id);
     patient.locked_at = row.locked_at || '';
-    patient.locked_at = row.locked_at || '';
     patient.diabetes_known = normalizeDiabetesStatus(row.diabetes_known);
     patient.location = patient.location || '';
     patient.location_at_notification = patient.location_at_notification || '';
@@ -1326,11 +1421,17 @@ function mod10Check(value) {
     return (sum % 10) === 0;
 }
 
+function isScientificNotationNumericText(value = '') {
+    const rawValue = String(value || '').trim();
+    if (!rawValue) return false;
+    return /[0-9](?:\.[0-9]+)?e[+-]?[0-9]+/i.test(rawValue);
+}
+
 function validateHealthCardFormat(hcn, province) {
     const rawValue = String(hcn || '').trim();
     if (!rawValue) return '';
-    if (/[0-9](?:\.[0-9]+)?e[+-]?[0-9]+/i.test(rawValue)) {
-        return 'HCN appears to be in scientific notation. Enter the full digits.';
+    if (isScientificNotationNumericText(rawValue)) {
+        return 'Possible Excel corruption: HCN is in scientific notation. Replace with full HCN digits from the source record.';
     }
     const normalized = rawValue.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
     const provinceCode = normalizeProvinceCode(province);

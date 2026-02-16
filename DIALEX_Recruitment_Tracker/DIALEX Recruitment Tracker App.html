@@ -48,14 +48,16 @@
         <div class="header">
             <h1>DIALEX eligibility, notification, and randomization tracker</h1>
             <div class="meta-row">
-                <div class="meta-pill version-pill" aria-label="Version date">Version: Jan 28 2026</div>
-                <div class="meta-pill owner-pill" aria-label="Ownership">Copyright 2025 DIALEX trial project office</div>
+                <div class="meta-pill version-pill" aria-label="Version date">Version: Feb 16 2026</div>
+                <div class="meta-pill owner-pill" aria-label="Ownership">Copyright 2026 DIALEX trial project office</div>
                 <button id="theme-toggle" class="meta-pill theme-toggle" onclick="toggleTheme()" aria-pressed="true" type="button">Dark theme</button>
             </div>
             <div class="header-admin hidden" id="admin-actions">
                 <div class="header-admin-label">Administration</div>
                 <div class="header-admin-actions">
                     <button id="manage-users-btn" class="secondary hidden" disabled>Manage users</button>
+                    <button id="import-study-ids-btn" class="secondary hidden" disabled>Import Study IDs (.csv)</button>
+                    <input type="file" id="study-ids-file" class="hidden" accept=".csv,text/csv" aria-label="Import Study IDs CSV">
                     <button id="sign-out-btn" class="secondary hidden" disabled>Switch user</button>
                     <button id="rotate-central-btn" class="secondary hidden" disabled>Rotate central password</button>
                 </div>

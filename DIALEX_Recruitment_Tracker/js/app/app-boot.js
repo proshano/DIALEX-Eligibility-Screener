@@ -38,6 +38,17 @@ const rotateCentralBtn = $('rotate-central-btn');
 if (rotateCentralBtn) {
     rotateCentralBtn.addEventListener('click', handleRotateCentralPassword);
 }
+const importStudyIdsBtn = $('import-study-ids-btn');
+const studyIdsFileInput = $('study-ids-file');
+if (importStudyIdsBtn) {
+    importStudyIdsBtn.addEventListener('click', () => {
+        if (!studyIdsFileInput || importStudyIdsBtn.disabled) return;
+        studyIdsFileInput.click();
+    });
+}
+if (studyIdsFileInput) {
+    studyIdsFileInput.addEventListener('change', importStudyIdsCsv);
+}
 $('add-patient-btn').addEventListener('click', promptNewPatient);
 $('save-all-btn').addEventListener('click', async () => {
     await saveDatabase();
@@ -70,7 +81,6 @@ if (unitFilterModal) {
         }
     });
 }
-$('registration-file').addEventListener('change', importRegistrationExtract);
 const registrationFileBtn = $('registration-file-btn');
 const registrationFileName = $('registration-file-name');
 if (registrationFileBtn) {
@@ -89,10 +99,37 @@ if (registrationFileName) {
 }
 $('registration-file').addEventListener('change', (event) => {
     const input = event.target;
-    if (!registrationFileName) return;
-    const file = input && input.files && input.files[0] ? input.files[0] : null;
-    registrationFileName.textContent = file ? file.name : 'No file selected';
+    if (registrationFileName) {
+        const file = input && input.files && input.files[0] ? input.files[0] : null;
+        registrationFileName.textContent = file ? file.name : 'No file selected';
+    }
+    importRegistrationExtract(event);
 });
+
+function syncStudyIdImportControlState() {
+    const hasIntegrityIssue = typeof hasStudyIdIntegrityIssue === 'function' && hasStudyIdIntegrityIssue();
+    const canEdit = Boolean(db && currentUser && saveDirectoryReady && isAutosaveEncryptionReady() && !hasIntegrityIssue);
+    const addPatientBtn = $('add-patient-btn');
+    if (addPatientBtn) addPatientBtn.disabled = !canEdit;
+    const registrationFile = $('registration-file');
+    if (registrationFile) registrationFile.disabled = !canEdit;
+    if (registrationFileBtn) registrationFileBtn.disabled = !canEdit;
+    if (registrationFileName) registrationFileName.classList.toggle('disabled', !canEdit);
+    const unitFilterButton = $('unit-filter-btn');
+    if (unitFilterButton) unitFilterButton.disabled = !canEdit;
+    const showStudyIdImport = Boolean(canEdit && typeof isAdminUser === 'function' && isAdminUser());
+    if (importStudyIdsBtn) {
+        importStudyIdsBtn.classList.toggle('hidden', !showStudyIdImport);
+        importStudyIdsBtn.disabled = !showStudyIdImport;
+    }
+}
+
+const baseUpdateAppAccessState = updateAppAccessState;
+updateAppAccessState = function(...args) {
+    baseUpdateAppAccessState.apply(this, args);
+    syncStudyIdImportControlState();
+};
+syncStudyIdImportControlState();
 
 function bindRoleButtonKeyboardActivation(control) {
     if (!control || control.tagName === 'BUTTON' || control.getAttribute('role') !== 'button') return;

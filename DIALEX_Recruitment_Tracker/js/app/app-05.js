@@ -292,6 +292,12 @@ function updateHealthCardProvince(index, value) {
 function updateInlineNotes(index, value) {
     const patient = patientsData[index];
     if (!patient) return;
+    if (typeof hasStudyIdIntegrityIssue === 'function' && hasStudyIdIntegrityIssue()) {
+        const message = getStudyIdIntegrityBlockingMessage();
+        showStatus(message, 'error');
+        showRecordWarning(message, 'error');
+        return;
+    }
     patient.notes = value;
     persistPatient(patient, false);
     refreshPatientRow(patient);
@@ -388,6 +394,11 @@ function updateDialysisStartDate(index, value) {
             showRecordWarning('');
             return;
         }
+        if (isFutureISODateString(normalized)) {
+            showRecordWarning('Dialysis start date cannot be in the future.', 'error');
+            renderPatientTable();
+            return;
+        }
         if (patient.birth_date) {
             const birth = parseISODate(patient.birth_date);
             const start = parseISODate(normalized);
@@ -477,19 +488,8 @@ function updateStudyId(index, value) {
     const patient = patientsData[index];
     if (!patient) return;
     if (!ensureEditablePatient(patient)) return;
-    const firstEligible = computeFirstEligibleDate(patient);
-    const randomizationAllowed = patient.opt_out_status === OPT_OUT_STATUS.DID_NOT
-        && Boolean(firstEligible)
-        && patient.inclusionMet
-        && patient.noExclusions
-        && patient.no_exclusions_confirmed;
-    if (!patient.randomized && !randomizationAllowed) {
-        showRecordWarning('Complete eligibility and opt-out steps before assigning a Study ID.', 'error');
-        renderPatientTable();
-        return;
-    }
-    const raw = formatStudyIdInput(value || '');
-    if (!raw) {
+    const formatted = formatStudyIdInput(value || '');
+    if (!formatted) {
         releaseStudyId(patient.study_id);
         patient.study_id = '';
         patient.allocation = '';
@@ -499,29 +499,13 @@ function updateStudyId(index, value) {
         refreshPatientRow(patient);
         return;
     }
-    const normalized = normalizeStudyIdValue(raw);
-    if (!normalized) {
-        showRecordWarning('Study ID must match ####-AAA-### (e.g., 1835-WKC-003).', 'error');
-        renderPatientTable();
+    const normalized = normalizeStudyIdValue(formatted);
+    if (normalized && normalized === patient.study_id) {
+        showRecordWarning('');
         return;
     }
-    const studySite = extractStudySite(normalized);
-    const locationCode = getPatientRandomizationCode(patient);
-    if (!locationCode) {
-        showRecordWarning('Select a dialysis unit at randomization before assigning a Study ID.', 'error');
-        renderPatientTable();
-        return;
-    }
-    if (studySite !== locationCode) {
-        const siteName = getLocationNameFromCode(studySite) || `site ${studySite}`;
-        showRecordWarning(`Study ID site code ${studySite} corresponds to ${siteName}. Check the Study ID or update the dialysis unit at randomization.`, 'error');
-        renderPatientTable();
-        return;
-    }
-    showRecordWarning('');
-    patient.study_id = normalized;
-    persistPatient(patient, false);
-    refreshPatientRow(patient);
+    showRecordWarning('Manual Study ID entry is disabled. Use "Eligible and ready to randomize now" to assign from the Study ID pool.', 'error');
+    renderPatientTable();
 }
 
 function assignStudyId(index) {
@@ -685,6 +669,12 @@ function toggleDialysisDurationConfirmed() {}
 function toggleRecordLocked(index, checked) {
     const patient = patientsData[index];
     if (!patient) return;
+    if (typeof hasStudyIdIntegrityIssue === 'function' && hasStudyIdIntegrityIssue()) {
+        const message = getStudyIdIntegrityBlockingMessage();
+        showStatus(message, 'error');
+        showRecordWarning(message, 'error');
+        return;
+    }
     if (checked) {
         patient.locked_at = getTorontoNow().toISOString();
         showStatus('Record locked. Only notes remain editable.', 'success');
@@ -760,6 +750,17 @@ function persistPatient(patient, refresh = true, options = {}) {
     if (!db) {
         if (persistOptions.throwOnError) {
             throw new Error('Database not initialized');
+        }
+        return;
+    }
+    if (typeof hasStudyIdIntegrityIssue === 'function' && hasStudyIdIntegrityIssue()) {
+        const message = getStudyIdIntegrityBlockingMessage();
+        if (!persistOptions.suppressStatus) {
+            showStatus(message, 'error');
+            showRecordWarning(message, 'error');
+        }
+        if (persistOptions.throwOnError) {
+            throw new Error(message);
         }
         return;
     }
@@ -1003,6 +1004,12 @@ function promptNewPatient() {
         showStatus('Create or load a database first.', 'error');
         return;
     }
+    if (typeof hasStudyIdIntegrityIssue === 'function' && hasStudyIdIntegrityIssue()) {
+        const message = getStudyIdIntegrityBlockingMessage();
+        showStatus(message, 'error');
+        showRecordWarning(message, 'error');
+        return;
+    }
     const tempMrn = generateTemporaryMrn();
     const patient = createBlankPatientRecord(tempMrn);
     persistPatient(patient);
@@ -1011,12 +1018,191 @@ function promptNewPatient() {
     focusPatientRow(tempMrn);
 }
 
+function isCsvFile(file) {
+    if (!file) return false;
+    const name = String(file.name || '').trim();
+    const type = String(file.type || '').toLowerCase();
+    const hasCsvExtension = /\.csv$/i.test(name);
+    if (hasCsvExtension) return true;
+    if (!name) {
+        return type === 'text/csv' || type === 'application/csv' || type === 'application/vnd.ms-excel';
+    }
+    return false;
+}
+
+function getExistingStudyIdsForImport() {
+    const existing = new Set();
+    if (!db) return existing;
+    let stmt = null;
+    try {
+        stmt = db.prepare(`
+            SELECT study_id FROM study_ids
+            UNION
+            SELECT study_id FROM patient_assessments
+            WHERE TRIM(COALESCE(study_id, '')) <> ''
+        `);
+        while (stmt.step()) {
+            const row = stmt.getAsObject();
+            const normalized = normalizeStudyIdValue(row.study_id || '');
+            if (normalized) {
+                existing.add(normalized);
+            }
+        }
+    } finally {
+        if (stmt) stmt.free();
+    }
+    return existing;
+}
+
+function ensureStudyIdImportAllowed() {
+    if (!db) {
+        showStatus('Create or load a database first.', 'error');
+        return false;
+    }
+    if (!currentUser) {
+        showStatus('Sign in to continue.', 'error');
+        return false;
+    }
+    if (!isAdminUser()) {
+        showStatus('Only admins can import additional Study IDs.', 'error');
+        return false;
+    }
+    if (!isAutosaveReady()) {
+        showStatus('Autosave must be ready before importing. Select a save folder and confirm encryption.', 'error');
+        return false;
+    }
+    if (typeof hasStudyIdIntegrityIssue === 'function' && hasStudyIdIntegrityIssue()) {
+        const message = getStudyIdIntegrityBlockingMessage();
+        showStatus(message, 'error');
+        showRecordWarning(message, 'error');
+        return false;
+    }
+    return true;
+}
+
+async function importStudyIdsCsv(event) {
+    const input = event && event.target ? event.target : null;
+    const file = input && input.files && input.files[0] ? input.files[0] : null;
+    if (input) {
+        input.value = '';
+    }
+    if (!file) return;
+    if (!ensureStudyIdImportAllowed()) return;
+    if (!isCsvFile(file)) {
+        showStatus('Study ID import requires a .csv file.', 'error');
+        return;
+    }
+
+    const readText = (inputFile) => new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result || '');
+        reader.onerror = () => reject(new Error('Error reading file.'));
+        reader.readAsText(inputFile);
+    });
+
+    let csvText = '';
+    try {
+        showStatus('Reading file...', 'status');
+        csvText = await readText(file);
+    } catch (error) {
+        console.error(error);
+        showStatus('Error reading file.', 'error');
+        return;
+    }
+
+    let parsed;
+    try {
+        parsed = parseStudyIdImportCSV(csvText || '');
+    } catch (error) {
+        console.error(error);
+        showStatus('Error parsing CSV: ' + error.message, 'error');
+        return;
+    }
+
+    const counters = {
+        total_rows: parsed.counters.total_rows || 0,
+        invalid: parsed.counters.invalid || 0,
+        duplicate_in_file: parsed.counters.duplicate_in_file || 0,
+        already_existing: 0,
+        added: 0
+    };
+    const filename = file.name || 'study_ids.csv';
+    const existing = getExistingStudyIdsForImport();
+    let stmt = null;
+    let inTransaction = false;
+    try {
+        const createdAt = getSqlTimestamp();
+        stmt = db.prepare('INSERT OR IGNORE INTO study_ids (study_id, created_at) VALUES (?, ?)');
+        db.run('BEGIN');
+        inTransaction = true;
+        (parsed.ids || []).forEach(studyId => {
+            if (existing.has(studyId)) {
+                counters.already_existing += 1;
+                return;
+            }
+            stmt.run([studyId, createdAt]);
+            const changed = typeof db.getRowsModified === 'function' ? db.getRowsModified() : 1;
+            if (changed > 0) {
+                counters.added += 1;
+                existing.add(studyId);
+            } else {
+                counters.already_existing += 1;
+            }
+        });
+        db.run('COMMIT');
+        inTransaction = false;
+    } catch (error) {
+        console.error('Failed to import Study IDs', error);
+        if (inTransaction) {
+            try {
+                db.run('ROLLBACK');
+            } catch (rollbackError) {
+                console.warn('Unable to rollback Study ID import', rollbackError);
+            }
+        }
+        showStatus('Unable to import Study IDs from CSV.', 'error');
+        return;
+    } finally {
+        if (stmt) stmt.free();
+    }
+
+    if (counters.added > 0) {
+        markDatabaseChanged();
+        loadRecruitingUnitState();
+        renderPatientTable();
+        updateFilterCounts();
+    }
+
+    logAuditEvent('study_ids_imported', {
+        filename,
+        total_rows: counters.total_rows,
+        invalid: counters.invalid,
+        duplicate_in_file: counters.duplicate_in_file,
+        already_existing: counters.already_existing,
+        added: counters.added
+    }, {
+        targetType: 'study_id_pool',
+        targetId: filename
+    });
+
+    const summary = `Added ${counters.added} new Study IDs. Skipped ${counters.already_existing} existing, ${counters.invalid} invalid, ${counters.duplicate_in_file} duplicates in file.`;
+    const statusType = counters.added > 0 ? 'success' : 'status';
+    showStatus(summary, statusType);
+    showToast(summary, statusType);
+}
+
 async function importRegistrationExtract(event) {
     const file = event.target.files[0];
     event.target.value = '';
     if (!file) return;
     if (!db) {
         showStatus('Create or load a database first.', 'error');
+        return;
+    }
+    if (typeof hasStudyIdIntegrityIssue === 'function' && hasStudyIdIntegrityIssue()) {
+        const message = getStudyIdIntegrityBlockingMessage();
+        showStatus(message, 'error');
+        showRecordWarning(message, 'error');
         return;
     }
     if (!isAutosaveReady()) {
@@ -1062,12 +1248,21 @@ async function importRegistrationExtract(event) {
     ingestRegistrationRows(rows);
 }
 
+function buildScientificHcnImportNote(rawHealthCard = '') {
+    const sample = String(rawHealthCard || '').trim();
+    if (!sample) {
+        return 'HCN import warning: value appears to be scientific notation. Verify the original full HCN from source records.';
+    }
+    return `HCN import warning: value appears to be scientific notation (${sample}). Verify the original full HCN from source records.`;
+}
+
 function ingestRegistrationRows(rows) {
     if (!Array.isArray(rows) || rows.length === 0) {
         showStatus('CSV did not contain any usable patient rows.', 'error');
         return;
     }
     if (!db) return;
+    let inTransaction = false;
     const existingMrns = new Set();
     const existingHcns = new Set();
     try {
@@ -1087,6 +1282,7 @@ function ingestRegistrationRows(rows) {
     const seenMrns = new Set(existingMrns);
     const seenHcns = new Set(existingHcns);
     const duplicates = [];
+    const scientificNotationHcns = [];
     const missingMrnSeed = getTorontoNowTimestamp();
     let missingMrnCounter = 0;
     const nextMissingMrn = () => {
@@ -1115,16 +1311,20 @@ const stmt = db.prepare(`
     const importUsername = getCurrentUsername();
     const importTimestamp = getSqlTimestamp();
     let imported = 0;
-    rows.forEach(original => {
+    try {
+        db.run('BEGIN');
+        inTransaction = true;
+        rows.forEach(original => {
         if (!original) return;
         const rawMrn = (original[MRN_HEADER] || '').toString().trim();
         const patientName = getPatientNameFromRow(original);
         const locationCode = getField(original, [LOCATION_HEADER]) || '';
         const locationName = LOCATION_CODES[locationCode] || locationCode || '';
         const locationDisplay = locationCode && locationName ? `${locationCode}: ${locationName}` : locationName || locationCode;
-        const healthCard = getField(original, [LAST_HCN_HEADER, 'Latest Known HCN', HCN_HEADER]) || '';
+        const healthCard = String(getField(original, [LAST_HCN_HEADER, 'Latest Known HCN', HCN_HEADER]) || '').trim();
         const healthCardProvince = getField(original, [HCN_PROVINCE_HEADER]) || '';
-        const normalizedHealthCard = normalizeHealthCardValue(healthCard);
+        const scientificNotationHcn = isScientificNotationNumericText(healthCard);
+        const normalizedHealthCard = scientificNotationHcn ? '' : normalizeHealthCardValue(healthCard);
         let duplicateReason = '';
         if (rawMrn && seenMrns.has(rawMrn)) {
             duplicateReason = 'MRN';
@@ -1137,6 +1337,13 @@ const stmt = db.prepare(`
         }
         const mrn = rawMrn || nextMissingMrn();
         const province = healthCardProvince;
+        const hcnValidationError = normalizedHealthCard
+            ? validateHealthCardFormat(normalizedHealthCard, province || '')
+            : '';
+        const hcnImportNote = scientificNotationHcn ? buildScientificHcnImportNote(healthCard) : '';
+        if (scientificNotationHcn) {
+            scientificNotationHcns.push({ mrn, healthCard });
+        }
         let modalityCode = getField(original, [MODALITY_HEADER, 'Current Modality', 'Latest Modality']) || '';
         if (!VALID_MODALITY_CODES.includes(modalityCode) && DISPLAY_TO_PREFERRED_CODE[modalityCode]) {
             modalityCode = DISPLAY_TO_PREFERRED_CODE[modalityCode];
@@ -1160,7 +1367,7 @@ const stmt = db.prepare(`
             computeInclusionAge(age, hasDiabetes),
             startIsoValid ? meetsDialysisDays(startIsoValid) : 0,
             hasValidModality ? 1 : 0,
-            normalizedHealthCard ? 1 : 0
+            (normalizedHealthCard && !hcnValidationError) ? 1 : 0
         ];
         const exclusionValues = EXCLUSION_KEYS.map(() => 0);
         const values = [
@@ -1181,7 +1388,7 @@ const stmt = db.prepare(`
             0,                                 // randomized
             '',                                // allocation
             '',                                // study_id
-            '',                                // notes
+            hcnImportNote,                     // notes
             'pending',                         // enrollment_status
             0,                                 // therapy_prescribed
             0,                                 // did_not_opt_out
@@ -1213,6 +1420,10 @@ const stmt = db.prepare(`
     } else {
         statusMessage = 'No new patients imported.';
     }
+    if (scientificNotationHcns.length) {
+        statusMessage += ` Flagged ${scientificNotationHcns.length} HCN value${scientificNotationHcns.length === 1 ? '' : 's'} that appear to be scientific notation.`;
+    }
+    const warningMessages = [];
     if (duplicates.length) {
         statusMessage += ` Skipped ${duplicates.length} duplicate${duplicates.length === 1 ? '' : 's'}.`;
         const sample = duplicates.slice(0, 5).map(entry => {
@@ -1222,13 +1433,26 @@ const stmt = db.prepare(`
             return entry.healthCard ? `HCN ${entry.healthCard}` : `MRN ${entry.mrn}`;
         });
         const more = duplicates.length > sample.length ? '…' : '';
-        showRecordWarning(`Skipped duplicate imports (${duplicates.length}): ${sample.join(', ')}${more}`, 'error');
+        warningMessages.push(`Skipped duplicate imports (${duplicates.length}): ${sample.join(', ')}${more}`);
+    }
+    if (scientificNotationHcns.length) {
+        const samples = scientificNotationHcns.slice(0, 5).map(entry => {
+            const mrnLabel = entry.mrn ? `MRN ${entry.mrn}` : 'MRN missing';
+            const hcnLabel = entry.healthCard ? ` (${entry.healthCard})` : '';
+            return `${mrnLabel}${hcnLabel}`;
+        });
+        const more = scientificNotationHcns.length > samples.length ? '…' : '';
+        warningMessages.push(`Flagged HCN values in scientific notation (${scientificNotationHcns.length}): ${samples.join(', ')}${more}`);
+    }
+    if (warningMessages.length) {
+        showRecordWarning(warningMessages.join(' '), 'error');
     } else {
         showRecordWarning('');
     }
     logAuditEvent('patients_imported', {
         imported,
-        duplicates: duplicates.length
+        duplicates: duplicates.length,
+        scientific_hcn_flagged: scientificNotationHcns.length
     }, {
         targetType: 'patient',
         targetId: ''

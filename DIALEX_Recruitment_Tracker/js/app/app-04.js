@@ -310,6 +310,16 @@ function buildPatientSummaryRow(patient, isExpanded) {
     const dialysisUnitCanonical = getDialysisUnitCanonical(patient);
     const dialysisUnitOptions = buildLocationOptionsHtml(dialysisUnitCanonical);
     const provinceOptions = buildProvinceOptions(patient.health_card_province || '');
+    const hcnProvince = normalizeProvinceCode(patient.health_card_province || inferProvinceFromHealthCard(patient.health_card || ''));
+    const hcnScientificNotation = patient.health_card ? isScientificNotationNumericText(patient.health_card) : false;
+    const hcnFormatError = patient.health_card ? validateHealthCardFormat(patient.health_card, hcnProvince || '') : '';
+    const hcnLabelText = hcnScientificNotation ? 'HCN (FIX REQUIRED)' : (hcnFormatError ? 'HCN (review)' : 'HCN');
+    const hcnLabelTitle = hcnFormatError ? ` title="${escapeHtml(hcnFormatError)}"` : '';
+    const hcnFieldClass = hcnScientificNotation ? 'hcn-critical-warning' : (hcnFormatError ? 'hcn-review-warning' : '');
+    const hcnWarningBanner = hcnScientificNotation
+        ? `<div class="hcn-critical-banner">POSSIBLE EXCEL CORRUPTION: THIS HCN IS IN SCIENTIFIC NOTATION. REPLACE WITH FULL DIGITS FROM SOURCE RECORD.</div>`
+        : '';
+    const copyHcnDisabled = (!patient.health_card || hcnScientificNotation) ? 'disabled' : '';
     const statusBadge = getStatusBadgeHtml(patient);
     const expandedClass = isExpanded ? 'expanded' : '';
     const displayMrn = getDisplayMrnValue(patient.mrn);
@@ -337,12 +347,13 @@ function buildPatientSummaryRow(patient, isExpanded) {
                         <button class="copy-btn-mini" ${displayMrn ? '' : 'disabled'} onclick="copyPatientField(${patient._index}, 'mrn')">Copy</button>
                     </div>
                 </div>
-                <div class="compact-field compact-hcn" data-field="health_card">
-                    <label>HCN</label>
+                <div class="compact-field compact-hcn ${hcnFieldClass}" data-field="health_card">
+                    <label${hcnLabelTitle}>${hcnLabelText}</label>
                     <div class="input-with-copy">
-                        <input type="text" class="table-input" placeholder="HCN" value="${escapeHtml(patient.health_card || '')}" ${isLocked ? 'disabled' : ''} onchange="updatePatientHcn(${patient._index}, this.value)">
-                        <button class="copy-btn-mini" ${patient.health_card ? '' : 'disabled'} onclick="copyPatientField(${patient._index}, 'health_card')">Copy</button>
+                        <input type="text" class="table-input ${hcnScientificNotation ? 'hcn-critical-input' : ''}" placeholder="HCN" value="${escapeHtml(patient.health_card || '')}" ${isLocked ? 'disabled' : ''} onchange="updatePatientHcn(${patient._index}, this.value)">
+                        <button class="copy-btn-mini" ${copyHcnDisabled} onclick="copyPatientField(${patient._index}, 'health_card')">Copy</button>
                     </div>
+                    ${hcnWarningBanner}
                 </div>
                 <div class="compact-field compact-province" data-field="health_card_province">
                     <label>HCN Province</label>
@@ -662,7 +673,7 @@ function matchesActiveFilter(patient) {
     const flags = patient.bucketFlags || computeBucketFlags(patient);
     switch (currentFilter) {
         case 'missing': return flags.missing;
-        case 'pending': return flags.pending || (flags.missing && !flags.ineligible);
+        case 'pending': return flags.pending;
         case 'ready_notify': return flags.ready_notify;
         case 'waiting': return flags.waiting;
         case 'final_eligibility': return flags.final_eligibility;
@@ -914,6 +925,7 @@ function updateInlineNotification(index, value) {
         patient.notification_date = normalized;
     }
     if (!patient.notification_date) {
+        patient.location_at_notification = '';
         patient.opt_out_status = OPT_OUT_STATUS.PENDING;
         patient.opt_out_date = '';
         patient.did_not_opt_out = 0;
@@ -924,6 +936,8 @@ function updateInlineNotification(index, value) {
         patient.study_id = '';
         patient.therapy_prescribed = 0;
         patient.enrollment_status = (patient.noExclusions && patient.inclusionMet && patient.no_exclusions_confirmed && patient.hasHealthCard) ? 'eligible' : 'pending';
+    } else {
+        patient.location_at_notification = getCanonicalLocationValue(patient.location) || '';
     }
     persistPatient(patient, false);
     refreshPatientRow(patient);
@@ -1004,6 +1018,11 @@ function updateOptOutDate(index, value) {
     }
     if (normalized === patient.opt_out_date) {
         showRecordWarning('');
+        return;
+    }
+    if (isFutureISODateString(normalized)) {
+        showRecordWarning('Opt-out date cannot be in the future.', 'error');
+        renderPatientTable();
         return;
     }
     const notification = parseISODate(patient.notification_date);
