@@ -311,15 +311,11 @@ function buildPatientSummaryRow(patient, isExpanded) {
     const dialysisUnitOptions = buildLocationOptionsHtml(dialysisUnitCanonical);
     const provinceOptions = buildProvinceOptions(patient.health_card_province || '');
     const hcnProvince = normalizeProvinceCode(patient.health_card_province || inferProvinceFromHealthCard(patient.health_card || ''));
-    const hcnScientificNotation = patient.health_card ? isScientificNotationNumericText(patient.health_card) : false;
     const hcnFormatError = patient.health_card ? validateHealthCardFormat(patient.health_card, hcnProvince || '') : '';
-    const hcnLabelText = hcnScientificNotation ? 'HCN (FIX REQUIRED)' : (hcnFormatError ? 'HCN (review)' : 'HCN');
+    const hcnLabelText = hcnFormatError ? 'HCN (review)' : 'HCN';
     const hcnLabelTitle = hcnFormatError ? ` title="${escapeHtml(hcnFormatError)}"` : '';
-    const hcnFieldClass = hcnScientificNotation ? 'hcn-critical-warning' : (hcnFormatError ? 'hcn-review-warning' : '');
-    const hcnWarningBanner = hcnScientificNotation
-        ? `<div class="hcn-critical-banner">POSSIBLE EXCEL CORRUPTION: THIS HCN IS IN SCIENTIFIC NOTATION. REPLACE WITH FULL DIGITS FROM SOURCE RECORD.</div>`
-        : '';
-    const copyHcnDisabled = (!patient.health_card || hcnScientificNotation) ? 'disabled' : '';
+    const hcnFieldClass = hcnFormatError ? 'hcn-review-warning' : '';
+    const copyHcnDisabled = !patient.health_card ? 'disabled' : '';
     const statusBadge = getStatusBadgeHtml(patient);
     const expandedClass = isExpanded ? 'expanded' : '';
     const displayMrn = getDisplayMrnValue(patient.mrn);
@@ -350,10 +346,9 @@ function buildPatientSummaryRow(patient, isExpanded) {
                 <div class="compact-field compact-hcn ${hcnFieldClass}" data-field="health_card">
                     <label${hcnLabelTitle}>${hcnLabelText}</label>
                     <div class="input-with-copy">
-                        <input type="text" class="table-input ${hcnScientificNotation ? 'hcn-critical-input' : ''}" placeholder="HCN" value="${escapeHtml(patient.health_card || '')}" ${isLocked ? 'disabled' : ''} onchange="updatePatientHcn(${patient._index}, this.value)">
+                        <input type="text" class="table-input" placeholder="HCN" value="${escapeHtml(patient.health_card || '')}" ${isLocked ? 'disabled' : ''} onchange="updatePatientHcn(${patient._index}, this.value)">
                         <button class="copy-btn-mini" ${copyHcnDisabled} onclick="copyPatientField(${patient._index}, 'health_card')">Copy</button>
                     </div>
-                    ${hcnWarningBanner}
                 </div>
                 <div class="compact-field compact-province" data-field="health_card_province">
                     <label>HCN Province</label>

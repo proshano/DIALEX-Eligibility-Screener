@@ -1315,7 +1315,7 @@ const stmt = db.prepare(`
         db.run('BEGIN');
         inTransaction = true;
         rows.forEach(original => {
-        if (!original) return;
+            if (!original) return;
         const rawMrn = (original[MRN_HEADER] || '').toString().trim();
         const patientName = getPatientNameFromRow(original);
         const locationCode = getField(original, [LOCATION_HEADER]) || '';
@@ -1411,7 +1411,22 @@ const stmt = db.prepare(`
             console.error('Failed to import row', error);
         }
     });
-    stmt.free();
+        db.run('COMMIT');
+        inTransaction = false;
+    } catch (error) {
+        console.error('Failed to import patients', error);
+        if (inTransaction) {
+            try {
+                db.run('ROLLBACK');
+            } catch (rollbackError) {
+                console.warn('Unable to rollback patient import', rollbackError);
+            }
+        }
+        showStatus('Unable to import patients from CSV.', 'error');
+        return;
+    } finally {
+        if (stmt) stmt.free();
+    }
     refreshPatientData();
     markDatabaseChanged();
     let statusMessage;

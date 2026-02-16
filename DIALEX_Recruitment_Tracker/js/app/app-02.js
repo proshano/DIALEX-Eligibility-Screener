@@ -562,6 +562,14 @@ function updateAppAccessState() {
 
     const loadDbRow = $('workflow-load-db-row');
     if (loadDbRow) loadDbRow.classList.toggle('hidden', !hasSaveFolder);
+    const loadDbBtn = $('load-db-btn');
+    if (loadDbBtn) loadDbBtn.disabled = hasDb;
+    const loadDbNote = $('workflow-load-db-note');
+    if (loadDbNote) {
+        loadDbNote.textContent = hasDb
+            ? 'Database loaded. To load a different database, close and reopen the app.'
+            : 'Click "Load database" and open the encrypted recruitment database for your site.';
+    }
     const patientDataCard = $('patient-data-card');
     if (patientDataCard) patientDataCard.classList.toggle('hidden', !hasSaveFolder || !hasDb);
 

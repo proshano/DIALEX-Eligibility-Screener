@@ -1445,9 +1445,6 @@ function validateHealthCardFormat(hcn, province) {
     if (/^K[0-9]{7}$/.test(normalized)) {
         return 'Veterans Affairs (VAC) health card numbers are not eligible.';
     }
-    if (/^[A-Z]{4}[0-9]{8}$/.test(normalized)) {
-        return 'Quebec health card numbers are not eligible.';
-    }
     if (provinceCode && !isProvinceTerritoryCode(provinceCode)) {
         return 'Province of Healthcard No. must be blank or a valid province/territory code.';
     }
@@ -1503,7 +1500,7 @@ function validateHealthCardFormat(hcn, province) {
             }
             break;
         case 'QC':
-            return 'Quebec health card numbers are not eligible.';
+            break;
         default:
             return 'Select a valid province/territory to validate HCN.';
     }
