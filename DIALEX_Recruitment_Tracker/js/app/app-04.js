@@ -72,11 +72,19 @@ function computeBucketFlags(patient = {}) {
     const hasConfirmedNoExclusions = Boolean(patient.no_exclusions_confirmed);
     const meetsEligibility = patient.inclusionMet && !hasAnyExclusion && hasConfirmedNoExclusions;
 
+    const unitCode = hasDialysisUnit ? normalizeUnitCode(getLocationCodeFromValue(locationValue)) : '';
+    const unitHasStudyIds = !unitCode || (Array.isArray(availableUnitCodes) && availableUnitCodes.map(normalizeUnitCode).indexOf(unitCode) >= 0);
+    flags.noStudyIdsForUnit = !unitHasStudyIds && Boolean(unitCode);
+
     if (notMissingOrIneligible) {
         if (!hasNotification) {
             if (patient.inclusionMet && !hasAnyExclusion) {
                 if (hasConfirmedNoExclusions) {
-                    flags.ready_notify = true;
+                    if (unitHasStudyIds) {
+                        flags.ready_notify = true;
+                    } else {
+                        flags.pending = true;
+                    }
                 } else {
                     flags.pending = true;
                 }
@@ -220,6 +228,11 @@ function getStatusBadgeHtml(patient) {
     const primary = statusLabels[rawPrimary] ? rawPrimary : 'all';
     let label = statusLabels[primary] || 'All';
     const statusClass = `status-${primary.replace(/_/g, '-')}`;
+
+    // Add study ID availability warning
+    if (flags.noStudyIdsForUnit) {
+        label += ' — no Study IDs for unit';
+    }
 
     // Add allocation info for randomized patients
     if ((primary === 'randomized_np' || primary === 'randomized_rx') && patient.allocation) {
@@ -937,6 +950,11 @@ function updateInlineNotification(index, value) {
     persistPatient(patient, false);
     refreshPatientRow(patient);
     if (patient.notification_date) {
+        const patientFlags = computeBucketFlags(patient);
+        if (patientFlags.noStudyIdsForUnit) {
+            showRecordWarning('No Study IDs loaded for this unit. Patient cannot be randomized until Study IDs are imported.', 'status');
+            return;
+        }
         const notification = parseISODate(patient.notification_date);
         if (notification && isDateOlderThanDays(notification, NOTIFICATION_WARNING_DAYS)) {
             showRecordWarning(`Check notification date: more than ${NOTIFICATION_WARNING_DAYS} days ago.`, 'status');

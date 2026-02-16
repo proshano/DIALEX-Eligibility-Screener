@@ -1019,9 +1019,16 @@ function getPatientUnitCode(patient = {}) {
 
 function matchesUnitFilter(patient) {
     if (!patient) return false;
-    if (!isUnitFilterActive()) return true;
+    if (!db) return true;
     const code = getPatientUnitCode(patient);
-    return code && recruitingUnitCodeSet.has(code);
+    if (!code) return false;
+    if (isUnitFilterActive()) {
+        return recruitingUnitCodeSet.has(code);
+    }
+    if (availableUnitCodes.length) {
+        return availableUnitCodes.map(normalizeUnitCode).indexOf(code) >= 0;
+    }
+    return true;
 }
 
 function getPatientRandomizationCode(patient = {}) {

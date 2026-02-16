@@ -10,12 +10,25 @@ This repository contains a self-contained, offline, browser-based screening tool
 - **Stability over novelty:** Minimize changes that alter behavior; preserve existing flows unless a change is requested.
 - **Non-technical users:** Assume end users are healthcare or health research staff with limited technical comfort. If a workflow should be avoided, remove or restrict the option rather than relying on instructions.
 
+## Repository Structure
+- `DIALEX_Recruitment_Tracker/` — The main recruitment tracker app (single HTML entry point with modular JS/CSS)
+  - `DIALEX Recruitment Tracker App.html` — Entry point
+  - `js/app/app-01.js` — Constants, configuration, save folder management
+  - `js/app/app-02.js` — User management, authentication, autosave
+  - `js/app/app-03.js` — Database setup, schema migration, patient loading, HCN validation, Study ID integrity
+  - `js/app/app-04.js` — Patient table rendering, bucket flags, filter matching, UI handlers
+  - `js/app/app-05.js` — Patient field persistence, Study ID assignment, CSV import
+  - `js/app/app-06.js` — Date utilities, CSV parsing, location/unit management, recruiting unit filter
+  - `js/app/app-boot.js` — DOM event listeners, initialization
+  - `css/` — Stylesheets split by concern
+- `DIALEX_Site_Recruitment_Setup/` — Setup app for creating site databases
+
 ## Implementation Guidelines
-- Keep functionality in the standalone HTML file unless asked to split files.
 - Use plain HTML/CSS/JS (vanilla). Avoid frameworks and tooling that require internet access.
 - Do not introduce telemetry, analytics, or external tracking.
-- Store any needed data locally (e.g., in the HTML/JS) and avoid APIs.
-- Ensure compatibility with common hospital browser setups (avoid bleeding-edge features).
+- Store any needed data locally and avoid APIs. SQLite via sql.js runs in-browser with AES-GCM encryption.
+- Ensure compatibility with Chrome and Edge (File System Access API required for autosave).
+- JS files are loaded via script tags in order; all share the global scope.
 
 ## Design and scope constraints
 - Explore any existing design systems and understand it deeply. 

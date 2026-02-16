@@ -24,7 +24,30 @@ initSqlJs().then(function(SQL_) {
 
 $('create-db-btn').addEventListener('click', createNewDatabase);
 $('save-db-btn').addEventListener('click', saveDatabase);
-$('load-db-btn').addEventListener('click', () => $('load-db-file').click());
+$('load-db-btn').addEventListener('click', async () => {
+    if (typeof window.showOpenFilePicker === 'function') {
+        try {
+            const options = {
+                types: [{ description: 'Encrypted database', accept: { 'application/octet-stream': ['.enc', '.db'] } }],
+                multiple: false
+            };
+            if (saveDirectoryHandle) {
+                options.startIn = saveDirectoryHandle;
+            }
+            const [fileHandle] = await window.showOpenFilePicker(options);
+            const file = await fileHandle.getFile();
+            const fakeEvent = { target: { files: [file], value: '' } };
+            await loadDatabase(fakeEvent);
+        } catch (error) {
+            if (error && error.name !== 'AbortError') {
+                console.error('Unable to open file picker', error);
+                showStatus('Unable to open file picker.', 'error');
+            }
+        }
+    } else {
+        $('load-db-file').click();
+    }
+});
 $('load-db-file').addEventListener('change', loadDatabase);
 const manageUsersBtn = $('manage-users-btn');
 if (manageUsersBtn) {
