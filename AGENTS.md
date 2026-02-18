@@ -52,6 +52,13 @@ This repository contains a self-contained, offline, browser-based screening tool
 - Changes must be easy to audit: small, focused edits and clear variable/function names.
 - If a change adds risk or assumes network availability, call it out and propose an offline alternative.
 
+## Recruitment Tracker Rules
+- In `DIALEX_Recruitment_Tracker`, marking a patient as randomized should automatically lock the record.
+- For randomized patients, eligibility and recruitment fields are admin-editable only; non-admins must not be able to modify those fields even if the record is unlocked.
+- Allocation and prescribed status remain editable after unlock, including for non-admin users.
+- Unlocking any patient record requires re-authentication of the currently signed-in user.
+- Recruitment summary export should remain lightweight (CSV), start with notified patients, and report count/percent of notified for: in opt-out period, opt-out period ended with opt-out status not documented, opted out, did not opt-out but deemed ineligible after notification, did not opt out and waiting to be randomized, randomized not yet prescribed, randomized and prescribed.
+
 ## Testing Expectations
 - Prefer manual test steps that work offline (e.g., open `DIALEX_Screener_Standalone.html` in a browser and verify flows).
 - Do not require installing tooling or packages to validate changes unless explicitly requested.

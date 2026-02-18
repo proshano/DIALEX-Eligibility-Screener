@@ -587,6 +587,8 @@ function updateAppAccessState() {
     if (registrationFileName) registrationFileName.classList.toggle('disabled', !canEdit);
     const unitFilterBtn = $('unit-filter-btn');
     if (unitFilterBtn) unitFilterBtn.disabled = !canEdit;
+    const exportSummaryBtn = $('export-recruitment-summary-btn');
+    if (exportSummaryBtn) exportSummaryBtn.disabled = !canEdit;
 
     const manageUsersBtn = $('manage-users-btn');
     if (manageUsersBtn) {

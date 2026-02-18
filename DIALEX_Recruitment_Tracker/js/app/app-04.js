@@ -74,7 +74,8 @@ function computeBucketFlags(patient = {}) {
 
     const unitCode = hasDialysisUnit ? normalizeUnitCode(getLocationCodeFromValue(locationValue)) : '';
     const unitHasStudyIds = !unitCode || (Array.isArray(availableUnitCodes) && availableUnitCodes.map(normalizeUnitCode).indexOf(unitCode) >= 0);
-    flags.noStudyIdsForUnit = !unitHasStudyIds && Boolean(unitCode);
+    const noStudyIdsForUnit = !unitHasStudyIds && Boolean(unitCode);
+    flags.noStudyIdsForUnit = noStudyIdsForUnit;
 
     if (notMissingOrIneligible) {
         if (!hasNotification) {
@@ -100,6 +101,16 @@ function computeBucketFlags(patient = {}) {
                 flags.final_eligibility = true;
             }
         }
+    }
+
+    if (noStudyIdsForUnit && !hasRandomization && !isOptedOutStatus) {
+        flags.ready_notify = false;
+        flags.waiting = false;
+        flags.final_eligibility = false;
+        flags.ready_randomize = false;
+        flags.pending = false;
+        flags.missing = false;
+        flags.ineligible = true;
     }
 
     flags.randomized_rx = hasRandomization && Boolean(patient.therapy_prescribed);
@@ -317,6 +328,8 @@ function buildPatientSummaryRow(patient, isExpanded) {
     row.dataset.mrn = patient.mrn || '';
 
     const isLocked = !!patient.locked_at;
+    const isRandomized = !!patient.randomized;
+    const eligibilityLocked = isLocked || (isRandomized && !isAdminUser());
     const ageValue = Number.isFinite(patient.age) ? patient.age : '';
     const diabetesStatus = normalizeDiabetesStatus(patient.diabetes_known);
     const needsDiabetesStatus = Number.isFinite(patient.age) && patient.age >= 45 && patient.age < 60;
@@ -343,35 +356,35 @@ function buildPatientSummaryRow(patient, isExpanded) {
                 </div>
                 <div class="compact-field compact-name">
                     <label>Name</label>
-                    <input type="text" class="table-input" placeholder="Patient name" value="${escapeHtml(patient.patient_name || '')}" ${isLocked ? 'disabled' : ''} onchange="updatePatientName(${patient._index}, this.value)">
+                    <input type="text" class="table-input" placeholder="Patient name" value="${escapeHtml(patient.patient_name || '')}" ${eligibilityLocked ? 'disabled' : ''} onchange="updatePatientName(${patient._index}, this.value)">
                 </div>
                 <div class="compact-field compact-age" data-field="age">
                     <label>Age</label>
-                    <input type="text" class="table-input" placeholder="Age" value="${ageValue}" inputmode="numeric" autocomplete="off" spellcheck="false" ${isLocked ? 'disabled' : ''} onblur="updatePatientAge(${patient._index}, this.value)">
+                    <input type="text" class="table-input" placeholder="Age" value="${ageValue}" inputmode="numeric" autocomplete="off" spellcheck="false" ${eligibilityLocked ? 'disabled' : ''} onblur="updatePatientAge(${patient._index}, this.value)">
                 </div>
                 <div class="compact-field compact-mrn">
                     <label>MRN</label>
                     <div class="input-with-copy">
-                        <input type="text" class="table-input" placeholder="MRN" value="${escapeHtml(displayMrn)}" ${isLocked ? 'disabled' : ''} onchange="updatePatientMrn(${patient._index}, this.value)">
+                        <input type="text" class="table-input" placeholder="MRN" value="${escapeHtml(displayMrn)}" ${eligibilityLocked ? 'disabled' : ''} onchange="updatePatientMrn(${patient._index}, this.value)">
                         <button class="copy-btn-mini" ${displayMrn ? '' : 'disabled'} onclick="copyPatientField(${patient._index}, 'mrn')">Copy</button>
                     </div>
                 </div>
                 <div class="compact-field compact-hcn ${hcnFieldClass}" data-field="health_card">
                     <label${hcnLabelTitle}>${hcnLabelText}</label>
                     <div class="input-with-copy">
-                        <input type="text" class="table-input" placeholder="HCN" value="${escapeHtml(patient.health_card || '')}" ${isLocked ? 'disabled' : ''} onchange="updatePatientHcn(${patient._index}, this.value)">
+                        <input type="text" class="table-input" placeholder="HCN" value="${escapeHtml(patient.health_card || '')}" ${eligibilityLocked ? 'disabled' : ''} onchange="updatePatientHcn(${patient._index}, this.value)">
                         <button class="copy-btn-mini" ${copyHcnDisabled} onclick="copyPatientField(${patient._index}, 'health_card')">Copy</button>
                     </div>
                 </div>
                 <div class="compact-field compact-province" data-field="health_card_province">
                     <label>HCN Province</label>
-                    <select class="table-input" ${isLocked ? 'disabled' : ''} onchange="updateHealthCardProvince(${patient._index}, this.value)">
+                    <select class="table-input" ${eligibilityLocked ? 'disabled' : ''} onchange="updateHealthCardProvince(${patient._index}, this.value)">
                         ${provinceOptions}
                     </select>
                 </div>
                 <div class="compact-field compact-dialysis" data-field="dialysis_unit">
                     <label>Dialysis Unit</label>
-                    <select class="table-input" ${isLocked ? 'disabled' : ''} onchange="updateDialysisUnit(${patient._index}, this.value)">
+                    <select class="table-input" ${eligibilityLocked ? 'disabled' : ''} onchange="updateDialysisUnit(${patient._index}, this.value)">
                         ${dialysisUnitOptions}
                     </select>
                 </div>
@@ -407,6 +420,7 @@ function buildPatientDetailsRow(patient) {
         : (patient.no_exclusions_confirmed ? 'check-success font-medium' : 'font-medium');
     const isRandomized = !!patient.randomized;
     const isLocked = !!patient.locked_at;
+    const eligibilityLocked = isLocked || (isRandomized && !isAdminUser());
     const ageValue = Number.isFinite(patient.age) ? patient.age : '';
     const diabetesStatus = normalizeDiabetesStatus(patient.diabetes_known);
     const needsDiabetesStatus = Number.isFinite(patient.age) && patient.age >= 45 && patient.age < 60;
@@ -423,10 +437,10 @@ function buildPatientDetailsRow(patient) {
     const eligibleWindowStarted = Boolean(patient.first_ready_date && patient.first_ready_date.getTime() <= startOfToday().getTime());
     const meetsEligibility = patient.inclusionMet && !patient.hasAnyExclusion && patient.no_exclusions_confirmed;
     const optOutSelectEnabled = hasEligibleDate || optOutStatus !== OPT_OUT_STATUS.PENDING || !!optOutDateDisplay;
-    const optOutDisabled = isLocked ? 'disabled' : (optOutSelectEnabled ? '' : 'disabled');
+    const optOutDisabled = eligibilityLocked ? 'disabled' : (optOutSelectEnabled ? '' : 'disabled');
     const optOutHelper = hasEligibleDate ? '' : '<div class="status-subtext">Calculate eligible date to enable opt-out status.</div>';
     const optOutDateVisible = optOutStatus === OPT_OUT_STATUS.OPTED_OUT;
-    const optOutDateDisabled = isLocked ? 'disabled' : (optOutDateVisible && optOutSelectEnabled ? '' : 'disabled');
+    const optOutDateDisabled = eligibilityLocked ? 'disabled' : (optOutDateVisible && optOutSelectEnabled ? '' : 'disabled');
     const optOutCopyDisabled = optOutDateDisplay && !optOutDateDisabled ? '' : 'disabled';
     const allocationValue = patient.allocation || '';
     const hasAllocation = allocationValue !== '';
@@ -445,7 +459,7 @@ function buildPatientDetailsRow(patient) {
     const notifiedCopyButton = `<button class="copy-btn" ${patient.notification_date ? '' : 'disabled'} onclick="copyPatientField(${patient._index}, 'notification_date')">Copy date</button>`;
     const dialysisConfirmControls = patient.dialysis_start_date ? '' : `
         <div class="patient-sub" data-field="dialysis_start_date" style="margin-top:4px;">
-            <button class="copy-btn" ${isLocked ? 'disabled' : ''} onclick="setDialysisDurationConfirmed(${patient._index}, ${patient.dialysis_duration_confirmed ? 0 : 1})">
+            <button class="copy-btn" ${eligibilityLocked ? 'disabled' : ''} onclick="setDialysisDurationConfirmed(${patient._index}, ${patient.dialysis_duration_confirmed ? 0 : 1})">
                 ${patient.dialysis_duration_confirmed ? 'Clear ≥90-day confirmation' : 'Confirm ≥90 days (date unknown)'}
             </button>
             ${patient.dialysis_duration_confirmed ? '<div class="status-subtext" style="margin-top:2px;">Use when exact start date is unavailable.</div>' : ''}
@@ -459,7 +473,7 @@ function buildPatientDetailsRow(patient) {
     const diabetesButton = (status, label) => {
         const isActive = diabetesStatus === status;
         return `
-            <button type="button" class="copy-btn diabetes-btn ${isActive ? 'active' : ''}" ${isLocked ? 'disabled' : ''} aria-pressed="${isActive ? 'true' : 'false'}" onclick="updateDiabetesStatus(${patient._index}, ${status})">
+            <button type="button" class="copy-btn diabetes-btn ${isActive ? 'active' : ''}" ${eligibilityLocked ? 'disabled' : ''} aria-pressed="${isActive ? 'true' : 'false'}" onclick="updateDiabetesStatus(${patient._index}, ${status})">
                 ${label}
             </button>
         `;
@@ -489,7 +503,7 @@ function buildPatientDetailsRow(patient) {
     const randomizationAllowed = canAssignStudyId && hasStudyId;
     const randomizationRowVisible = randomizationAllowed || isRandomized;
     const randomizationRowStyle = randomizationRowVisible ? '' : 'display:none;';
-    const randomizedDisabled = isLocked ? 'disabled' : (randomizationAllowed ? '' : (isRandomized ? '' : 'disabled'));
+    const randomizedDisabled = eligibilityLocked ? 'disabled' : (randomizationAllowed ? '' : (isRandomized ? '' : 'disabled'));
     let randomizationHelper = '';
     if (!randomizationRowVisible) {
         if (canAssignStudyId && !hasStudyId) {
@@ -523,7 +537,9 @@ function buildPatientDetailsRow(patient) {
     const therapyHelper = allocationRowVisible && therapyHelperMessage ? `<div class="status-subtext">${therapyHelperMessage}</div>` : '';
     const lockToggleDisabled = '';
     const lockIndicator = patient.locked_at ? `<div class="status-subtext locked-indicator">Locked ${escapeHtml(formatDisplayDateTime(patient.locked_at))}</div>` : '';
-    const lockHelper = '<div class="status-subtext">Lock prevents editing fields above; notes remain editable.</div>';
+    const lockHelper = eligibilityLocked && !isLocked
+        ? '<div class="status-subtext">Randomized record: eligibility fields are locked. Unlock allows allocation/prescription updates only unless you are an admin.</div>'
+        : '<div class="status-subtext">Lock prevents editing fields above; notes remain editable.</div>';
     const lockDisplay = lockIndicator || lockHelper;
     const isManualRecord = isManualPatientRecord(patient);
     const hasNotificationDate = Boolean(patient.notification_date);
@@ -544,11 +560,11 @@ function buildPatientDetailsRow(patient) {
                     <div class="section-label">Inclusion</div>
                     <div class="checkbox-group">
                     <label class="master-check-label">
-                        <input type="checkbox" ${patient.inclusionMet ? 'checked' : ''} ${isLocked ? 'disabled' : ''} onchange="toggleMasterInclusion(${patient._index}, this)">
+                        <input type="checkbox" ${patient.inclusionMet ? 'checked' : ''} ${eligibilityLocked ? 'disabled' : ''} onchange="toggleMasterInclusion(${patient._index}, this)">
                         <span class="${inclusionLabelClass}">All inclusion criteria met</span>
                     </label>
                     <div class="inline-criteria-list">
-                        ${INCLUSION_KEYS.map(key => renderCheckbox(patient, key, isLocked)).join('')}
+                        ${INCLUSION_KEYS.map(key => renderCheckbox(patient, key, eligibilityLocked)).join('')}
                     </div>
                     ${diabetesStatusRow}
                     <div class="date-field" data-field="dialysis_start_date" style="margin-top: 10px;">
@@ -557,7 +573,7 @@ function buildPatientDetailsRow(patient) {
                             <span class="date-display ${dialysisStartFriendly ? 'has-value' : ''}">${dialysisStartFriendlyDisplay}</span>
                         </div>
                         <div class="date-input-row">
-                            <input type="text" class="table-input inline-date" value="${dialysisStartDisplaySafe}" placeholder="DD/MM/YYYY" title="DD/MM/YYYY or YYYY-MM-DD" inputmode="numeric" autocomplete="off" spellcheck="false" data-date-entry="true" ${isLocked ? 'disabled' : ''} onblur="updateDialysisStartDate(${patient._index}, this.value)">
+                            <input type="text" class="table-input inline-date" value="${dialysisStartDisplaySafe}" placeholder="DD/MM/YYYY" title="DD/MM/YYYY or YYYY-MM-DD" inputmode="numeric" autocomplete="off" spellcheck="false" data-date-entry="true" ${eligibilityLocked ? 'disabled' : ''} onblur="updateDialysisStartDate(${patient._index}, this.value)">
                         </div>
                     </div>
                     ${dialysisConfirmControls}
@@ -567,11 +583,11 @@ function buildPatientDetailsRow(patient) {
                     <div class="section-label">Exclusion</div>
                     <div class="checkbox-group">
                         <label class="master-check-label">
-                            <input type="checkbox" ${patient.no_exclusions_confirmed ? 'checked' : ''} ${isLocked ? 'disabled' : ''} onchange="toggleMasterExclusion(${patient._index}, this)">
+                            <input type="checkbox" ${patient.no_exclusions_confirmed ? 'checked' : ''} ${eligibilityLocked ? 'disabled' : ''} onchange="toggleMasterExclusion(${patient._index}, this)">
                             <span class="${noExclusionLabelClass}">No exclusions</span>
                         </label>
                         <div class="inline-criteria-list">
-                            ${EXCLUSION_KEYS.map(key => renderCheckbox(patient, key, isLocked)).join('')}
+                            ${EXCLUSION_KEYS.map(key => renderCheckbox(patient, key, eligibilityLocked)).join('')}
                         </div>
                         ${missingMessage}
                     </div>
@@ -585,7 +601,7 @@ function buildPatientDetailsRow(patient) {
                         <span class="date-display ${notificationFriendly ? 'has-value' : ''}">${notificationFriendlyDisplay}</span>
                     </div>
                     <div class="date-input-row">
-                        <input type="text" class="table-input inline-date" value="${notificationDisplaySafe}" placeholder="DD/MM/YYYY" title="DD/MM/YYYY or YYYY-MM-DD" inputmode="numeric" autocomplete="off" spellcheck="false" data-date-entry="true" ${isLocked ? 'disabled' : ''} onblur="updateInlineNotification(${patient._index}, this.value)">
+                        <input type="text" class="table-input inline-date" value="${notificationDisplaySafe}" placeholder="DD/MM/YYYY" title="DD/MM/YYYY or YYYY-MM-DD" inputmode="numeric" autocomplete="off" spellcheck="false" data-date-entry="true" ${eligibilityLocked ? 'disabled' : ''} onblur="updateInlineNotification(${patient._index}, this.value)">
                         ${notifiedCopyButton}
                     </div>
                 </div>
@@ -613,7 +629,7 @@ function buildPatientDetailsRow(patient) {
                     </div>
                 </div>
                 <div class="inline-field-row" style="${studyRowStyle}">
-                    <button class="copy-btn" ${isLocked || hasStudyId || !canAssignStudyId ? 'disabled' : ''} onclick="assignStudyId(${patient._index})">Eligible and ready to randomize now</button>
+                    <button class="copy-btn" ${eligibilityLocked || hasStudyId || !canAssignStudyId ? 'disabled' : ''} onclick="assignStudyId(${patient._index})">Eligible and ready to randomize now</button>
                     <label class="patient-sub">Study ID:</label>
                     <span class="date-display ${studyIdValue ? 'has-value' : ''}">${escapeHtml(studyIdValue || 'Not assigned')}</span>
                     <button class="copy-btn" ${studyCopyDisabled} onclick="copyPatientField(${patient._index}, 'study_id')">Copy</button>
@@ -815,7 +831,7 @@ function labelForKey(key) {
 function toggleMasterInclusion(index, checkbox) {
     const patient = patientsData[index];
     if (!patient || !checkbox) return;
-    if (!ensureEditablePatient(patient)) return;
+    if (!ensureEligibilityEditablePatient(patient)) return;
     if (checkbox.checked) {
         const allMet = INCLUSION_KEYS.every(key => patient[key] === 1);
         if (!allMet) {
@@ -834,7 +850,7 @@ function toggleMasterInclusion(index, checkbox) {
 function toggleMasterExclusion(index, checkbox) {
     const patient = patientsData[index];
     if (!patient || !checkbox) return;
-    if (!ensureEditablePatient(patient)) {
+    if (!ensureEligibilityEditablePatient(patient)) {
         checkbox.checked = !!patient.no_exclusions_confirmed;
         return;
     }
@@ -857,7 +873,7 @@ function toggleMasterExclusion(index, checkbox) {
 function updateCriterion(index, key, checked) {
     const patient = patientsData[index];
     if (!patient) return;
-    if (!ensureEditablePatient(patient)) return;
+    if (!ensureEligibilityEditablePatient(patient)) return;
     if (INCLUSION_KEYS.includes(key)) {
         const message = INCLUSION_FIELD_MESSAGES[key] || 'Inclusion criteria are calculated from source fields.';
         showRecordWarning(message, 'error');
@@ -901,7 +917,7 @@ function updateCriterion(index, key, checked) {
 function updateInlineNotification(index, value) {
     const patient = patientsData[index];
     if (!patient) return;
-    if (!ensureEditablePatient(patient)) return;
+    if (!ensureEligibilityEditablePatient(patient)) return;
     const newDate = (value || '').trim();
     if (!newDate) {
         if (!patient.notification_date) {
@@ -967,7 +983,7 @@ function updateInlineNotification(index, value) {
 function updateOptOutStatus(index, value) {
     const patient = patientsData[index];
     if (!patient) return;
-    if (!ensureEditablePatient(patient)) return;
+    if (!ensureEligibilityEditablePatient(patient)) return;
     if (!patient.notification_date) {
         showRecordWarning('Set a notification date before updating opt-out status.', 'error');
         renderPatientTable();
@@ -1003,7 +1019,7 @@ function updateOptOutStatus(index, value) {
 function updateOptOutDate(index, value) {
     const patient = patientsData[index];
     if (!patient) return;
-    if (!ensureEditablePatient(patient)) return;
+    if (!ensureEligibilityEditablePatient(patient)) return;
     if (!patient.notification_date) {
         showRecordWarning('Set a notification date before recording opt-out date.', 'error');
         renderPatientTable();
@@ -1063,7 +1079,7 @@ function updateOptOutDate(index, value) {
 function updateDialysisUnit(index, value) {
     const patient = patientsData[index];
     if (!patient) return;
-    if (!ensureEditablePatient(patient)) return;
+    if (!ensureEligibilityEditablePatient(patient)) return;
     const canonical = getCanonicalLocationValue(value);
     if (value && value.trim() && !canonical) {
         showRecordWarning('Select a dialysis unit from the list.', 'error');

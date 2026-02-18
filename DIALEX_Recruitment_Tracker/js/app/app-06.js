@@ -1153,6 +1153,16 @@ function ensureEditablePatient(patient) {
     return true;
 }
 
+function ensureEligibilityEditablePatient(patient) {
+    if (!ensureEditablePatient(patient)) return false;
+    if (patient.randomized && !isAdminUser()) {
+        showRecordWarning('This patient has already been randomized. Only admin users can edit eligibility fields.', 'error');
+        renderPatientTable();
+        return false;
+    }
+    return true;
+}
+
 function showRecordWarning(message = '', type = 'error') {
     const el = $('record-warning');
     if (!el) return;

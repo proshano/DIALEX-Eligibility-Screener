@@ -13,7 +13,7 @@ function updatePatientName(index, value) {
 function updatePatientBirthDate(index, value) {
     const patient = patientsData[index];
     if (!patient) return;
-    if (!ensureEditablePatient(patient)) return;
+    if (!ensureEligibilityEditablePatient(patient)) return;
     const raw = (value || '').trim();
     if (!raw) {
         if (!patient.birth_date) {
@@ -79,7 +79,7 @@ function updatePatientBirthDate(index, value) {
 function updatePatientAge(index, value) {
     const patient = patientsData[index];
     if (!patient) return;
-    if (!ensureEditablePatient(patient)) return;
+    if (!ensureEligibilityEditablePatient(patient)) return;
     const raw = (value || '').trim();
     const hasStoredAge = Number.isFinite(patient.age);
     if (!raw) {
@@ -143,7 +143,7 @@ function updatePatientAge(index, value) {
 function updateDiabetesStatus(index, value) {
     const patient = patientsData[index];
     if (!patient) return;
-    if (!ensureEditablePatient(patient)) return;
+    if (!ensureEligibilityEditablePatient(patient)) return;
     const nextStatus = normalizeDiabetesStatus(value);
     if (patient.diabetes_known === nextStatus) {
         showRecordWarning('');
@@ -168,7 +168,7 @@ function updateDiabetesStatus(index, value) {
 function updatePatientMrn(index, value) {
     const patient = patientsData[index];
     if (!patient) return;
-    if (!ensureEditablePatient(patient)) return;
+    if (!ensureEligibilityEditablePatient(patient)) return;
     const trimmed = (value || '').trim();
     const previous = patient.mrn || '';
     if (!trimmed) {
@@ -219,7 +219,7 @@ function updatePatientMrn(index, value) {
 function updatePatientHcn(index, value) {
     const patient = patientsData[index];
     if (!patient) return;
-    if (!ensureEditablePatient(patient)) return;
+    if (!ensureEligibilityEditablePatient(patient)) return;
     const trimmed = (value || '').trim();
     const normalized = normalizeHealthCardValue(trimmed);
     const provinceCode = patient.health_card_province || '';
@@ -265,7 +265,7 @@ function updatePatientHcn(index, value) {
 function updateHealthCardProvince(index, value) {
     const patient = patientsData[index];
     if (!patient) return;
-    if (!ensureEditablePatient(patient)) return;
+    if (!ensureEligibilityEditablePatient(patient)) return;
     const code = (value || '').trim().toUpperCase();
     if (code && !PROVINCE_LABELS[code]) {
         showRecordWarning('Select a valid province/territory code.', 'error');
@@ -306,7 +306,7 @@ function updateInlineNotes(index, value) {
 function updateRandomizedStatus(index, value) {
     const patient = patientsData[index];
     if (!patient) return;
-    if (!ensureEditablePatient(patient)) return;
+    if (!ensureEligibilityEditablePatient(patient)) return;
     const shouldMark = String(value) === '1';
     if (!shouldMark) {
         releaseStudyId(patient.study_id);
@@ -315,6 +315,7 @@ function updateRandomizedStatus(index, value) {
         patient.therapy_prescribed = 0;
         patient.allocation = '';
         patient.study_id = '';
+        patient.locked_at = '';
         showRecordWarning('');
         persistPatient(patient, false);
         refreshPatientRow(patient);
@@ -363,6 +364,7 @@ function updateRandomizedStatus(index, value) {
     }
     patient.randomized = 1;
     patient.enrollment_status = 'enrolled';
+    patient.locked_at = getTorontoNow().toISOString();
     if (!normalizeLocationValue(patient.location_at_randomization)) {
         patient.location_at_randomization = getCanonicalLocationValue(patient.location);
     }
@@ -374,7 +376,7 @@ function updateRandomizedStatus(index, value) {
 function updateDialysisStartDate(index, value) {
     const patient = patientsData[index];
     if (!patient) return;
-    if (!ensureEditablePatient(patient)) return;
+    if (!ensureEligibilityEditablePatient(patient)) return;
     const raw = (value || '').trim();
     if (!raw) {
         if (!patient.dialysis_start_date) {
@@ -427,7 +429,7 @@ function updateDialysisStartDate(index, value) {
 function setDialysisDurationConfirmed(index, flag) {
     const patient = patientsData[index];
     if (!patient) return;
-    if (!ensureEditablePatient(patient)) return;
+    if (!ensureEligibilityEditablePatient(patient)) return;
     if (patient.dialysis_start_date) return;
     patient.dialysis_duration_confirmed = flag ? 1 : 0;
     recalcDialysisInclusion(patient);
@@ -666,7 +668,37 @@ function releaseStudyId(studyId) {
 
 function toggleDialysisDurationConfirmed() {}
 
-function toggleRecordLocked(index, checked) {
+async function reauthenticateCurrentUser(actionLabel = 'continue') {
+    if (!db || !currentUser || !currentUser.username) {
+        showStatus('Sign in to continue.', 'error');
+        return false;
+    }
+    const normalized = normalizeUsername(currentUser.username);
+    const userRecord = fetchUserByUsername(normalized);
+    if (!userRecord || !Number(userRecord.active)) {
+        showStatus('Your account is unavailable. Sign in again.', 'error');
+        return false;
+    }
+    const password = await promptPasswordModal({
+        title: 'Confirm your credentials',
+        message: `Enter your password to ${actionLabel}.`,
+        requireConfirmation: false,
+        submitLabel: 'Confirm',
+        autocomplete: 'current-password'
+    });
+    if (!password) {
+        showStatus('Action canceled.', 'status');
+        return false;
+    }
+    const valid = await verifyPassword(password, userRecord.password_salt, userRecord.password_hash);
+    if (!valid) {
+        showStatus('Incorrect password.', 'error');
+        return false;
+    }
+    return true;
+}
+
+async function toggleRecordLocked(index, checked) {
     const patient = patientsData[index];
     if (!patient) return;
     if (typeof hasStudyIdIntegrityIssue === 'function' && hasStudyIdIntegrityIssue()) {
@@ -679,8 +711,17 @@ function toggleRecordLocked(index, checked) {
         patient.locked_at = getTorontoNow().toISOString();
         showStatus('Record locked. Only notes remain editable.', 'success');
     } else {
+        const canUnlock = await reauthenticateCurrentUser('unlock this record');
+        if (!canUnlock) {
+            renderPatientTable();
+            return;
+        }
         patient.locked_at = '';
-        showStatus('Record unlocked.', 'status');
+        if (patient.randomized && !isAdminUser()) {
+            showStatus('Record unlocked for allocation/prescription updates. Eligibility edits still require admin access.', 'status');
+        } else {
+            showStatus('Record unlocked.', 'status');
+        }
     }
     persistPatient(patient, false);
     refreshPatientRow(patient);
@@ -1254,6 +1295,113 @@ function buildScientificHcnImportNote(rawHealthCard = '') {
         return 'HCN import warning: value appears to be scientific notation. Verify the original full HCN from source records.';
     }
     return `HCN import warning: value appears to be scientific notation (${sample}). Verify the original full HCN from source records.`;
+}
+
+function formatPercent(part, total) {
+    if (!Number.isFinite(total) || total <= 0) return '0.00%';
+    const ratio = (part / total) * 100;
+    return `${ratio.toFixed(2)}%`;
+}
+
+function buildRecruitmentSummaryRows() {
+    const notifiedDenominator = patientsData.reduce((count, patient) => {
+        if (!patient) return count;
+        return patient.notification_date ? count + 1 : count;
+    }, 0);
+    const today = startOfToday();
+    let inOptOutPeriod = 0;
+    let optOutPeriodEndedNoStatus = 0;
+    let notified = 0;
+    let optedOut = 0;
+    let ineligibleAfterNotified = 0;
+    let waitingToBeRandomized = 0;
+    let randomizedNotPrescribed = 0;
+    let randomizedAndPrescribed = 0;
+
+    patientsData.forEach(patient => {
+        if (!patient) return;
+        const hasNotification = Boolean(patient.notification_date);
+        if (!hasNotification) return;
+
+        const flags = patient.bucketFlags || computeBucketFlags(patient);
+        const optOutStatus = patient.opt_out_status || OPT_OUT_STATUS.PENDING;
+        const hasRandomization = Boolean(patient.randomized);
+        const isOptedOut = optOutStatus === OPT_OUT_STATUS.OPTED_OUT;
+        const isPrescribed = Boolean(patient.therapy_prescribed);
+        const notificationDate = parseISODate(patient.notification_date);
+        const optOutEndDate = notificationDate ? addDays(notificationDate, NOTIFICATION_BUFFER_DAYS) : null;
+        const optOutWindowComplete = Boolean(optOutEndDate && optOutEndDate.getTime() <= today.getTime());
+
+        notified += 1;
+        if (hasRandomization) {
+            if (isPrescribed) {
+                randomizedAndPrescribed += 1;
+            } else {
+                randomizedNotPrescribed += 1;
+            }
+            return;
+        }
+        if (isOptedOut) {
+            optedOut += 1;
+            return;
+        }
+        if (flags.ineligible) {
+            ineligibleAfterNotified += 1;
+            return;
+        }
+        if (!optOutWindowComplete) {
+            inOptOutPeriod += 1;
+            return;
+        }
+        if (optOutStatus === OPT_OUT_STATUS.PENDING) {
+            optOutPeriodEndedNoStatus += 1;
+            return;
+        }
+        if (optOutStatus === OPT_OUT_STATUS.DID_NOT) {
+            waitingToBeRandomized += 1;
+            return;
+        }
+        optOutPeriodEndedNoStatus += 1;
+    });
+
+    return [
+        ['Recruitment State', 'Count', 'Percent of notified'],
+        ['Notified patients', String(notified), notifiedDenominator > 0 ? '100.00%' : '0.00%'],
+        ['In opt-out period', String(inOptOutPeriod), formatPercent(inOptOutPeriod, notifiedDenominator)],
+        ['Opt-out period ended, opt-out status not documented', String(optOutPeriodEndedNoStatus), formatPercent(optOutPeriodEndedNoStatus, notifiedDenominator)],
+        ['Opted out', String(optedOut), formatPercent(optedOut, notifiedDenominator)],
+        ['Did not opt-out, but deemed ineligible for another reason after notification', String(ineligibleAfterNotified), formatPercent(ineligibleAfterNotified, notifiedDenominator)],
+        ['Did not opt out, waiting to be randomized', String(waitingToBeRandomized), formatPercent(waitingToBeRandomized, notifiedDenominator)],
+        ['Randomized, not yet prescribed', String(randomizedNotPrescribed), formatPercent(randomizedNotPrescribed, notifiedDenominator)],
+        ['Randomized and prescribed', String(randomizedAndPrescribed), formatPercent(randomizedAndPrescribed, notifiedDenominator)]
+    ];
+}
+
+function csvEscape(value) {
+    const raw = value === null || value === undefined ? '' : String(value);
+    if (/[,"\n\r]/.test(raw)) {
+        return `"${raw.replace(/"/g, '""')}"`;
+    }
+    return raw;
+}
+
+function convertRowsToCsv(rows) {
+    return rows
+        .map(row => row.map(csvEscape).join(','))
+        .join('\n');
+}
+
+function exportRecruitmentSummaryCsv() {
+    if (!db || !currentUser) {
+        showStatus('Load and unlock a database first.', 'error');
+        return;
+    }
+    const rows = buildRecruitmentSummaryRows();
+    const csv = convertRowsToCsv(rows);
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    const filename = `dialex-recruitment-summary-${formatTimestampForFilename()}.csv`;
+    triggerBrowserDownload(blob, filename);
+    showStatus('Recruitment summary exported.', 'success');
 }
 
 function ingestRegistrationRows(rows) {

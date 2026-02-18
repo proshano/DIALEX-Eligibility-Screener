@@ -76,6 +76,10 @@ $('add-patient-btn').addEventListener('click', promptNewPatient);
 $('save-all-btn').addEventListener('click', async () => {
     await saveDatabase();
 });
+const exportRecruitmentSummaryBtn = $('export-recruitment-summary-btn');
+if (exportRecruitmentSummaryBtn) {
+    exportRecruitmentSummaryBtn.addEventListener('click', exportRecruitmentSummaryCsv);
+}
 $('search-input').addEventListener('input', event => {
     currentSearchTerm = event.target.value.trim().toLowerCase();
     renderPatientTable();

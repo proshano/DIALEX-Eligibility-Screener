@@ -774,7 +774,7 @@ function updateSaveFolderStatus() {
     } else if (saveDirectoryHandle && saveDirectoryReady) {
         message = saveDirectoryHandle.name || 'Selected folder';
     } else if (saveDirectoryHandle) {
-        message = 'Permission needed';
+        message = 'Not selected';
     }
     if (statusEl) {
         statusEl.textContent = message;

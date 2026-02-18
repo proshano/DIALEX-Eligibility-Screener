@@ -445,9 +445,9 @@ body.browser-warning-active footer {
     width: 100%;
 }
 .manual-entry .manual-title {
-    font-size: 14px;
+    font-size: 16px;
     font-weight: 600;
-    color: var(--muted);
+    color: var(--text);
     margin-bottom: 6px;
 }
 .manual-entry .manual-note {

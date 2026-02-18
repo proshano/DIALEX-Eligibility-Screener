@@ -46,9 +46,9 @@
     <div class="container">
     <div id="toast-root" class="toast-container" aria-live="polite" aria-atomic="true"></div>
         <div class="header">
-            <h1>DIALEX eligibility, notification, and randomization tracker</h1>
+            <h1>DIALEX Recruitment Tracker</h1>
             <div class="meta-row">
-                <div class="meta-pill version-pill" aria-label="Version date">Version: Feb 16 2026</div>
+                <div class="meta-pill version-pill" aria-label="Version date">Version: Feb 18 2026</div>
                 <div class="meta-pill owner-pill" aria-label="Ownership">Copyright 2026 DIALEX trial project office</div>
                 <button id="theme-toggle" class="meta-pill theme-toggle" onclick="toggleTheme()" aria-pressed="true" type="button">Dark theme</button>
             </div>
@@ -185,7 +185,7 @@
                         <div id="workflow-save-folder-row" class="workflow-row">
                             <div class="workflow-row-head">
                                 <div class="workflow-row-info">
-                                    <div class="workflow-row-title">1. Set save folder</div>
+                                    <div class="workflow-row-title">1. Set a folder for saving the recruitment database</div>
                                     <div class="workflow-row-note">Current folder: <span id="save-folder-inline" class="workflow-row-status">Browser default</span></div>
                                 </div>
                                 <div class="workflow-row-actions">
@@ -241,6 +241,11 @@
                                 <button id="add-patient-btn" class="secondary" disabled>Add individual patient</button>
                                 <div class="manual-note">Use this only when you cannot import an ORRS extract.</div>
                             </div>
+                        </div>
+                        <div class="workflow-row manual-entry" id="workflow-export-summary-row">
+                            <div class="manual-title">Recruitment summary</div>
+                            <button id="export-recruitment-summary-btn" class="secondary" disabled>Export recruitment summary (.csv)</button>
+                            <div class="manual-note">Exports counts and percentages for key recruitment outcomes.</div>
                         </div>
                     </div>
                 </div>
