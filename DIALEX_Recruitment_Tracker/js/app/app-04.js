@@ -522,10 +522,10 @@ function buildPatientDetailsRow(patient) {
         : '';
     const allocationRowVisible = isRandomized && (hasStudyId || hasAllocation || patient.therapy_prescribed);
     const allocationRowStyle = allocationRowVisible ? '' : 'display:none;';
-    const allocationDisabled = isLocked ? 'disabled' : ((isRandomized && hasStudyId) ? '' : 'disabled');
+    const allocationDisabled = (isRandomized && hasStudyId) ? '' : 'disabled';
     const therapyLabelClass = patient.therapy_prescribed ? 'check-success font-medium' : '';
     const therapyAllowed = isRandomized && hasStudyId && hasAllocation;
-    const therapyDisabled = isLocked ? 'disabled' : (therapyAllowed ? '' : 'disabled');
+    const therapyDisabled = therapyAllowed ? '' : 'disabled';
     let therapyHelperMessage = '';
     if (!isRandomized) {
         therapyHelperMessage = 'Mark randomized first.';
@@ -535,10 +535,10 @@ function buildPatientDetailsRow(patient) {
         therapyHelperMessage = 'Select allocation before prescribing.';
     }
     const therapyHelper = allocationRowVisible && therapyHelperMessage ? `<div class="status-subtext">${therapyHelperMessage}</div>` : '';
-    const lockToggleDisabled = '';
+    const lockToggleDisabled = (isLocked && !isAdminUser()) ? 'disabled' : '';
     const lockIndicator = patient.locked_at ? `<div class="status-subtext locked-indicator">Locked ${escapeHtml(formatDisplayDateTime(patient.locked_at))}</div>` : '';
     const lockHelper = eligibilityLocked && !isLocked
-        ? '<div class="status-subtext">Randomized record: eligibility fields are locked. Unlock allows allocation/prescription updates only unless you are an admin.</div>'
+        ? '<div class="status-subtext">Randomized record: non-admin users cannot edit eligibility fields. Allocation and prescribed remain editable.</div>'
         : '<div class="status-subtext">Lock prevents editing fields above; notes remain editable.</div>';
     const lockDisplay = lockIndicator || lockHelper;
     const isManualRecord = isManualPatientRecord(patient);
@@ -643,6 +643,14 @@ function buildPatientDetailsRow(patient) {
                         <option value="1" ${randomizedSelectValue === '1' ? 'selected' : ''}>Yes</option>
                     </select>
                 </div>
+                <div class="lock-section">
+                    <div class="inline-field-row" style="align-items:center; gap:6px;">
+                        <span aria-hidden="true">🔒</span>
+                        <label class="patient-sub" style="margin:0;">Eligibility and randomization locked:</label>
+                        <input type="checkbox" ${patient.locked_at ? 'checked' : ''} ${lockToggleDisabled} onchange="toggleRecordLocked(${patient._index}, this.checked)">
+                    </div>
+                    ${lockDisplay}
+                </div>
                 <div class="inline-field-row" style="${allocationRowStyle}">
                     <label class="patient-sub">Allocation:</label>
                     <select class="table-input inline-select" ${allocationDisabled} onchange="updateAllocation(${patient._index}, this.value)">
@@ -656,14 +664,6 @@ function buildPatientDetailsRow(patient) {
                     </label>
                 </div>
                 ${therapyHelper}
-                <div class="lock-section">
-                    <div class="inline-field-row" style="align-items:center; gap:6px;">
-                        <span aria-hidden="true">🔒</span>
-                        <label class="patient-sub" style="margin:0;">Lock record:</label>
-                        <input type="checkbox" ${patient.locked_at ? 'checked' : ''} ${lockToggleDisabled} onchange="toggleRecordLocked(${patient._index}, this.checked)">
-                    </div>
-                    ${lockDisplay}
-                </div>
             </div>
                 </div>
                 <div>
@@ -943,6 +943,13 @@ function updateInlineNotification(index, value) {
         }
         if (isFutureISODateString(normalized)) {
             showRecordWarning('Notification date cannot be in the future.', 'error');
+            renderPatientTable();
+            return;
+        }
+        const dialysisStart = parseISODate(patient.dialysis_start_date);
+        const notification = parseISODate(normalized);
+        if (dialysisStart && notification && notification.getTime() < dialysisStart.getTime()) {
+            showRecordWarning('Notification date cannot be before dialysis start date.', 'error');
             renderPatientTable();
             return;
         }

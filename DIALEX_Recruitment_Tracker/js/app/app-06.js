@@ -584,6 +584,11 @@ function getRandomizationIssues(patient) {
     if (!patient.dialysis_start_date && !patient.dialysis_duration_confirmed) {
         issues.push('Enter dialysis start date or confirm ≥90 days');
     }
+    const dialysisStart = parseISODate(patient.dialysis_start_date);
+    const notificationDate = parseISODate(patient.notification_date);
+    if (dialysisStart && notificationDate && notificationDate.getTime() < dialysisStart.getTime()) {
+        issues.push('Notification date cannot be before dialysis start date');
+    }
     const firstEligible = computeFirstEligibleDate(patient);
     if (firstEligible && firstEligible.getTime() > getTorontoNowTimestamp()) {
         issues.push(`Eligible on ${formatISODate(firstEligible)}`);
@@ -1146,6 +1151,25 @@ function ensureEditablePatient(patient) {
         return false;
     }
     if (isPatientLocked(patient)) {
+        showStatus(READ_ONLY_MESSAGE, 'status');
+        renderPatientTable();
+        return false;
+    }
+    return true;
+}
+
+function ensureRandomizedFollowupEditablePatient(patient) {
+    if (!patient) return false;
+    if (typeof hasStudyIdIntegrityIssue === 'function' && hasStudyIdIntegrityIssue()) {
+        const message = typeof getStudyIdIntegrityBlockingMessage === 'function'
+            ? getStudyIdIntegrityBlockingMessage()
+            : 'Integrity error: duplicate assigned Study IDs detected. Resolve duplicates externally and reload this database.';
+        showStatus(message, 'error');
+        showRecordWarning(message, 'error');
+        renderPatientTable();
+        return false;
+    }
+    if (isPatientLocked(patient) && !patient.randomized) {
         showStatus(READ_ONLY_MESSAGE, 'status');
         renderPatientTable();
         return false;

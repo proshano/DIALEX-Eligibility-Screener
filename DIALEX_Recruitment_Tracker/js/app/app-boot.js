@@ -57,6 +57,10 @@ const signOutBtn = $('sign-out-btn');
 if (signOutBtn) {
     signOutBtn.addEventListener('click', handleSignOut);
 }
+const changePasswordBtn = $('change-password-btn');
+if (changePasswordBtn) {
+    changePasswordBtn.addEventListener('click', handleChangeOwnPassword);
+}
 const rotateCentralBtn = $('rotate-central-btn');
 if (rotateCentralBtn) {
     rotateCentralBtn.addEventListener('click', handleRotateCentralPassword);

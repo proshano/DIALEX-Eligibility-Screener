@@ -55,9 +55,10 @@
             <div class="header-admin hidden" id="admin-actions">
                 <div class="header-admin-label">Administration</div>
                 <div class="header-admin-actions">
-                    <button id="manage-users-btn" class="secondary hidden" disabled>Manage users</button>
                     <button id="import-study-ids-btn" class="secondary hidden" disabled>Import Study IDs (.csv)</button>
+                    <button id="manage-users-btn" class="secondary hidden" disabled>Manage users</button>
                     <input type="file" id="study-ids-file" class="hidden" accept=".csv,text/csv" aria-label="Import Study IDs CSV">
+                    <button id="change-password-btn" class="secondary hidden" disabled>Change my password</button>
                     <button id="sign-out-btn" class="secondary hidden" disabled>Switch user</button>
                     <button id="rotate-central-btn" class="secondary hidden" disabled>Rotate central password</button>
                 </div>
@@ -76,7 +77,7 @@
                     </li>
                     <li>
                         <div class="step-badge">2</div>
-                        <div class="step-content">If you do not know your password, choose <strong>"Use central recovery password"</strong> to unlock the file and reset your account. Admin users can open <strong>"Manage users"</strong> to add or disable accounts.</div>
+                        <div class="step-content">If you do not know your password, choose <strong>"Use central recovery password"</strong> to unlock the file and set a new password. Admin users can open <strong>"Manage users"</strong> to add/disable users and reset passwords for other accounts. Use <strong>"Change my password"</strong> for your own account. After an admin reset, the user must first sign in with the temporary password, then set a new password.</div>
                     </li>
                     <li>
                         <div class="step-badge">3</div>
@@ -104,7 +105,7 @@
                     </li>
                     <li>
                         <div class="step-badge">9</div>
-                        <div class="step-content">You can <strong>lock</strong> patient records to prevent accidental changes and unlock them later when needed.</div>
+                        <div class="step-content">You can <strong>lock</strong> patient records to prevent accidental changes. Only admins can unlock records, and unlocking requires re-authentication. For randomized records, eligibility/recruitment fields remain admin-restricted while allocation and prescribed remain editable.</div>
                     </li>
                 </ol>
 
@@ -435,6 +436,21 @@
         </div>
     </div>
 
+    <!-- Acknowledge Modal -->
+    <div id="acknowledge-modal" class="patient-modal" role="dialog" aria-modal="true" aria-labelledby="acknowledge-modal-title" aria-describedby="acknowledge-modal-message">
+        <div class="modal-content modal-narrow">
+            <div class="modal-header">
+                <h2 id="acknowledge-modal-title">Notice</h2>
+            </div>
+            <div class="modal-body">
+                <p id="acknowledge-modal-message" class="modal-message"></p>
+                <div class="modal-footer">
+                    <button type="button" id="acknowledge-modal-btn">Acknowledged</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Login Modal -->
     <div id="login-modal" class="patient-modal" role="dialog" aria-modal="true" aria-labelledby="login-modal-title" aria-describedby="login-modal-message">
         <div class="modal-content modal-narrow">
@@ -445,6 +461,7 @@
             <div class="modal-body">
                 <p id="login-modal-message" class="modal-message">Database loaded. Sign in to continue.</p>
                 <div id="login-recovery-banner" class="modal-banner hidden" role="status" aria-live="polite"></div>
+                <div id="login-reset-required-banner" class="modal-banner hidden" role="status" aria-live="polite"></div>
                 <form id="login-form">
                     <div>
                         <label for="login-username">Username</label>
@@ -458,7 +475,7 @@
                     <div class="modal-footer">
                         <button type="button" class="secondary hidden" id="login-cancel-btn">Cancel</button>
                         <button type="button" class="secondary" id="login-unload-btn">Unload database</button>
-                        <button type="button" class="secondary" id="login-reset-btn">Reset password</button>
+                        <button type="button" class="secondary" id="login-reset-btn">Use central recovery password</button>
                         <button type="submit" id="login-submit-btn">Sign in</button>
                     </div>
                 </form>
@@ -513,7 +530,7 @@
                 <span id="user-management-close" class="close" role="button" tabindex="0" aria-label="Close user management dialog">&times;</span>
             </div>
             <div class="modal-body">
-                <p class="modal-message">Add, disable, or reset passwords for local users.</p>
+                <p class="modal-message">Add, disable, or manage local users. Password reset sets a temporary password; the user must sign in with it and then set a new password.</p>
                 <table class="user-table">
                     <thead>
                         <tr>

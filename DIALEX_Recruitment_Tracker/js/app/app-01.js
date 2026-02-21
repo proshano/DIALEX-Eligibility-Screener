@@ -374,7 +374,7 @@ const OPT_OUT_STATUS = {
     OPTED_OUT: 'opted_out'
 };
 const STUDY_ID_REGEX = /^\d{4}-[A-Z]{3}-\d{3}$/;
-const READ_ONLY_MESSAGE = 'Record is locked; only notes remain editable.';
+const READ_ONLY_MESSAGE = 'Record is locked.';
 const TEMP_MRN_PREFIX = '__pending_patient__';
 const ENTRY_SOURCE_MANUAL = 'manual';
 const ENTRY_SOURCE_IMPORT = 'import';

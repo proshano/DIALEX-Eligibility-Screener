@@ -763,6 +763,11 @@ async function initializeLoadedDatabase(decrypted) {
     refreshStudyIdIntegrityState({ showStatus: false, refreshAccess: false });
     loadRecruitingUnitState();
     refreshPatientData();
+    if (typeof setFilter === 'function') {
+        setFilter('pending');
+    } else {
+        currentFilter = 'pending';
+    }
     resetAutosaveTracking();
     saveDirectoryReady = false;
     await restoreSavedDirectoryHandle();

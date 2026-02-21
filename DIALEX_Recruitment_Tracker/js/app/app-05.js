@@ -401,9 +401,15 @@ function updateDialysisStartDate(index, value) {
             renderPatientTable();
             return;
         }
+        const notification = parseISODate(patient.notification_date);
+        const start = parseISODate(normalized);
+        if (notification && start && start.getTime() > notification.getTime()) {
+            showRecordWarning('Dialysis start date cannot be after notification date.', 'error');
+            renderPatientTable();
+            return;
+        }
         if (patient.birth_date) {
             const birth = parseISODate(patient.birth_date);
-            const start = parseISODate(normalized);
             if (birth && start && start.getTime() <= birth.getTime()) {
                 showRecordWarning("Dialysis start date must be after the patient's birth year.", 'error');
                 renderPatientTable();
@@ -440,7 +446,7 @@ function setDialysisDurationConfirmed(index, flag) {
 function toggleTherapyPrescribed(index, checkbox) {
     const patient = patientsData[index];
     if (!patient || !checkbox) return;
-    if (!ensureEditablePatient(patient)) {
+    if (!ensureRandomizedFollowupEditablePatient(patient)) {
         checkbox.checked = !!patient.therapy_prescribed;
         return;
     }
@@ -467,7 +473,7 @@ function toggleTherapyPrescribed(index, checkbox) {
 function updateAllocation(index, value) {
     const patient = patientsData[index];
     if (!patient) return;
-    if (!ensureEditablePatient(patient)) return;
+    if (!ensureRandomizedFollowupEditablePatient(patient)) return;
     if (!patient.randomized) {
         showRecordWarning('Mark randomized before selecting allocation.', 'error');
         renderPatientTable();
@@ -709,19 +715,28 @@ async function toggleRecordLocked(index, checked) {
     }
     if (checked) {
         patient.locked_at = getTorontoNow().toISOString();
-        showStatus('Record locked. Only notes remain editable.', 'success');
+        if (patient.randomized) {
+            showStatus('Record locked. Allocation and prescribed remain editable after randomization.', 'success');
+        } else {
+            showStatus('Record locked. Only notes remain editable.', 'success');
+        }
     } else {
+        if (!isAdminUser()) {
+            await promptAcknowledgeModal({
+                title: 'Admin access required',
+                message: 'Only admin users can unlock records.',
+                acknowledgeLabel: 'Acknowledged'
+            });
+            renderPatientTable();
+            return;
+        }
         const canUnlock = await reauthenticateCurrentUser('unlock this record');
         if (!canUnlock) {
             renderPatientTable();
             return;
         }
         patient.locked_at = '';
-        if (patient.randomized && !isAdminUser()) {
-            showStatus('Record unlocked for allocation/prescription updates. Eligibility edits still require admin access.', 'status');
-        } else {
-            showStatus('Record unlocked.', 'status');
-        }
+        showStatus('Record unlocked.', 'status');
     }
     persistPatient(patient, false);
     refreshPatientRow(patient);
@@ -1576,6 +1591,11 @@ const stmt = db.prepare(`
         if (stmt) stmt.free();
     }
     refreshPatientData();
+    if (typeof setFilter === 'function') {
+        setFilter('pending');
+    } else {
+        currentFilter = 'pending';
+    }
     markDatabaseChanged();
     let statusMessage;
     if (imported) {

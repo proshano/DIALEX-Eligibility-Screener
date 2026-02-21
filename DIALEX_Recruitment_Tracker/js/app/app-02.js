@@ -523,6 +523,48 @@ function promptImportBackupModal() {
     });
 }
 
+function promptAcknowledgeModal(options = {}) {
+    return new Promise(resolve => {
+        const modal = $('acknowledge-modal');
+        const titleEl = $('acknowledge-modal-title');
+        const messageEl = $('acknowledge-modal-message');
+        const acknowledgeBtn = $('acknowledge-modal-btn');
+        const title = options.title || 'Notice';
+        const message = options.message || '';
+        const acknowledgeLabel = options.acknowledgeLabel || 'Acknowledged';
+
+        if (!modal || !titleEl || !messageEl || !acknowledgeBtn) {
+            window.alert(message || title);
+            resolve(true);
+            return;
+        }
+
+        const previouslyFocused = document.activeElement;
+        let resolved = false;
+
+        const cleanup = () => {
+            if (resolved) return;
+            resolved = true;
+            modal.classList.remove('active');
+            acknowledgeBtn.removeEventListener('click', onAcknowledge);
+            if (previouslyFocused && typeof previouslyFocused.focus === 'function') {
+                previouslyFocused.focus();
+            }
+            resolve(true);
+        };
+
+        const onAcknowledge = () => cleanup();
+
+        titleEl.textContent = title;
+        messageEl.textContent = message;
+        acknowledgeBtn.textContent = acknowledgeLabel;
+        modal.classList.add('active');
+        acknowledgeBtn.addEventListener('click', onAcknowledge);
+
+        requestAnimationFrame(() => acknowledgeBtn.focus());
+    });
+}
+
 function normalizeUsername(value) {
     return (value || '').toString().trim().toLowerCase();
 }
@@ -597,6 +639,12 @@ function updateAppAccessState() {
         manageUsersBtn.disabled = !showManage;
     }
 
+    const changePasswordBtn = $('change-password-btn');
+    if (changePasswordBtn) {
+        changePasswordBtn.classList.toggle('hidden', !unlocked);
+        changePasswordBtn.disabled = !unlocked;
+    }
+
     const signOutBtn = $('sign-out-btn');
     if (signOutBtn) {
         signOutBtn.classList.toggle('hidden', !unlocked);
@@ -615,7 +663,7 @@ function updateAppAccessState() {
 
     const adminGroup = $('admin-actions');
     if (adminGroup) {
-        const showAdmin = [manageUsersBtn, signOutBtn, rotateCentralBtn]
+        const showAdmin = [manageUsersBtn, changePasswordBtn, signOutBtn, rotateCentralBtn]
             .some((btn) => btn && !btn.classList.contains('hidden'));
         adminGroup.classList.toggle('hidden', !showAdmin);
     }
@@ -642,13 +690,76 @@ function setCurrentUser(user) {
     }
 }
 
+async function handleChangeOwnPassword() {
+    if (!db || !currentUser || !currentUser.username) {
+        showStatus('Sign in to change password.', 'error');
+        return;
+    }
+    const normalized = normalizeUsername(currentUser.username);
+    const userRecord = fetchUserByUsername(normalized);
+    if (!userRecord || !Number(userRecord.active)) {
+        showStatus('Your account is unavailable. Sign in again.', 'error');
+        return;
+    }
+
+    let currentPassword = await promptPasswordModal({
+        title: 'Confirm current password',
+        message: 'Enter your current password to continue.',
+        requireConfirmation: false,
+        submitLabel: 'Continue',
+        autocomplete: 'current-password'
+    });
+    if (!currentPassword) {
+        showStatus('Password change canceled.', 'status');
+        return;
+    }
+    const validCurrent = await verifyPassword(currentPassword, userRecord.password_salt, userRecord.password_hash);
+    currentPassword = null;
+    if (!validCurrent) {
+        showStatus('Current password is incorrect.', 'error');
+        return;
+    }
+
+    let newPassword = await promptPasswordModal({
+        title: 'Change my password',
+        message: 'Create and confirm a new password for your account.',
+        requireConfirmation: true,
+        submitLabel: 'Update password',
+        autocomplete: 'new-password',
+        minLength: MIN_PASSWORD_LENGTH
+    });
+    if (!newPassword) {
+        showStatus('Password change canceled.', 'status');
+        return;
+    }
+    const sameAsCurrent = await verifyPassword(newPassword, userRecord.password_salt, userRecord.password_hash);
+    if (sameAsCurrent) {
+        showStatus('New password must be different from current password.', 'error');
+        newPassword = null;
+        return;
+    }
+    await updateUserPassword(normalized, newPassword, {
+        action: 'user_password_changed',
+        details: { username: normalized, reason: 'self_service' },
+        actorUsername: normalized,
+        actorRole: userRecord.role
+    });
+    newPassword = null;
+    markDatabaseChanged();
+    const refreshed = sanitizeUserRecord(fetchUserByUsername(normalized));
+    if (refreshed) {
+        setCurrentUser(refreshed);
+    }
+    showStatus('Password updated.', 'success');
+}
+
 async function handleSignOut() {
     if (!db) return;
     const previousUser = currentUser ? { ...currentUser } : null;
     const result = await promptLoginModal({
         allowCancel: true,
         title: 'Switch user',
-        message: 'Sign in as a different user, or cancel to stay signed in.'
+        message: 'Sign in as a different user, or cancel to stay signed in. If an admin recently reset that user, sign in first with the temporary password.'
     });
     if (!result) return;
     if (result.action === 'cancel') {
@@ -1078,15 +1189,20 @@ async function handleUserManagementAction(action, username) {
             const wrapId = getUserWrapId(target.username);
             const wraps = Array.isArray(encryptionState.wraps) ? encryptionState.wraps : [];
             if (wrapId && !wraps.some(entry => entry.id === wrapId)) {
-                showStatus('User enabled. Reset their password to restore decryption access.', 'status');
+                showStatus('User enabled. Set a temporary password to restore decryption access.', 'status');
             }
         }
         return;
     }
     if (action === 'reset') {
+        if (target.username === getCurrentUsername()) {
+            closeUserManagementModal();
+            await handleChangeOwnPassword();
+            return;
+        }
         const newPassword = await promptPasswordModal({
             title: `Reset password for ${target.username}`,
-            message: `Create a new password for ${target.username}.`,
+            message: `Set a temporary password for ${target.username}. Share it securely. The user must sign in with this temporary password, then create a new password.`,
             requireConfirmation: true,
             submitLabel: 'Reset password',
             autocomplete: 'new-password',
@@ -1099,7 +1215,7 @@ async function handleUserManagementAction(action, username) {
             details: { username: target.username, reset_required: true }
         });
         markDatabaseChanged();
-        showStatus('Temporary password set. The user will be prompted to set a new password at sign-in.', 'success');
+        showStatus('Temporary password set. User must sign in with temporary password, then set a new password.', 'success');
         return;
     }
 }
@@ -1115,6 +1231,7 @@ async function promptLoginModal(options = {}) {
         const passwordInput = $('login-password');
         const errorEl = $('login-error');
         const recoveryBanner = $('login-recovery-banner');
+        const resetRequiredBanner = $('login-reset-required-banner');
         const cancelBtn = $('login-cancel-btn');
         const unloadBtn = $('login-unload-btn');
         const resetBtn = $('login-reset-btn');
@@ -1125,7 +1242,7 @@ async function promptLoginModal(options = {}) {
         const authenticate = typeof options.authenticate === 'function' ? options.authenticate : authenticateUser;
         const recover = typeof options.recover === 'function' ? options.recover : null;
         const submitLabel = options.submitLabel || 'Sign in';
-        const recoveryLabel = options.recoveryLabel || (recover ? 'Use central recovery password' : 'Reset password');
+        const recoveryLabel = options.recoveryLabel || 'Use central recovery password';
         const showReset = options.showReset !== false;
         const unloadLabel = options.unloadLabel || 'Unload database';
         const passwordAutocomplete = options.passwordAutocomplete || 'current-password';
@@ -1201,7 +1318,7 @@ async function promptLoginModal(options = {}) {
             const isCentralRecovery = reason === 'central_recovery';
             const message = isCentralRecovery
                 ? 'Central recovery was used to unlock this database. Set a new admin password now.'
-                : `Your password was reset by an admin. Create a new password for ${displayName}.`;
+                : `You signed in with a temporary password set by an admin. Create a new password for ${displayName}.`;
             while (true) {
                 let newPassword = await promptPasswordModal({
                     title: 'Set new password',
@@ -1308,7 +1425,7 @@ async function promptLoginModal(options = {}) {
             const username = usernameInput ? usernameInput.value : '';
             const normalized = normalizeUsername(username);
             if (!normalized) {
-                showError('Enter a username to reset.');
+                showError('Enter a username.');
                 if (usernameInput) {
                     usernameInput.focus();
                 }
@@ -1339,10 +1456,10 @@ async function promptLoginModal(options = {}) {
             if (!centralPassword) return;
             centralPassword = null;
             let newPassword = await promptPasswordModal({
-                title: `Reset password for ${normalized}`,
+                title: `Set new password for ${normalized}`,
                 message: `Create and confirm a new password for ${normalized}.`,
                 requireConfirmation: true,
-                submitLabel: 'Reset password',
+                submitLabel: 'Set new password',
                 autocomplete: 'new-password',
                 minLength: MIN_PASSWORD_LENGTH
             });
@@ -1369,6 +1486,15 @@ async function promptLoginModal(options = {}) {
             errorEl.classList.add('hidden');
             if (passwordInput) {
                 passwordInput.value = '';
+            }
+            if (resetRequiredBanner) {
+                const normalized = normalizeUsername(usernameInput ? usernameInput.value : '');
+                const user = normalized ? fetchUserByUsername(normalized) : null;
+                const needsReset = Boolean(user && Number(user.password_reset_required));
+                if (needsReset) {
+                    resetRequiredBanner.textContent = 'This account has a temporary password. Sign in with the temporary password from your admin, then set your own password.';
+                }
+                resetRequiredBanner.classList.toggle('hidden', !needsReset);
             }
         };
 
@@ -1403,6 +1529,10 @@ async function promptLoginModal(options = {}) {
         if (recoveryBanner) {
             recoveryBanner.textContent = recoveryMessage;
             recoveryBanner.classList.toggle('hidden', !recoveryMode);
+        }
+        if (resetRequiredBanner) {
+            resetRequiredBanner.textContent = '';
+            resetRequiredBanner.classList.add('hidden');
         }
         if (passwordGroup) {
             passwordGroup.classList.toggle('hidden', !showPassword);

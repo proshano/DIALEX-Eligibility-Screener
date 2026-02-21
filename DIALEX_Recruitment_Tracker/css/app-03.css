@@ -160,6 +160,11 @@
 #login-modal { z-index: 1200; }
 #admin-setup-modal { z-index: 1200; }
 #import-backup-modal { z-index: 1200; }
+#acknowledge-modal {
+    z-index: 1300;
+    align-items: center;
+    padding: 16px;
+}
 
 .modal-content {
     background: var(--card);
