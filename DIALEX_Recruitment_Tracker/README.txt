@@ -1,5 +1,7 @@
 DIALEX Recruitment Tracker - Read Me First
 
+Repository folder name: DIALEX Recruitment Tracker
+
 IMPORTANT: To use this tool, open ONLY the file named DIALEX Recruitment Tracker App.html in Google Chrome or Microsoft Edge.
 Do not open or delete any other files.
 
@@ -25,13 +27,22 @@ Recruitment summary export
 Randomization and record locking
 - When a patient is marked as randomized, the record is locked automatically.
 - For randomized patients, eligibility/recruitment fields are restricted to admin users.
-- Allocation and Prescribed can still be updated after unlocking the record.
-- Unlocking any record now requires re-entering the signed-in user's password.
+- Allocation and Prescribed remain editable for randomized records, including when the record is locked.
+- Only admin users can unlock records.
+- Unlocking any record requires re-entering the signed-in user's password.
+
+Password management updates
+- Signed-in users can use "Change my password" for their own account.
+- If an admin resets another user's password, it is temporary.
+- A user with a temporary password must first sign in with that temporary password, then set a new password.
 
 Operator test checklist (offline)
 1) Open `DIALEX Recruitment Tracker App.html` in Chrome or Edge.
 2) Load and unlock a test database.
 3) Mark one patient as randomized and confirm the record auto-locks.
 4) As a non-admin user, try editing eligibility/recruitment fields on that randomized patient (they should appear disabled).
-5) Unlock the randomized record, re-enter password when prompted, and confirm Allocation + Prescribed can be edited.
-6) Export `Export recruitment summary (.csv)` and confirm the file includes count and `Percent of notified` columns.
+5) As a non-admin user, verify a locked record cannot be unlocked.
+6) As a non-admin user, confirm Allocation + Prescribed can still be edited on a randomized record.
+7) As an admin user, unlock a record and confirm re-authentication is required.
+8) Enter a notification date before dialysis start date (or dialysis start date after notification date) and confirm a validation error appears.
+9) Export `Export recruitment summary (.csv)` and confirm the file includes count and `Percent of notified` columns.

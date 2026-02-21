@@ -1,6 +1,6 @@
 # AGENTS.md
 
-This repository contains a self-contained, offline, browser-based screening tool for hospital environments.
+This repository contains a self-contained, offline, browser-based recruitment tracker for hospital environments.
 
 ## Priority Principles
 - **Offline-first:** The app must run without internet access. Do not add network calls or dependencies that assume connectivity.
@@ -39,7 +39,7 @@ This repository contains a self-contained, offline, browser-based screening tool
 - If any instruction is ambiguous, choose the simplest valid interpretation.
 
 
-# Ucertainty and ambiguity
+# Uncertainty and ambiguity
 - If the question is ambiguous or underspecified, explicitly call this out and:
   - Ask up to 1–3 precise clarifying questions, OR
   - Present 2–3 plausible interpretations with clearly labeled assumptions.
@@ -55,10 +55,11 @@ This repository contains a self-contained, offline, browser-based screening tool
 ## Recruitment Tracker Rules
 - In `DIALEX_Recruitment_Tracker`, marking a patient as randomized should automatically lock the record.
 - For randomized patients, eligibility and recruitment fields are admin-editable only; non-admins must not be able to modify those fields even if the record is unlocked.
-- Allocation and prescribed status remain editable after unlock, including for non-admin users.
-- Unlocking any patient record requires re-authentication of the currently signed-in user.
+- Allocation and prescribed status remain editable for randomized records, including for non-admin users, even when the record is locked.
+- Only admin users can unlock patient records, and unlocking requires re-authentication of the currently signed-in user.
+- Admin password reset for another user should set a temporary password; that user must sign in with the temporary password first, then set a new password.
 - Recruitment summary export should remain lightweight (CSV), start with notified patients, and report count/percent of notified for: in opt-out period, opt-out period ended with opt-out status not documented, opted out, did not opt-out but deemed ineligible after notification, did not opt out and waiting to be randomized, randomized not yet prescribed, randomized and prescribed.
 
 ## Testing Expectations
-- Prefer manual test steps that work offline (e.g., open `DIALEX_Screener_Standalone.html` in a browser and verify flows).
+- Prefer manual test steps that work offline (e.g., open `DIALEX Recruitment Tracker App.html` in a browser and verify flows).
 - Do not require installing tooling or packages to validate changes unless explicitly requested.
