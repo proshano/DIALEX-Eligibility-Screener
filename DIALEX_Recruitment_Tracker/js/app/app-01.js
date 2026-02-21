@@ -594,6 +594,26 @@ const LOCATION_CODES = {
     "WRO": "WINDSOR REGIONAL OUELLETTE",
     "YHS": "YEE HONG SATELLITE - SCARBOROUGH FINCH - SATELLITE"
 };
+const LEGACY_UNIT_CODE_ALIASES = {
+    SCO: 'BCC'
+};
+const LEGACY_UNIT_DISPLAY_NOTES = {
+    BCC: 'legacy: SCO - Sisters of Charity of Ottawa'
+};
+
+function resolveUnitCodeAlias(code = '') {
+    const normalized = (code || '').trim().toUpperCase();
+    if (!normalized) return '';
+    return LEGACY_UNIT_CODE_ALIASES[normalized] || normalized;
+}
+
+function getLocationDisplayName(code = '', name = '') {
+    const normalizedCode = (code || '').trim().toUpperCase();
+    const baseName = String(name || '').trim();
+    if (!baseName) return '';
+    const note = LEGACY_UNIT_DISPLAY_NOTES[normalizedCode] || '';
+    return note ? `${baseName} (${note})` : baseName;
+}
 
 function normalizeLocationValue(value = '') {
     return (value || '').trim();
@@ -617,10 +637,11 @@ function escapeHtml(value = '') {
 }
 const LOCATION_OPTION_ENTRIES = Object.entries(LOCATION_CODES).map(([code, name]) => {
     const value = code ? `${code}: ${name}` : (name || '');
+    const baseText = formatLocationDisplay(value);
     return {
         code,
         value,
-        text: formatLocationDisplay(value)
+        text: getLocationDisplayName(code, baseText)
     };
 }).sort((a, b) => a.text.localeCompare(b.text, undefined, { sensitivity: 'base' }));
 const LOCATION_VALUE_MAP = new Map();

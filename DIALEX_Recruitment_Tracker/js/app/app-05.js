@@ -1481,9 +1481,12 @@ const stmt = db.prepare(`
             if (!original) return;
         const rawMrn = (original[MRN_HEADER] || '').toString().trim();
         const patientName = getPatientNameFromRow(original);
-        const locationCode = getField(original, [LOCATION_HEADER]) || '';
-        const locationName = LOCATION_CODES[locationCode] || locationCode || '';
-        const locationDisplay = locationCode && locationName ? `${locationCode}: ${locationName}` : locationName || locationCode;
+        const rawLocationCode = getField(original, [LOCATION_HEADER]) || '';
+        const locationCode = getLocationCodeFromValue(rawLocationCode);
+        const locationName = getLocationNameFromCode(locationCode);
+        const locationDisplay = locationCode && locationName
+            ? `${locationCode}: ${locationName}`
+            : (rawLocationCode || '');
         const healthCard = String(getField(original, [LAST_HCN_HEADER, 'Latest Known HCN', HCN_HEADER]) || '').trim();
         const healthCardProvince = getField(original, [HCN_PROVINCE_HEADER]) || '';
         const scientificNotationHcn = isScientificNotationNumericText(healthCard);

@@ -378,7 +378,7 @@ function analyzePreScreeningRows(rows) {
     };
     rows.forEach(row => {
         const mrn = (row[MRN_HEADER] || '').toString().trim();
-        const locationCode = getField(row, [LOCATION_HEADER]) || '';
+        const locationCode = getLocationCodeFromValue(getField(row, [LOCATION_HEADER]) || '');
         const patientName = getPatientNameFromRow(row);
         const healthCard = getField(row, [LAST_HCN_HEADER, 'Latest Known HCN', HCN_HEADER]) || '';
         const provinceRaw = getField(row, [HCN_PROVINCE_HEADER]) || '';
@@ -810,17 +810,34 @@ function getMostRecentLocationInfo(patient = {}) {
 function getCanonicalLocationValue(value = '') {
     const normalized = normalizeLocationValue(value);
     if (!normalized) return '';
-    return LOCATION_VALUE_MAP.get(normalized) || normalized;
+    if (LOCATION_VALUE_MAP.has(normalized)) {
+        return LOCATION_VALUE_MAP.get(normalized) || normalized;
+    }
+    const code = getLocationCodeFromValue(normalized);
+    const name = getLocationNameFromCode(code);
+    if (code && name) {
+        return `${code}: ${name}`;
+    }
+    return normalized;
 }
 
 function getLocationCodeFromValue(value = '') {
     const normalized = normalizeLocationValue(value);
     if (!normalized) return '';
+    let code = '';
     if (normalized.includes(':')) {
-        return normalized.split(':')[0].trim().toUpperCase();
+        code = normalized.split(':')[0].trim().toUpperCase();
+    } else {
+        const token = normalized.split(/\s+/)[0];
+        code = (token || '').toUpperCase();
     }
-    const token = normalized.split(/\s+/)[0];
-    return (token || '').toUpperCase();
+    const upperCode = (code || '').trim().toUpperCase();
+    if (!upperCode) return '';
+    const upperRaw = normalized.toUpperCase();
+    if (upperRaw === upperCode) {
+        return resolveUnitCodeAlias(upperCode);
+    }
+    return upperCode;
 }
 
 function normalizeUnitCode(value = '') {
@@ -954,7 +971,8 @@ function renderRecruitingUnitOptions() {
     const fragment = document.createDocumentFragment();
     availableUnitCodes.forEach(code => {
         const name = getLocationNameFromCode(code);
-        const label = name ? `${code} - ${name}` : code;
+        const displayName = getLocationDisplayName(code, name);
+        const label = displayName ? `${code} - ${displayName}` : code;
         const option = document.createElement('label');
         option.className = 'unit-filter-option';
         const checkbox = document.createElement('input');
