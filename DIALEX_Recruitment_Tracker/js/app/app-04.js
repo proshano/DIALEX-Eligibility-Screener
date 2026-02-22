@@ -336,12 +336,19 @@ function buildPatientSummaryRow(patient, isExpanded) {
     const dialysisUnitCanonical = getDialysisUnitCanonical(patient);
     const dialysisUnitOptions = buildLocationOptionsHtml(dialysisUnitCanonical);
     const provinceOptions = buildProvinceOptions(patient.health_card_province || '');
+    const hasHealthCard = !!String(patient.health_card || '').trim();
     const hcnProvince = normalizeProvinceCode(patient.health_card_province || inferProvinceFromHealthCard(patient.health_card || ''));
-    const hcnFormatError = patient.health_card ? validateHealthCardFormat(patient.health_card, hcnProvince || '') : '';
-    const hcnLabelText = hcnFormatError ? 'HCN (review)' : 'HCN';
-    const hcnLabelTitle = hcnFormatError ? ` title="${escapeHtml(hcnFormatError)}"` : '';
-    const hcnFieldClass = hcnFormatError ? 'hcn-review-warning' : '';
-    const copyHcnDisabled = !patient.health_card ? 'disabled' : '';
+    const hcnFormatError = hasHealthCard ? validateHealthCardFormat(patient.health_card, hcnProvince || '') : '';
+    const hcnProvinceReviewError = hcnFormatError === 'Select province/territory to validate HCN.'
+        || hcnFormatError === 'Province of Healthcard No. must be blank or a valid province/territory code.';
+    const hcnMissingError = !hasHealthCard;
+    const hcnLabelTitle = hcnMissingError
+        ? ' title="Health card number missing"'
+        : (hcnFormatError && !hcnProvinceReviewError ? ` title="${escapeHtml(hcnFormatError)}"` : '');
+    const hcnFieldClass = hcnMissingError || (hcnFormatError && !hcnProvinceReviewError) ? 'hcn-review-warning' : '';
+    const provinceLabelTitle = hcnProvinceReviewError ? ` title="${escapeHtml(hcnFormatError)}"` : '';
+    const provinceFieldClass = hcnProvinceReviewError ? 'hcn-review-warning' : '';
+    const copyHcnDisabled = !hasHealthCard ? 'disabled' : '';
     const statusBadge = getStatusBadgeHtml(patient);
     const expandedClass = isExpanded ? 'expanded' : '';
     const displayMrn = getDisplayMrnValue(patient.mrn);
@@ -370,14 +377,14 @@ function buildPatientSummaryRow(patient, isExpanded) {
                     </div>
                 </div>
                 <div class="compact-field compact-hcn ${hcnFieldClass}" data-field="health_card">
-                    <label${hcnLabelTitle}>${hcnLabelText}</label>
+                    <label${hcnLabelTitle}>HCN</label>
                     <div class="input-with-copy">
                         <input type="text" class="table-input" placeholder="HCN" value="${escapeHtml(patient.health_card || '')}" ${eligibilityLocked ? 'disabled' : ''} onchange="updatePatientHcn(${patient._index}, this.value)">
                         <button class="copy-btn-mini" ${copyHcnDisabled} onclick="copyPatientField(${patient._index}, 'health_card')">Copy</button>
                     </div>
                 </div>
-                <div class="compact-field compact-province" data-field="health_card_province">
-                    <label>HCN Province</label>
+                <div class="compact-field compact-province ${provinceFieldClass}" data-field="health_card_province">
+                    <label${provinceLabelTitle}>HCN Province</label>
                     <select class="table-input" ${eligibilityLocked ? 'disabled' : ''} onchange="updateHealthCardProvince(${patient._index}, this.value)">
                         ${provinceOptions}
                     </select>

@@ -784,9 +784,30 @@ function getDialysisUnitCanonical(patient = {}) {
 }
 
 function getLocationDisplayFromCanonical(canonical = '') {
-    const normalized = normalizeLocationValue(canonical);
+    const resolvedCanonical = getCanonicalLocationValue(canonical);
+    const normalized = normalizeLocationValue(resolvedCanonical);
     if (!normalized) return '';
-    return CANONICAL_TO_DISPLAY.get(normalized) || formatLocationDisplay(normalized);
+    const directDisplay = CANONICAL_TO_DISPLAY.get(normalized);
+    if (directDisplay) return directDisplay;
+
+    const directCode = getLocationCodeFromValue(normalized);
+    const directName = getLocationNameFromCode(directCode);
+    if (directCode && directName) {
+        return getLocationDisplayName(directCode, directName);
+    }
+
+    const firstToken = normalizeUnitCode(
+        normalized.includes(':')
+            ? normalized.split(':')[0]
+            : normalized.split(/\s+/)[0]
+    );
+    const aliasedCode = resolveUnitCodeAlias(firstToken);
+    const aliasedName = getLocationNameFromCode(aliasedCode);
+    if (aliasedCode && aliasedName) {
+        return getLocationDisplayName(aliasedCode, aliasedName);
+    }
+
+    return formatLocationDisplay(normalized);
 }
 
 function getLocationNameFromCode(code = '') {

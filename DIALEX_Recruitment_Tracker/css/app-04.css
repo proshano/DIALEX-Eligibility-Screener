@@ -282,7 +282,9 @@
 }
 .patient-collapsed-summary .compact-hcn.hcn-review-warning label {
     color: var(--warning);
-    font-weight: 700;
+}
+.patient-collapsed-summary .compact-province.hcn-review-warning label {
+    color: var(--warning);
 }
 .patient-collapsed-summary .compact-province {
     width: 110px;

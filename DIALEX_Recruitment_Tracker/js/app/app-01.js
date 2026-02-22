@@ -475,7 +475,7 @@ const LOCATION_CODES = {
     "ALL": "STEVENSON MEMORIAL (ALLISTON)",
     "ALS": "ADAM LINTON DIALYSIS UNIT",
     "AMG": "ALEXANDRA MARINE AND GENERAL HOSPITAL - GODERICH",
-    "BCC": "BRUYERE CC INC.-SAINT-VINCENT",
+    "BCC": "BRUYERE HEALTH - SAINT-VINCENT HOSPITAL",
     "BDC": "BURLINGTON DIALYSIS CENTER",
     "BDD": "BELLEVILLE DIALYSIS CLINIC",
     "BGH": "THE BRANT COMMUNITY HEALTHCARE SYSTEM",
@@ -598,7 +598,7 @@ const LEGACY_UNIT_CODE_ALIASES = {
     SCO: 'BCC'
 };
 const LEGACY_UNIT_DISPLAY_NOTES = {
-    BCC: 'legacy: SCO - Sisters of Charity of Ottawa'
+    BCC: 'formarly SCO - Sisters of Charity of Ottawa'
 };
 
 function resolveUnitCodeAlias(code = '') {
