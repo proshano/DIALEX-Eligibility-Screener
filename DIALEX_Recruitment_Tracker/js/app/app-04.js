@@ -68,6 +68,7 @@ function computeBucketFlags(patient = {}) {
     const firstEligibleDate = patient.first_ready_date || null;
     const eligibleWindowStarted = Boolean(firstEligibleDate && firstEligibleDate.getTime() <= today.getTime());
     const hasRandomization = Boolean(patient.randomized);
+    const hasStudyId = Boolean(String(patient.study_id || '').trim());
     const notMissingOrIneligible = !flags.missing && !flags.ineligible;
     const hasConfirmedNoExclusions = Boolean(patient.no_exclusions_confirmed);
     const meetsEligibility = patient.inclusionMet && !hasAnyExclusion && hasConfirmedNoExclusions;
@@ -95,7 +96,7 @@ function computeBucketFlags(patient = {}) {
                 flags.pending = true;
             } else if (!optOutWindowComplete) {
                 flags.waiting = true;
-            } else if (optOutStatus === OPT_OUT_STATUS.DID_NOT && eligibleWindowStarted) {
+            } else if (optOutStatus === OPT_OUT_STATUS.DID_NOT && eligibleWindowStarted && hasStudyId) {
                 flags.ready_randomize = true;
             } else {
                 flags.final_eligibility = true;
@@ -225,7 +226,7 @@ function getStatusBadgeHtml(patient) {
     const flags = patient.bucketFlags || computeBucketFlags(patient);
     const rawPrimary = flags.primary;
     const statusLabels = {
-        missing: 'Missing',
+        missing: 'Missing data',
         pending: 'Assess eligibility for notification',
         ready_notify: 'Deliver notification',
         waiting: 'Notified and waiting',
@@ -336,6 +337,9 @@ function buildPatientSummaryRow(patient, isExpanded) {
     const dialysisUnitCanonical = getDialysisUnitCanonical(patient);
     const dialysisUnitOptions = buildLocationOptionsHtml(dialysisUnitCanonical);
     const provinceOptions = buildProvinceOptions(patient.health_card_province || '');
+    const missingName = !String(patient.patient_name || '').trim();
+    const missingAge = !Number.isFinite(patient.age);
+    const missingDialysisUnit = !normalizeLocationValue(dialysisUnitCanonical);
     const hasHealthCard = !!String(patient.health_card || '').trim();
     const hcnProvince = normalizeProvinceCode(patient.health_card_province || inferProvinceFromHealthCard(patient.health_card || ''));
     const hcnFormatError = hasHealthCard ? validateHealthCardFormat(patient.health_card, hcnProvince || '') : '';
@@ -348,6 +352,9 @@ function buildPatientSummaryRow(patient, isExpanded) {
     const hcnFieldClass = hcnMissingError || (hcnFormatError && !hcnProvinceReviewError) ? 'hcn-review-warning' : '';
     const provinceLabelTitle = hcnProvinceReviewError ? ` title="${escapeHtml(hcnFormatError)}"` : '';
     const provinceFieldClass = hcnProvinceReviewError ? 'hcn-review-warning' : '';
+    const nameFieldClass = missingName ? 'required-missing' : '';
+    const ageFieldClass = missingAge ? 'required-missing' : '';
+    const dialysisFieldClass = missingDialysisUnit ? 'required-missing' : '';
     const copyHcnDisabled = !hasHealthCard ? 'disabled' : '';
     const statusBadge = getStatusBadgeHtml(patient);
     const expandedClass = isExpanded ? 'expanded' : '';
@@ -361,12 +368,12 @@ function buildPatientSummaryRow(patient, isExpanded) {
                         <polyline points="9 18 15 12 9 6"></polyline>
                     </svg>
                 </div>
-                <div class="compact-field compact-name">
-                    <label>Name</label>
+                <div class="compact-field compact-name ${nameFieldClass}">
+                    <label${missingName ? ' title="Name missing"' : ''}>Name</label>
                     <input type="text" class="table-input" placeholder="Patient name" value="${escapeHtml(patient.patient_name || '')}" ${eligibilityLocked ? 'disabled' : ''} onchange="updatePatientName(${patient._index}, this.value)">
                 </div>
-                <div class="compact-field compact-age" data-field="age">
-                    <label>Age</label>
+                <div class="compact-field compact-age ${ageFieldClass}" data-field="age">
+                    <label${missingAge ? ' title="Age missing"' : ''}>Age</label>
                     <input type="text" class="table-input" placeholder="Age" value="${ageValue}" inputmode="numeric" autocomplete="off" spellcheck="false" ${eligibilityLocked ? 'disabled' : ''} onblur="updatePatientAge(${patient._index}, this.value)">
                 </div>
                 <div class="compact-field compact-mrn">
@@ -389,8 +396,8 @@ function buildPatientSummaryRow(patient, isExpanded) {
                         ${provinceOptions}
                     </select>
                 </div>
-                <div class="compact-field compact-dialysis" data-field="dialysis_unit">
-                    <label>Dialysis Unit</label>
+                <div class="compact-field compact-dialysis ${dialysisFieldClass}" data-field="dialysis_unit">
+                    <label${missingDialysisUnit ? ' title="Dialysis unit missing"' : ''}>Dialysis Unit</label>
                     <select class="table-input" ${eligibilityLocked ? 'disabled' : ''} onchange="updateDialysisUnit(${patient._index}, this.value)">
                         ${dialysisUnitOptions}
                     </select>
@@ -524,6 +531,9 @@ function buildPatientDetailsRow(patient) {
     const studyRowVisible = canAssignStudyId || isRandomized || hasStudyId;
     const studyRowStyle = studyRowVisible ? '' : 'display:none;';
     const studyCopyDisabled = studyIdValue ? '' : 'disabled';
+    const assignStudyIdButtonHtml = canAssignStudyId && !hasStudyId
+        ? `<button class="copy-btn assign-study-id-btn" ${eligibilityLocked ? 'disabled' : ''} onclick="assignStudyId(${patient._index})">I confirm this patient is still eligible</button>`
+        : '';
     const studyHelper = (!hasStudyId && canAssignStudyId)
         ? '<div class="status-subtext">Assign a Study ID to enable randomization.</div>'
         : '';
@@ -612,7 +622,7 @@ function buildPatientDetailsRow(patient) {
                         ${notifiedCopyButton}
                     </div>
                 </div>
-                <div id="first-eligible-wrap-${patient._index}">
+                <div id="first-eligible-wrap-${patient._index}" class="inline-field-row tight">
                     <label class="patient-sub">Eligible on:</label>
                     ${eligibleMessage}
                 </div>
@@ -635,10 +645,10 @@ function buildPatientDetailsRow(patient) {
                         </div>
                     </div>
                 </div>
-                <div class="inline-field-row" style="${studyRowStyle}">
-                    <button class="copy-btn" ${eligibilityLocked || hasStudyId || !canAssignStudyId ? 'disabled' : ''} onclick="assignStudyId(${patient._index})">Eligible and ready to randomize now</button>
+                <div class="inline-field-row study-id-row" style="${studyRowStyle}">
+                    ${assignStudyIdButtonHtml}
                     <label class="patient-sub">Study ID:</label>
-                    <span class="date-display ${studyIdValue ? 'has-value' : ''}">${escapeHtml(studyIdValue || 'Not assigned')}</span>
+                    <span class="date-display study-id-display ${studyIdValue ? 'has-value' : ''}">${escapeHtml(studyIdValue || 'Not assigned')}</span>
                     <button class="copy-btn" ${studyCopyDisabled} onclick="copyPatientField(${patient._index}, 'study_id')">Copy</button>
                 </div>
                 ${studyHelper}
@@ -704,7 +714,7 @@ function matchesActiveFilter(patient) {
     const flags = patient.bucketFlags || computeBucketFlags(patient);
     switch (currentFilter) {
         case 'missing': return flags.missing;
-        case 'pending': return flags.pending;
+        case 'pending': return flags.pending || (flags.missing && !flags.ineligible);
         case 'ready_notify': return flags.ready_notify;
         case 'waiting': return flags.waiting;
         case 'final_eligibility': return flags.final_eligibility;
