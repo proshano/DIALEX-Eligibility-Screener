@@ -48,7 +48,7 @@
         <div class="header">
             <h1>DIALEX Recruitment Tracker</h1>
             <div class="meta-row">
-                <div class="meta-pill version-pill" aria-label="Version date">Version: Mar 2 2026</div>
+                <div class="meta-pill version-pill" aria-label="Version date">Version: Mar 4 2026</div>
                 <div class="meta-pill owner-pill" aria-label="Ownership">Copyright 2026 DIALEX trial project office</div>
                 <button id="theme-toggle" class="meta-pill theme-toggle" onclick="toggleTheme()" aria-pressed="true" type="button">Dark theme</button>
             </div>
@@ -402,6 +402,7 @@
                         <label for="password-confirm-input">Confirm password</label>
                         <input type="password" id="password-confirm-input" class="modal-input" autocomplete="new-password">
                     </div>
+                    <div id="password-policy-feedback" class="password-policy hidden" aria-live="polite"></div>
                     <p id="password-error" class="form-error hidden" role="alert"></p>
                     <div class="modal-footer">
                         <button type="button" class="secondary" id="password-cancel-btn">Cancel</button>
@@ -512,6 +513,7 @@
                         <label for="admin-password-confirm">Confirm password</label>
                         <input type="password" id="admin-password-confirm" class="modal-input" autocomplete="new-password" required>
                     </div>
+                    <div id="admin-setup-password-policy" class="password-policy" aria-live="polite"></div>
                     <p id="admin-setup-error" class="form-error hidden" role="alert"></p>
                     <div class="modal-footer">
                         <button type="button" class="secondary" id="admin-setup-unload-btn">Unload database</button>
@@ -573,6 +575,7 @@
                             <label for="user-create-confirm">Confirm password</label>
                             <input type="password" id="user-create-confirm" class="modal-input" autocomplete="new-password" required>
                         </div>
+                        <div id="user-create-password-policy" class="password-policy" aria-live="polite"></div>
                         <p id="user-management-error" class="form-error hidden" role="alert"></p>
                         <div class="modal-footer">
                             <button type="submit">Add user</button>

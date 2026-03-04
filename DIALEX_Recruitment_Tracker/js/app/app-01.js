@@ -7,7 +7,86 @@ const PASSWORD_HASH_LEN = 32;
 const ENCRYPTION_MAGIC = 'DIALEX-ENC-V2';
 const ENCRYPTION_HEADER = `${ENCRYPTION_MAGIC}\n`;
 const MIN_PASSWORD_LENGTH = 8;
+const PASSWORD_COMPLEXITY_REQUIRED_GROUPS = 3;
 const USERNAME_PATTERN = /^[a-z0-9._-]{3,}$/i;
+
+function getPasswordStrengthAssessment(password, options = {}) {
+    const value = (password || '').toString();
+    const hasLower = /[a-z]/.test(value);
+    const hasUpper = /[A-Z]/.test(value);
+    const hasNumber = /[0-9]/.test(value);
+    const hasSymbol = /[^A-Za-z0-9]/.test(value);
+    const groupCount = [hasLower, hasUpper, hasNumber, hasSymbol].filter(Boolean).length;
+    const normalizedUsername = (options.username || '').toString().trim().toLowerCase();
+    const containsUsername = Boolean(normalizedUsername) && value.toLowerCase().includes(normalizedUsername);
+    return {
+        hasMinLength: value.length >= MIN_PASSWORD_LENGTH,
+        hasLower,
+        hasUpper,
+        hasNumber,
+        hasSymbol,
+        groupCount,
+        hasRequiredGroups: groupCount >= PASSWORD_COMPLEXITY_REQUIRED_GROUPS,
+        hasUsernameRule: Boolean(normalizedUsername),
+        excludesUsername: !containsUsername
+    };
+}
+
+function renderPasswordPolicyChecklist(container, options = {}) {
+    if (!container) return;
+    const password = (options.password || '').toString();
+    const confirmation = (options.confirmation || '').toString();
+    const includeConfirmation = Boolean(options.includeConfirmation);
+    const assessmentPassword = password || confirmation;
+    const assessment = getPasswordStrengthAssessment(assessmentPassword, { username: options.username || '' });
+    const confirmationMatches = includeConfirmation && confirmation.length > 0 && confirmation === password;
+    const checks = [
+        { passed: assessment.hasMinLength, label: `At least ${MIN_PASSWORD_LENGTH} characters` },
+        { passed: assessment.hasLower, label: 'Contains lowercase letter (a-z)' },
+        { passed: assessment.hasUpper, label: 'Contains uppercase letter (A-Z)' },
+        { passed: assessment.hasNumber, label: 'Contains number (0-9)' },
+        { passed: assessment.hasSymbol, label: 'Contains symbol (for example: !, @, #)' },
+        {
+            passed: assessment.hasRequiredGroups,
+            label: `Meets at least ${PASSWORD_COMPLEXITY_REQUIRED_GROUPS} of 4 character types (${assessment.groupCount}/4)`
+        }
+    ];
+    if (assessment.hasUsernameRule) {
+        checks.push({ passed: assessment.excludesUsername, label: 'Does not contain username' });
+    }
+    if (includeConfirmation) {
+        checks.push({ passed: confirmationMatches, label: 'Password and confirmation match' });
+    }
+
+    const title = options.title || 'Password requirements';
+    container.innerHTML = `
+        <div class="password-policy-title">${title}</div>
+        <ul class="password-policy-list">
+            ${checks.map(check => `
+                <li class="password-policy-item ${check.passed ? 'pass' : 'fail'}">
+                    <span class="password-policy-indicator">${check.passed ? 'Pass' : 'Missing'}</span>
+                    <span class="password-policy-text">${check.label}</span>
+                </li>
+            `).join('')}
+        </ul>
+    `;
+    container.classList.remove('hidden');
+}
+
+function validatePasswordStrength(password, options = {}) {
+    const label = options.label || 'Password';
+    const assessment = getPasswordStrengthAssessment(password, options);
+    if (!assessment.hasMinLength) {
+        return `${label} must be at least ${MIN_PASSWORD_LENGTH} characters.`;
+    }
+    if (!assessment.hasRequiredGroups) {
+        return `${label} must include at least 3 of the following: uppercase letters, lowercase letters, numbers, symbols.`;
+    }
+    if (assessment.hasUsernameRule && !assessment.excludesUsername) {
+        return `${label} must not contain the username.`;
+    }
+    return '';
+}
 
 async function getPasswordKey(password) {
     const enc = new TextEncoder();
@@ -282,7 +361,12 @@ async function ensureEncryptionStateForSave() {
         requireConfirmation: true,
         submitLabel: 'Continue',
         autocomplete: 'new-password',
-        minLength: MIN_PASSWORD_LENGTH
+        minLength: MIN_PASSWORD_LENGTH,
+        validate: async (password) => {
+            const error = validatePasswordStrength(password, { label: 'Central recovery password' });
+            if (error) return { ok: false, message: error };
+            return { ok: true };
+        }
     });
     if (!centralPassword) return false;
 

@@ -293,11 +293,19 @@ function promptPasswordModal(options = {}) {
         const passwordInput = $('password-input');
         const confirmGroup = $('password-confirm-group');
         const confirmInput = $('password-confirm-input');
+        const policyEl = $('password-policy-feedback');
         const errorEl = $('password-error');
         const cancelBtn = $('password-cancel-btn');
         const submitBtn = $('password-submit-btn');
         const closeBtn = $('password-modal-close');
         const requireConfirmation = Boolean(options.requireConfirmation);
+        const showPolicy = Boolean(options.showPolicy !== false && requireConfirmation);
+        const getPolicyUsername = () => {
+            if (typeof options.policyUsername === 'function') {
+                return options.policyUsername();
+            }
+            return options.policyUsername || '';
+        };
         const validate = typeof options.validate === 'function' ? options.validate : null;
         const minLength = Number.isFinite(options.minLength) ? options.minLength : 0;
         const minLengthMessage = options.minLengthMessage
@@ -321,6 +329,10 @@ function promptPasswordModal(options = {}) {
         errorEl.textContent = '';
         errorEl.classList.add('hidden');
         submitBtn.textContent = submitLabel;
+        if (policyEl) {
+            policyEl.innerHTML = '';
+            policyEl.classList.toggle('hidden', !showPolicy);
+        }
 
         modal.classList.add('active');
 
@@ -331,6 +343,10 @@ function promptPasswordModal(options = {}) {
             passwordInput.value = '';
             confirmInput.value = '';
             form.removeEventListener('submit', onSubmit);
+            passwordInput.removeEventListener('input', onPasswordPolicyInput);
+            passwordInput.removeEventListener('change', onPasswordPolicyInput);
+            confirmInput.removeEventListener('input', onPasswordPolicyInput);
+            confirmInput.removeEventListener('change', onPasswordPolicyInput);
             cancelBtn.removeEventListener('click', onCancel);
             closeBtn.removeEventListener('click', onCancel);
             closeBtn.removeEventListener('keydown', onCloseKeydown);
@@ -340,6 +356,17 @@ function promptPasswordModal(options = {}) {
                 previouslyFocused.focus();
             }
             resolve(result);
+        };
+
+        const onPasswordPolicyInput = () => {
+            if (!showPolicy || !policyEl) return;
+            renderPasswordPolicyChecklist(policyEl, {
+                title: 'Password requirements',
+                password: passwordInput.value,
+                confirmation: confirmInput.value,
+                includeConfirmation: requireConfirmation,
+                username: getPolicyUsername()
+            });
         };
 
         const showError = (message) => {
@@ -418,6 +445,13 @@ function promptPasswordModal(options = {}) {
         };
 
         form.addEventListener('submit', onSubmit);
+        if (showPolicy && policyEl) {
+            passwordInput.addEventListener('input', onPasswordPolicyInput);
+            passwordInput.addEventListener('change', onPasswordPolicyInput);
+            confirmInput.addEventListener('input', onPasswordPolicyInput);
+            confirmInput.addEventListener('change', onPasswordPolicyInput);
+            onPasswordPolicyInput();
+        }
         cancelBtn.addEventListener('click', onCancel);
         closeBtn.addEventListener('click', onCancel);
         closeBtn.addEventListener('keydown', onCloseKeydown);
@@ -726,7 +760,13 @@ async function handleChangeOwnPassword() {
         requireConfirmation: true,
         submitLabel: 'Update password',
         autocomplete: 'new-password',
-        minLength: MIN_PASSWORD_LENGTH
+        policyUsername: normalized,
+        minLength: MIN_PASSWORD_LENGTH,
+        validate: async (password) => {
+            const error = validatePasswordStrength(password, { label: 'New password', username: normalized });
+            if (error) return { ok: false, message: error };
+            return { ok: true };
+        }
     });
     if (!newPassword) {
         showStatus('Password change canceled.', 'status');
@@ -1026,8 +1066,9 @@ async function createUserRecord({ username, firstName, lastName, password, role 
         throw new Error('First name and last name are required.');
     }
     const displayName = buildDisplayName(firstName, lastName);
-    if (!password || password.length < MIN_PASSWORD_LENGTH) {
-        throw new Error(`Passwords must be at least ${MIN_PASSWORD_LENGTH} characters.`);
+    const passwordError = validatePasswordStrength(password, { label: 'Password', username: normalized });
+    if (passwordError) {
+        throw new Error(passwordError);
     }
     if (fetchUserByUsername(normalized)) {
         throw new Error('That username is already in use.');
@@ -1068,6 +1109,11 @@ async function createUserRecord({ username, firstName, lastName, password, role 
 
 async function updateUserPassword(username, newPassword, options = {}) {
     const normalized = normalizeUsername(username);
+    const passwordLabel = options.passwordLabel || 'Password';
+    const passwordError = validatePasswordStrength(newPassword, { label: passwordLabel, username: normalized });
+    if (passwordError) {
+        throw new Error(passwordError);
+    }
     const record = await createPasswordRecord(newPassword);
     const resetRequired = options.resetRequired ? 1 : 0;
     const stmt = db.prepare(`
@@ -1206,7 +1252,13 @@ async function handleUserManagementAction(action, username) {
             requireConfirmation: true,
             submitLabel: 'Reset password',
             autocomplete: 'new-password',
-            minLength: MIN_PASSWORD_LENGTH
+            policyUsername: target.username,
+            minLength: MIN_PASSWORD_LENGTH,
+            validate: async (password) => {
+                const error = validatePasswordStrength(password, { label: 'Temporary password', username: target.username });
+                if (error) return { ok: false, message: error };
+                return { ok: true };
+            }
         });
         if (!newPassword) return;
         await updateUserPassword(target.username, newPassword, {
@@ -1326,7 +1378,13 @@ async function promptLoginModal(options = {}) {
                     requireConfirmation: true,
                     submitLabel: 'Update password',
                     autocomplete: 'new-password',
-                    minLength: MIN_PASSWORD_LENGTH
+                    policyUsername: normalized,
+                    minLength: MIN_PASSWORD_LENGTH,
+                    validate: async (password) => {
+                        const error = validatePasswordStrength(password, { label: 'New password', username: normalized });
+                        if (error) return { ok: false, message: error };
+                        return { ok: true };
+                    }
                 });
                 if (!newPassword) {
                     showError('Password reset is required to continue.');
@@ -1461,7 +1519,13 @@ async function promptLoginModal(options = {}) {
                 requireConfirmation: true,
                 submitLabel: 'Set new password',
                 autocomplete: 'new-password',
-                minLength: MIN_PASSWORD_LENGTH
+                policyUsername: normalized,
+                minLength: MIN_PASSWORD_LENGTH,
+                validate: async (password) => {
+                    const error = validatePasswordStrength(password, { label: 'New password', username: normalized });
+                    if (error) return { ok: false, message: error };
+                    return { ok: true };
+                }
             });
             if (!newPassword) return;
             await updateUserPassword(normalized, newPassword, {

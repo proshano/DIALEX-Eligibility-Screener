@@ -7,6 +7,7 @@ const ENCRYPTION_MAGIC = 'DIALEX-ENC-V2';
 const ENCRYPTION_HEADER = `${ENCRYPTION_MAGIC}
 `;
 const MIN_PASSWORD_LENGTH = 8;
+const PASSWORD_COMPLEXITY_REQUIRED_GROUPS = 3;
 const USERNAME_PATTERN = /^[a-z0-9._-]{3,}$/i;
 const STUDY_ID_PATTERN = /^[0-9]{4}-[A-Z]{3}-[0-9]{3}$/;
 const TORONTO_TIME_ZONE = 'America/Toronto';
@@ -23,6 +24,8 @@ const TORONTO_PARTS_FORMATTER = new Intl.DateTimeFormat('en-CA', {
 
 let SQL;
 let importedStudyIds = [];
+let isSqlReady = false;
+let isCreatingDatabase = false;
 
 const statusEl = document.getElementById('status');
 const createBtn = document.getElementById('create-btn');
@@ -33,6 +36,17 @@ const studyIdPreview = document.getElementById('study-id-preview');
 const clearStudyIdsBtn = document.getElementById('clear-study-ids');
 const passwordToggle = document.getElementById('toggle-passwords');
 const passwordFields = document.querySelectorAll('[data-password-field]');
+const centralPasswordInput = document.getElementById('central-password');
+const centralConfirmInput = document.getElementById('central-confirm');
+const centralPasswordPolicyEl = document.getElementById('central-password-policy');
+const adminUsernameInput = document.getElementById('admin-username');
+const adminPasswordInput = document.getElementById('admin-password');
+const adminConfirmInput = document.getElementById('admin-confirm');
+const adminPasswordPolicyEl = document.getElementById('admin-password-policy');
+
+function updateCreateButtonState() {
+    createBtn.disabled = !isSqlReady || importedStudyIds.length === 0 || isCreatingDatabase;
+}
 
 function resetPasswordVisibilityToSecureDefault() {
     if (passwordToggle) {
@@ -113,6 +127,92 @@ function clearStatus() {
 
 function normalizeUsername(value) {
     return (value || '').toString().trim().toLowerCase();
+}
+
+function getPasswordStrengthAssessment(password, options = {}) {
+    const value = (password || '').toString();
+    const hasLower = /[a-z]/.test(value);
+    const hasUpper = /[A-Z]/.test(value);
+    const hasNumber = /[0-9]/.test(value);
+    const hasSymbol = /[^A-Za-z0-9]/.test(value);
+    const groupCount = [hasLower, hasUpper, hasNumber, hasSymbol].filter(Boolean).length;
+    const normalizedUsername = normalizeUsername(options.username || '');
+    const containsUsername = Boolean(normalizedUsername) && value.toLowerCase().includes(normalizedUsername);
+    return {
+        hasMinLength: value.length >= MIN_PASSWORD_LENGTH,
+        hasLower,
+        hasUpper,
+        hasNumber,
+        hasSymbol,
+        groupCount,
+        hasRequiredGroups: groupCount >= PASSWORD_COMPLEXITY_REQUIRED_GROUPS,
+        hasUsernameRule: Boolean(normalizedUsername),
+        excludesUsername: !containsUsername
+    };
+}
+
+function renderPasswordPolicyChecklist(container, options = {}) {
+    if (!container) return;
+    const password = (options.password || '').toString();
+    const confirmation = (options.confirmation || '').toString();
+    const assessmentPassword = password || confirmation;
+    const assessment = getPasswordStrengthAssessment(assessmentPassword, { username: options.username || '' });
+    const confirmationMatches = confirmation.length > 0 && confirmation === password;
+    const checks = [
+        { passed: assessment.hasMinLength, label: `At least ${MIN_PASSWORD_LENGTH} characters` },
+        { passed: assessment.hasLower, label: 'Contains lowercase letter (a-z)' },
+        { passed: assessment.hasUpper, label: 'Contains uppercase letter (A-Z)' },
+        { passed: assessment.hasNumber, label: 'Contains number (0-9)' },
+        { passed: assessment.hasSymbol, label: 'Contains symbol (for example: !, @, #)' },
+        {
+            passed: assessment.hasRequiredGroups,
+            label: `Meets at least ${PASSWORD_COMPLEXITY_REQUIRED_GROUPS} of 4 character types (${assessment.groupCount}/4)`
+        }
+    ];
+    if (assessment.hasUsernameRule) {
+        checks.push({ passed: assessment.excludesUsername, label: 'Does not contain username' });
+    }
+    checks.push({ passed: confirmationMatches, label: 'Password and confirmation match' });
+
+    container.innerHTML = `
+        <div class="password-policy-title">Password requirements</div>
+        <ul class="password-policy-list">
+            ${checks.map(check => `
+                <li class="password-policy-item ${check.passed ? 'pass' : 'fail'}">
+                    <span class="password-policy-indicator">${check.passed ? 'Pass' : 'Missing'}</span>
+                    <span class="password-policy-text">${check.label}</span>
+                </li>
+            `).join('')}
+        </ul>
+    `;
+}
+
+function validatePasswordStrength(password, options = {}) {
+    const label = options.label || 'Password';
+    const assessment = getPasswordStrengthAssessment(password, options);
+    if (!assessment.hasMinLength) {
+        return `${label} must be at least ${MIN_PASSWORD_LENGTH} characters.`;
+    }
+    if (!assessment.hasRequiredGroups) {
+        return `${label} must include at least 3 of the following: uppercase letters, lowercase letters, numbers, symbols.`;
+    }
+    if (assessment.hasUsernameRule && !assessment.excludesUsername) {
+        return `${label} must not contain the username.`;
+    }
+    return '';
+}
+
+function refreshPasswordPolicyChecklist() {
+    renderPasswordPolicyChecklist(centralPasswordPolicyEl, {
+        password: centralPasswordInput ? centralPasswordInput.value : '',
+        confirmation: centralConfirmInput ? centralConfirmInput.value : '',
+        username: ''
+    });
+    renderPasswordPolicyChecklist(adminPasswordPolicyEl, {
+        password: adminPasswordInput ? adminPasswordInput.value : '',
+        confirmation: adminConfirmInput ? adminConfirmInput.value : '',
+        username: adminUsernameInput ? adminUsernameInput.value : ''
+    });
 }
 
 function getUserWrapId(username) {
@@ -270,6 +370,7 @@ function clearStudyIdImport() {
     studyIdPreview.textContent = '';
     studyIdPreview.classList.add('hidden');
     clearStudyIdsBtn.disabled = true;
+    updateCreateButtonState();
 }
 
 function handleStudyIdFileChange(event) {
@@ -291,6 +392,7 @@ function handleStudyIdFileChange(event) {
             clearStudyIdsBtn.disabled = true;
             renderStudyIdPreview([]);
             setStudyIdStatus(result.error, 'error');
+            updateCreateButtonState();
             return;
         }
 
@@ -305,14 +407,56 @@ function handleStudyIdFileChange(event) {
         }
         setStudyIdStatus(message, 'success');
         renderStudyIdPreview(importedStudyIds);
+        updateCreateButtonState();
     };
     reader.onerror = () => {
         importedStudyIds = [];
         clearStudyIdsBtn.disabled = true;
         renderStudyIdPreview([]);
         setStudyIdStatus('Unable to read the CSV file.', 'error');
+        updateCreateButtonState();
     };
     reader.readAsText(file);
+}
+
+function hasScriptTagForSource(src) {
+    const expected = new URL(src, window.location.href).href;
+    return Array.from(document.scripts).some(script => script.src === expected);
+}
+
+function loadScriptSource(src) {
+    return new Promise((resolve, reject) => {
+        if (hasScriptTagForSource(src) && typeof initSqlJs === 'function') {
+            resolve();
+            return;
+        }
+        const script = document.createElement('script');
+        script.src = src;
+        script.onload = () => resolve();
+        script.onerror = () => reject(new Error(`Unable to load ${src}`));
+        document.head.appendChild(script);
+    });
+}
+
+async function ensureSqlJsLoaded() {
+    if (typeof initSqlJs === 'function') {
+        return true;
+    }
+    const candidateSources = [
+        'js/lib/sql.js',
+        '../DIALEX_Recruitment_Tracker/js/lib/sql.js'
+    ];
+    for (const src of candidateSources) {
+        try {
+            await loadScriptSource(src);
+            if (typeof initSqlJs === 'function') {
+                return true;
+            }
+        } catch (error) {
+            console.warn(error.message);
+        }
+    }
+    return false;
 }
 
 async function getPasswordKey(password) {
@@ -560,9 +704,10 @@ function buildFilename(siteLabel) {
     return `${base}-${timestamp}.enc`;
 }
 
-function validatePasswords(label, password, confirmation) {
-    if (!password || password.length < MIN_PASSWORD_LENGTH) {
-        return `${label} must be at least ${MIN_PASSWORD_LENGTH} characters.`;
+function validatePasswords(label, password, confirmation, options = {}) {
+    const policyError = validatePasswordStrength(password, { label, username: options.username || '' });
+    if (policyError) {
+        return policyError;
     }
     if (password !== confirmation) {
         return `${label} values do not match.`;
@@ -616,7 +761,7 @@ async function handleProvision(event) {
         return;
     }
 
-    const adminError = validatePasswords('Admin password', adminPassword, adminConfirm);
+    const adminError = validatePasswords('Admin password', adminPassword, adminConfirm, { username: adminUsername });
     if (adminError) {
         showStatus(adminError, 'error');
         return;
@@ -628,7 +773,13 @@ async function handleProvision(event) {
         return;
     }
 
-    createBtn.disabled = true;
+    if (!isSqlReady) {
+        showStatus('Database engine is not ready yet. Wait for initialization and try again.', 'error');
+        return;
+    }
+
+    isCreatingDatabase = true;
+    updateCreateButtonState();
 
     try {
         const db = new SQL.Database();
@@ -651,24 +802,49 @@ async function handleProvision(event) {
         showStatus(`Encrypted starter database created. Keep the central recovery password private and share the admin credentials with the site. Included ${importedStudyIds.length} study IDs.`, 'success');
         form.reset();
         resetPasswordVisibilityToSecureDefault();
+        refreshPasswordPolicyChecklist();
         clearStudyIdImport();
     } catch (error) {
         console.error(error);
         showStatus(error.message || 'Unable to create database.', 'error');
     } finally {
-        createBtn.disabled = false;
+        isCreatingDatabase = false;
+        updateCreateButtonState();
     }
 }
-
-initSqlJs().then(SQL_ => {
-    SQL = SQL_;
-    createBtn.disabled = false;
-    showStatus('Ready to create a site starter database.', 'success');
-}).catch(err => {
-    console.error(err);
-    showStatus('Unable to initialize database engine.', 'error');
-});
 
 form.addEventListener('submit', handleProvision);
 studyIdInput.addEventListener('change', handleStudyIdFileChange);
 clearStudyIdsBtn.addEventListener('click', clearStudyIdImport);
+if (centralPasswordInput) centralPasswordInput.addEventListener('input', refreshPasswordPolicyChecklist);
+if (centralPasswordInput) centralPasswordInput.addEventListener('change', refreshPasswordPolicyChecklist);
+if (centralConfirmInput) centralConfirmInput.addEventListener('input', refreshPasswordPolicyChecklist);
+if (centralConfirmInput) centralConfirmInput.addEventListener('change', refreshPasswordPolicyChecklist);
+if (adminUsernameInput) adminUsernameInput.addEventListener('input', refreshPasswordPolicyChecklist);
+if (adminUsernameInput) adminUsernameInput.addEventListener('change', refreshPasswordPolicyChecklist);
+if (adminPasswordInput) adminPasswordInput.addEventListener('input', refreshPasswordPolicyChecklist);
+if (adminPasswordInput) adminPasswordInput.addEventListener('change', refreshPasswordPolicyChecklist);
+if (adminConfirmInput) adminConfirmInput.addEventListener('input', refreshPasswordPolicyChecklist);
+if (adminConfirmInput) adminConfirmInput.addEventListener('change', refreshPasswordPolicyChecklist);
+
+async function initializeSqlEngine() {
+    const hasSqlJs = await ensureSqlJsLoaded();
+    if (!hasSqlJs) {
+        showStatus('Unable to initialize database engine: sql.js was not found. Keep this folder with the full DIALEX package.', 'error');
+        return;
+    }
+
+    try {
+        SQL = await initSqlJs();
+        isSqlReady = true;
+        updateCreateButtonState();
+        showStatus('Ready to create a site starter database.', 'success');
+    } catch (error) {
+        console.error(error);
+        showStatus('Unable to initialize database engine.', 'error');
+    }
+}
+
+updateCreateButtonState();
+refreshPasswordPolicyChecklist();
+initializeSqlEngine();

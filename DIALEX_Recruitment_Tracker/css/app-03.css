@@ -272,6 +272,57 @@
     display: none;
 }
 
+.password-policy {
+    margin: -6px 0 0 0;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--bg) 88%, var(--card));
+}
+
+.password-policy.hidden {
+    display: none;
+}
+
+.password-policy-title {
+    font-size: 13px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.password-policy-list {
+    list-style: none;
+    margin: 8px 0 0 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.password-policy-item {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    font-size: 13px;
+}
+
+.password-policy-item.pass {
+    color: var(--success);
+}
+
+.password-policy-item.fail {
+    color: var(--muted);
+}
+
+.password-policy-indicator {
+    width: 52px;
+    flex: 0 0 52px;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
 .modal-footer {
     display: flex;
     justify-content: flex-end;

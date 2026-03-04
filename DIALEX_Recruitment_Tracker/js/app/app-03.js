@@ -76,6 +76,7 @@ async function promptInitialAdminSetup() {
         const lastNameInput = $('admin-last-name');
         const passwordInput = $('admin-password');
         const confirmInput = $('admin-password-confirm');
+        const policyEl = $('admin-setup-password-policy');
         const errorEl = $('admin-setup-error');
         const unloadBtn = $('admin-setup-unload-btn');
         const submitBtn = $('admin-setup-submit-btn');
@@ -88,10 +89,26 @@ async function promptInitialAdminSetup() {
             modal.classList.remove('active');
             form.removeEventListener('submit', onSubmit);
             if (unloadBtn) unloadBtn.removeEventListener('click', onUnload);
+            if (usernameInput) usernameInput.removeEventListener('input', refreshPasswordPolicy);
+            if (usernameInput) usernameInput.removeEventListener('change', refreshPasswordPolicy);
+            if (passwordInput) passwordInput.removeEventListener('input', refreshPasswordPolicy);
+            if (passwordInput) passwordInput.removeEventListener('change', refreshPasswordPolicy);
+            if (confirmInput) confirmInput.removeEventListener('input', refreshPasswordPolicy);
+            if (confirmInput) confirmInput.removeEventListener('change', refreshPasswordPolicy);
             if (previouslyFocused && typeof previouslyFocused.focus === 'function') {
                 previouslyFocused.focus();
             }
             resolve(result);
+        };
+
+        const refreshPasswordPolicy = () => {
+            renderPasswordPolicyChecklist(policyEl, {
+                title: 'Password requirements',
+                password: passwordInput ? passwordInput.value : '',
+                confirmation: confirmInput ? confirmInput.value : '',
+                includeConfirmation: true,
+                username: normalizeUsername(usernameInput ? usernameInput.value : '')
+            });
         };
 
         const showError = (message) => {
@@ -122,8 +139,10 @@ async function promptInitialAdminSetup() {
                 }
                 return;
             }
-            if (!password || password.length < MIN_PASSWORD_LENGTH) {
-                showError(`Passwords must be at least ${MIN_PASSWORD_LENGTH} characters.`);
+            const normalized = normalizeUsername(username);
+            const passwordError = validatePasswordStrength(password, { label: 'Password', username: normalized });
+            if (passwordError) {
+                showError(passwordError);
                 passwordInput.focus();
                 return;
             }
@@ -164,9 +183,16 @@ async function promptInitialAdminSetup() {
         confirmInput.value = '';
         errorEl.textContent = '';
         errorEl.classList.add('hidden');
+        refreshPasswordPolicy();
         modal.classList.add('active');
 
         form.addEventListener('submit', onSubmit);
+        if (usernameInput) usernameInput.addEventListener('input', refreshPasswordPolicy);
+        if (usernameInput) usernameInput.addEventListener('change', refreshPasswordPolicy);
+        if (passwordInput) passwordInput.addEventListener('input', refreshPasswordPolicy);
+        if (passwordInput) passwordInput.addEventListener('change', refreshPasswordPolicy);
+        if (confirmInput) confirmInput.addEventListener('input', refreshPasswordPolicy);
+        if (confirmInput) confirmInput.addEventListener('change', refreshPasswordPolicy);
         if (unloadBtn) unloadBtn.addEventListener('click', onUnload);
         requestAnimationFrame(() => usernameInput.focus());
     });
@@ -222,7 +248,12 @@ async function handleRotateCentralPassword() {
         requireConfirmation: true,
         submitLabel: 'Update password',
         autocomplete: 'new-password',
-        minLength: MIN_PASSWORD_LENGTH
+        minLength: MIN_PASSWORD_LENGTH,
+        validate: async (password) => {
+            const error = validatePasswordStrength(password, { label: 'Central recovery password' });
+            if (error) return { ok: false, message: error };
+            return { ok: true };
+        }
     });
     if (!newPassword) return;
     const newWrap = await wrapDataKey(encryptionState.dataKey, newPassword);
@@ -251,6 +282,23 @@ function setupUserManagementControls() {
     const form = $('user-create-form');
     const errorEl = $('user-management-error');
     const tbody = $('user-management-body');
+    const usernameInput = $('user-create-username');
+    const firstNameInput = $('user-create-first-name');
+    const lastNameInput = $('user-create-last-name');
+    const roleInput = $('user-create-role');
+    const passwordInput = $('user-create-password');
+    const confirmInput = $('user-create-confirm');
+    const policyEl = $('user-create-password-policy');
+
+    const refreshPasswordPolicy = () => {
+        renderPasswordPolicyChecklist(policyEl, {
+            title: 'Password requirements',
+            password: passwordInput ? passwordInput.value : '',
+            confirmation: confirmInput ? confirmInput.value : '',
+            includeConfirmation: true,
+            username: normalizeUsername(usernameInput ? usernameInput.value : '')
+        });
+    };
 
     const closeModal = () => {
         modal.classList.remove('active');
@@ -274,6 +322,14 @@ function setupUserManagementControls() {
         });
     }
 
+    if (usernameInput) usernameInput.addEventListener('input', refreshPasswordPolicy);
+    if (usernameInput) usernameInput.addEventListener('change', refreshPasswordPolicy);
+    if (passwordInput) passwordInput.addEventListener('input', refreshPasswordPolicy);
+    if (passwordInput) passwordInput.addEventListener('change', refreshPasswordPolicy);
+    if (confirmInput) confirmInput.addEventListener('input', refreshPasswordPolicy);
+    if (confirmInput) confirmInput.addEventListener('change', refreshPasswordPolicy);
+    refreshPasswordPolicy();
+
     if (form) {
         form.addEventListener('submit', async (event) => {
             event.preventDefault();
@@ -282,12 +338,6 @@ function setupUserManagementControls() {
                 errorEl.textContent = '';
                 errorEl.classList.add('hidden');
             }
-            const usernameInput = $('user-create-username');
-            const firstNameInput = $('user-create-first-name');
-            const lastNameInput = $('user-create-last-name');
-            const roleInput = $('user-create-role');
-            const passwordInput = $('user-create-password');
-            const confirmInput = $('user-create-confirm');
             const username = usernameInput ? usernameInput.value : '';
             const firstName = normalizeNamePart(firstNameInput ? firstNameInput.value : '');
             const lastName = normalizeNamePart(lastNameInput ? lastNameInput.value : '');
@@ -308,9 +358,13 @@ function setupUserManagementControls() {
                 }
                 return;
             }
-            if (!password || password.length < MIN_PASSWORD_LENGTH) {
+            const passwordError = validatePasswordStrength(password, {
+                label: 'Password',
+                username: normalizeUsername(username)
+            });
+            if (passwordError) {
                 if (errorEl) {
-                    errorEl.textContent = `Passwords must be at least ${MIN_PASSWORD_LENGTH} characters.`;
+                    errorEl.textContent = passwordError;
                     errorEl.classList.remove('hidden');
                 }
                 return;
@@ -331,6 +385,7 @@ function setupUserManagementControls() {
                 if (roleInput) roleInput.value = 'user';
                 if (passwordInput) passwordInput.value = '';
                 if (confirmInput) confirmInput.value = '';
+                refreshPasswordPolicy();
                 renderUserManagementList();
                 showStatus('User added.', 'success');
             } catch (error) {
