@@ -1065,16 +1065,16 @@ function loadRecruitingUnitSelection() {
 
 function loadRecruitingUnitExtrasSelection() {
     if (!db) {
-        setRecruitingUnitExtras({}, { refresh: false });
+        setRecruitingUnitExtras(DEFAULT_RECRUITING_UNIT_EXTRAS, { refresh: false });
         return;
     }
-    let extras = {};
+    let extras = { ...DEFAULT_RECRUITING_UNIT_EXTRAS };
     const raw = readSiteSetting(UNIT_FILTER_EXTRAS_SETTING_KEY);
     if (raw) {
         try {
             const parsed = JSON.parse(raw);
             if (parsed && typeof parsed === 'object') {
-                extras = parsed;
+                extras = { ...DEFAULT_RECRUITING_UNIT_EXTRAS, ...parsed };
             }
         } catch (error) {
             console.warn('Unable to parse recruiting unit visibility settings', error);
@@ -1222,7 +1222,7 @@ function loadRecruitingUnitState() {
 function resetRecruitingUnitState() {
     availableUnitCodes = [];
     setRecruitingUnitCodes([], false, true);
-    setRecruitingUnitExtras({}, { refresh: false });
+    setRecruitingUnitExtras(DEFAULT_RECRUITING_UNIT_EXTRAS, { refresh: false });
     renderRecruitingUnitOptions();
     updateRecruitingUnitSummary();
     closeRecruitingUnitModal();

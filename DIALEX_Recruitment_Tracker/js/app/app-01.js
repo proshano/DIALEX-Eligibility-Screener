@@ -772,6 +772,10 @@ const UNIT_FILTER_EXTRA_KEYS = Object.freeze({
     INCLUDE_NO_UNIT: 'include_no_unit',
     INCLUDE_NOT_IN_SCOPE: 'include_not_in_scope'
 });
+const DEFAULT_RECRUITING_UNIT_EXTRAS = Object.freeze({
+    [UNIT_FILTER_EXTRA_KEYS.INCLUDE_NO_UNIT]: true,
+    [UNIT_FILTER_EXTRA_KEYS.INCLUDE_NOT_IN_SCOPE]: true
+});
 const PATIENT_SCOPE_SETTING_KEY = 'patient_scope_mode';
 const PATIENT_SCOPE_MODES = Object.freeze({
     PARTICIPATING: 'participating_only',
