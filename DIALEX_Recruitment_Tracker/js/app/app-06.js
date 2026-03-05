@@ -741,7 +741,7 @@ function isFutureISODateString(value) {
 
 function buildLocationOptionsHtml(selectedValue = '') {
     const normalizedSelected = normalizeLocationValue(selectedValue);
-    const options = ['<option value="">None (not in-centre)</option>'];
+    const options = ['<option value="">Not chronic in-centre HD</option>'];
     const hasAvailableUnits = !!(db && Array.isArray(availableUnitCodes) && availableUnitCodes.length);
     const shouldMarkUnavailable = hasAvailableUnits;
     const allowedSet = hasAvailableUnits
@@ -874,7 +874,7 @@ function loadAvailableUnitCodes() {
         stmt = db.prepare('SELECT study_id FROM study_ids');
         while (stmt.step()) {
             const row = stmt.getAsObject();
-            const code = normalizeUnitCode(extractStudySite(row.study_id || ''));
+            const code = normalizeUnitCode(resolveUnitCodeAlias(extractStudySite(row.study_id || '')));
             if (code) codes.add(code);
         }
     } catch (error) {
@@ -918,44 +918,169 @@ function writeSiteSetting(key, value) {
     }
 }
 
-function setRecruitingUnitCodes(codes = [], persist = false) {
-    const normalized = Array.from(new Set((codes || []).map(normalizeUnitCode).filter(Boolean)));
+function setRecruitingUnitCodes(codes = [], persist = false, allSelected = (codes || []).length === 0) {
+    const normalized = Array.from(new Set((codes || [])
+        .map(code => normalizeUnitCode(resolveUnitCodeAlias(code)))
+        .filter(Boolean)));
     recruitingUnitCodes = normalized;
     recruitingUnitCodeSet = new Set(normalized);
+    recruitingUnitAllSelected = Boolean(allSelected);
     updateRecruitingUnitSummary();
     if (persist) {
         writeSiteSetting(UNIT_FILTER_SETTING_KEY, JSON.stringify(normalized));
+        writeSiteSetting(UNIT_FILTER_MODE_SETTING_KEY, recruitingUnitAllSelected ? 'all' : 'custom');
     }
+}
+
+function normalizeRecruitingUnitExtras(raw = {}) {
+    const input = raw && typeof raw === 'object' ? raw : {};
+    return {
+        [UNIT_FILTER_EXTRA_KEYS.INCLUDE_NO_UNIT]: Boolean(input[UNIT_FILTER_EXTRA_KEYS.INCLUDE_NO_UNIT]),
+        [UNIT_FILTER_EXTRA_KEYS.INCLUDE_NOT_IN_SCOPE]: Boolean(input[UNIT_FILTER_EXTRA_KEYS.INCLUDE_NOT_IN_SCOPE])
+    };
+}
+
+function setRecruitingUnitExtras(extras = {}, options = {}) {
+    const persist = Boolean(options.persist);
+    const refresh = options.refresh !== false;
+    const normalized = normalizeRecruitingUnitExtras(extras);
+    recruitingUnitIncludeNoUnit = normalized[UNIT_FILTER_EXTRA_KEYS.INCLUDE_NO_UNIT];
+    recruitingUnitIncludeNotInScope = normalized[UNIT_FILTER_EXTRA_KEYS.INCLUDE_NOT_IN_SCOPE];
+    updateRecruitingUnitSummary();
+    if (persist) {
+        writeSiteSetting(UNIT_FILTER_EXTRAS_SETTING_KEY, JSON.stringify(normalized));
+    }
+    if (refresh) {
+        renderPatientTable();
+        updateFilterCounts();
+    }
+}
+
+function normalizePatientScopeMode(value = '') {
+    const normalized = String(value || '').trim();
+    if (Object.values(PATIENT_SCOPE_MODES).indexOf(normalized) >= 0) {
+        return normalized;
+    }
+    return PATIENT_SCOPE_MODES.PARTICIPATING;
+}
+
+function updatePatientScopeControls() {
+    const modes = [
+        { key: PATIENT_SCOPE_MODES.PARTICIPATING, buttonId: 'scope-participating-btn' },
+        { key: PATIENT_SCOPE_MODES.OUT_OF_SCOPE, buttonId: 'scope-out-of-scope-btn' },
+        { key: PATIENT_SCOPE_MODES.ALL, buttonId: 'scope-all-patients-btn' }
+    ];
+    modes.forEach(({ key, buttonId }) => {
+        const button = $(buttonId);
+        if (!button) return;
+        button.classList.toggle('active', key === currentPatientScope);
+    });
+}
+
+function updatePatientScopeSummary() {
+    const summary = $('scope-filter-summary');
+    if (!summary) return;
+    if (!db) {
+        summary.textContent = 'Scope: No database loaded';
+        return;
+    }
+    const label = PATIENT_SCOPE_LABELS[currentPatientScope] || PATIENT_SCOPE_LABELS[PATIENT_SCOPE_MODES.PARTICIPATING];
+    summary.textContent = `Scope: ${label}`;
+}
+
+function setPatientScope(scope, options = {}) {
+    const persist = Boolean(options.persist);
+    const refresh = options.refresh !== false;
+    const normalized = normalizePatientScopeMode(scope);
+    currentPatientScope = normalized;
+    updatePatientScopeControls();
+    updatePatientScopeSummary();
+    if (persist) {
+        writeSiteSetting(PATIENT_SCOPE_SETTING_KEY, normalized);
+    }
+    if (refresh) {
+        renderPatientTable();
+        updateFilterCounts();
+    }
+}
+
+function loadPatientScopeSelection() {
+    if (!db) {
+        setPatientScope(PATIENT_SCOPE_MODES.PARTICIPATING, { refresh: false });
+        return;
+    }
+    const raw = readSiteSetting(PATIENT_SCOPE_SETTING_KEY);
+    const scope = normalizePatientScopeMode(raw);
+    setPatientScope(scope, { refresh: false });
 }
 
 function loadRecruitingUnitSelection() {
     if (!db) {
-        setRecruitingUnitCodes([]);
+        setRecruitingUnitCodes([], false, true);
         return;
     }
     let codes = [];
+    let hasStoredCodes = false;
     const raw = readSiteSetting(UNIT_FILTER_SETTING_KEY);
     if (raw) {
         try {
             const parsed = JSON.parse(raw);
             if (Array.isArray(parsed)) {
                 codes = parsed;
+                hasStoredCodes = true;
             }
         } catch (error) {
             console.warn('Unable to parse recruiting unit settings', error);
         }
     }
-    codes = codes.map(normalizeUnitCode).filter(Boolean);
+    const modeRaw = (readSiteSetting(UNIT_FILTER_MODE_SETTING_KEY) || '').trim().toLowerCase();
+    let allSelected = true;
+    if (modeRaw === 'all') {
+        allSelected = true;
+    } else if (modeRaw === 'custom') {
+        allSelected = false;
+    } else if (hasStoredCodes) {
+        // Backward compatibility: historical empty array represented "all units".
+        allSelected = codes.length === 0;
+    } else {
+        allSelected = true;
+    }
+    codes = codes
+        .map(code => normalizeUnitCode(resolveUnitCodeAlias(code)))
+        .filter(Boolean);
+    codes = Array.from(new Set(codes));
     if (!availableUnitCodes.length) {
         codes = [];
+        allSelected = true;
     } else {
         const allowed = new Set(availableUnitCodes);
         codes = codes.filter(code => allowed.has(code));
-        if (codes.length === availableUnitCodes.length) {
+        if (!allSelected && codes.length === availableUnitCodes.length) {
+            allSelected = true;
             codes = [];
         }
     }
-    setRecruitingUnitCodes(codes);
+    setRecruitingUnitCodes(codes, false, allSelected);
+}
+
+function loadRecruitingUnitExtrasSelection() {
+    if (!db) {
+        setRecruitingUnitExtras({}, { refresh: false });
+        return;
+    }
+    let extras = {};
+    const raw = readSiteSetting(UNIT_FILTER_EXTRAS_SETTING_KEY);
+    if (raw) {
+        try {
+            const parsed = JSON.parse(raw);
+            if (parsed && typeof parsed === 'object') {
+                extras = parsed;
+            }
+        } catch (error) {
+            console.warn('Unable to parse recruiting unit visibility settings', error);
+        }
+    }
+    setRecruitingUnitExtras(extras, { refresh: false });
 }
 
 function updateRecruitingUnitSummary() {
@@ -965,15 +1090,21 @@ function updateRecruitingUnitSummary() {
         summary.textContent = 'No database loaded';
         return;
     }
+    const parts = [];
     if (!availableUnitCodes.length) {
-        summary.textContent = 'No units loaded';
-        return;
+        parts.push('No listed units');
+    } else if (recruitingUnitAllSelected) {
+        parts.push('All listed units');
+    } else {
+        parts.push(`${recruitingUnitCodes.length} selected`);
     }
-    if (!recruitingUnitCodes.length) {
-        summary.textContent = 'All units';
-        return;
+    if (recruitingUnitIncludeNoUnit) {
+        parts.push('no unit');
     }
-    summary.textContent = `${recruitingUnitCodes.length} selected`;
+    if (recruitingUnitIncludeNotInScope) {
+        parts.push('unit not in study list');
+    }
+    summary.textContent = parts.join(' + ');
 }
 
 function renderRecruitingUnitOptions() {
@@ -983,23 +1114,56 @@ function renderRecruitingUnitOptions() {
     list.innerHTML = '';
     if (!availableUnitCodes.length) {
         if (empty) empty.classList.remove('hidden');
-        return;
+    } else if (empty) {
+        empty.classList.add('hidden');
     }
-    if (empty) empty.classList.add('hidden');
-    const selection = recruitingUnitCodes.length
-        ? new Set(recruitingUnitCodes)
-        : new Set(availableUnitCodes);
+    const selection = recruitingUnitAllSelected
+        ? new Set(availableUnitCodes)
+        : new Set(recruitingUnitCodes);
     const fragment = document.createDocumentFragment();
     availableUnitCodes.forEach(code => {
-        const name = getLocationNameFromCode(code);
-        const displayName = getLocationDisplayName(code, name);
-        const label = displayName ? `${code} - ${displayName}` : code;
+        const resolvedCode = resolveUnitCodeAlias(code) || code;
+        const name = getLocationNameFromCode(resolvedCode);
+        const displayName = getLocationDisplayName(resolvedCode, name);
+        const labelCode = resolvedCode || code;
+        const label = displayName ? `${labelCode} - ${displayName}` : labelCode;
         const option = document.createElement('label');
         option.className = 'unit-filter-option';
         const checkbox = document.createElement('input');
         checkbox.type = 'checkbox';
         checkbox.dataset.unitCode = code;
         checkbox.checked = selection.has(code);
+        const text = document.createElement('span');
+        text.textContent = label;
+        option.appendChild(checkbox);
+        option.appendChild(text);
+        fragment.appendChild(option);
+    });
+    const divider = document.createElement('div');
+    divider.className = 'unit-filter-divider';
+    fragment.appendChild(divider);
+    const sectionLabel = document.createElement('div');
+    sectionLabel.className = 'unit-filter-section-label';
+    sectionLabel.textContent = 'Other groups';
+    fragment.appendChild(sectionLabel);
+    [
+        {
+            key: UNIT_FILTER_EXTRA_KEYS.INCLUDE_NO_UNIT,
+            checked: recruitingUnitIncludeNoUnit,
+            label: 'No dialysis unit (not chronic in-centre HD)'
+        },
+        {
+            key: UNIT_FILTER_EXTRA_KEYS.INCLUDE_NOT_IN_SCOPE,
+            checked: recruitingUnitIncludeNotInScope,
+            label: 'Unit not in study list'
+        }
+    ].forEach(({ key, checked, label }) => {
+        const option = document.createElement('label');
+        option.className = 'unit-filter-option';
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.dataset.extraKey = key;
+        checkbox.checked = checked;
         const text = document.createElement('span');
         text.textContent = label;
         option.appendChild(checkbox);
@@ -1027,11 +1191,21 @@ function saveRecruitingUnitSelection() {
     const selected = Array.from(list.querySelectorAll('input[type="checkbox"][data-unit-code]'))
         .filter(input => input.checked)
         .map(input => input.dataset.unitCode);
+    const selectedExtras = new Set(
+        Array.from(list.querySelectorAll('input[type="checkbox"][data-extra-key]'))
+            .filter(input => input.checked)
+            .map(input => input.dataset.extraKey)
+    );
     let next = Array.from(new Set(selected.map(normalizeUnitCode).filter(Boolean)));
-    if (availableUnitCodes.length && next.length === availableUnitCodes.length) {
+    const allSelected = !availableUnitCodes.length || next.length === availableUnitCodes.length;
+    if (allSelected) {
         next = [];
     }
-    setRecruitingUnitCodes(next, true);
+    setRecruitingUnitCodes(next, true, allSelected);
+    setRecruitingUnitExtras({
+        [UNIT_FILTER_EXTRA_KEYS.INCLUDE_NO_UNIT]: selectedExtras.has(UNIT_FILTER_EXTRA_KEYS.INCLUDE_NO_UNIT),
+        [UNIT_FILTER_EXTRA_KEYS.INCLUDE_NOT_IN_SCOPE]: selectedExtras.has(UNIT_FILTER_EXTRA_KEYS.INCLUDE_NOT_IN_SCOPE)
+    }, { persist: true, refresh: false });
     closeRecruitingUnitModal();
     renderPatientTable();
     updateFilterCounts();
@@ -1040,39 +1214,87 @@ function saveRecruitingUnitSelection() {
 function loadRecruitingUnitState() {
     loadAvailableUnitCodes();
     loadRecruitingUnitSelection();
+    loadRecruitingUnitExtrasSelection();
     renderRecruitingUnitOptions();
     updateRecruitingUnitSummary();
 }
 
 function resetRecruitingUnitState() {
     availableUnitCodes = [];
-    setRecruitingUnitCodes([]);
+    setRecruitingUnitCodes([], false, true);
+    setRecruitingUnitExtras({}, { refresh: false });
     renderRecruitingUnitOptions();
     updateRecruitingUnitSummary();
     closeRecruitingUnitModal();
 }
 
 function isUnitFilterActive() {
-    return recruitingUnitCodes.length > 0;
+    return !recruitingUnitAllSelected;
 }
 
 function getPatientUnitCode(patient = {}) {
     const selected = getDialysisUnitCanonical(patient);
-    return normalizeUnitCode(getLocationCodeFromValue(selected));
+    const code = normalizeUnitCode(getLocationCodeFromValue(selected));
+    return normalizeUnitCode(resolveUnitCodeAlias(code));
+}
+
+function getAvailableUnitCodeSet() {
+    if (!Array.isArray(availableUnitCodes) || !availableUnitCodes.length) {
+        return new Set();
+    }
+    return new Set(availableUnitCodes.map(normalizeUnitCode).filter(Boolean));
+}
+
+function getParticipatingUnitCodeSet() {
+    const availableSet = getAvailableUnitCodeSet();
+    if (!availableSet.size) return availableSet;
+    if (!isUnitFilterActive()) {
+        return availableSet;
+    }
+    return new Set(
+        Array.from(recruitingUnitCodeSet)
+            .map(code => normalizeUnitCode(resolveUnitCodeAlias(code)))
+            .filter(code => availableSet.has(code))
+    );
+}
+
+function isPatientInParticipatingUnit(patient = {}) {
+    const code = getPatientUnitCode(patient);
+    if (!code) return false;
+    const participatingSet = getParticipatingUnitCodeSet();
+    if (!participatingSet.size) return false;
+    return participatingSet.has(code);
+}
+
+function isPatientInListedStudyUnit(patient = {}) {
+    const code = getPatientUnitCode(patient);
+    if (!code) return false;
+    const availableSet = getAvailableUnitCodeSet();
+    if (!availableSet.size) return false;
+    return availableSet.has(code);
 }
 
 function matchesUnitFilter(patient) {
     if (!patient) return false;
     if (!db) return true;
     const code = getPatientUnitCode(patient);
-    if (!code) return false;
-    if (isUnitFilterActive()) {
-        return recruitingUnitCodeSet.has(code);
+    if (!code) return recruitingUnitIncludeNoUnit;
+    const availableSet = getAvailableUnitCodeSet();
+    if (!availableSet.size) {
+        return true;
     }
-    if (availableUnitCodes.length) {
-        return availableUnitCodes.map(normalizeUnitCode).indexOf(code) >= 0;
+    if (!availableSet.has(code)) {
+        return recruitingUnitIncludeNotInScope;
     }
-    return true;
+    const participatingSet = getParticipatingUnitCodeSet();
+    if (!participatingSet.size) return false;
+    return participatingSet.has(code);
+}
+
+function matchesPatientScope(patient) {
+    if (!patient) return false;
+    if (!db) return true;
+    return matchesUnitFilter(patient);
 }
 
 function getPatientRandomizationCode(patient = {}) {
@@ -1109,7 +1331,19 @@ function setFilter(filter) {
 }
 
 function updateFilterCounts() {
-    const filteredPatients = patientsData.filter(matchesUnitFilter);
+    const filteredPatients = patientsData.filter(matchesPatientScope);
+    const scopeCounts = {
+        [PATIENT_SCOPE_MODES.PARTICIPATING]: 0,
+        [PATIENT_SCOPE_MODES.OUT_OF_SCOPE]: 0,
+        [PATIENT_SCOPE_MODES.ALL]: patientsData.length
+    };
+    patientsData.forEach(patient => {
+        if (isPatientInParticipatingUnit(patient)) {
+            scopeCounts[PATIENT_SCOPE_MODES.PARTICIPATING]++;
+        } else {
+            scopeCounts[PATIENT_SCOPE_MODES.OUT_OF_SCOPE]++;
+        }
+    });
     const counts = {
         all: filteredPatients.length,
         missing: 0,
@@ -1146,6 +1380,13 @@ function updateFilterCounts() {
         const value = key === 'all' ? counts.all : (counts[key] || 0);
         el.textContent = value;
     });
+
+    const participatingEl = $('count-scope-participating');
+    if (participatingEl) participatingEl.textContent = scopeCounts[PATIENT_SCOPE_MODES.PARTICIPATING];
+    const outOfScopeEl = $('count-scope-out-of-scope');
+    if (outOfScopeEl) outOfScopeEl.textContent = scopeCounts[PATIENT_SCOPE_MODES.OUT_OF_SCOPE];
+    const allPatientsEl = $('count-scope-all-patients');
+    if (allPatientsEl) allPatientsEl.textContent = scopeCounts[PATIENT_SCOPE_MODES.ALL];
 }
 
 function showStatus(message, type = 'status') {

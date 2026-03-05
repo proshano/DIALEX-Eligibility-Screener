@@ -682,7 +682,7 @@ const LEGACY_UNIT_CODE_ALIASES = {
     SCO: 'BCC'
 };
 const LEGACY_UNIT_DISPLAY_NOTES = {
-    BCC: 'formarly SCO - Sisters of Charity of Ottawa'
+    BCC: 'formerly SCO - Sisters of Charity of Ottawa'
 };
 
 function resolveUnitCodeAlias(code = '') {
@@ -766,9 +766,29 @@ const LOCATION_SOURCE_LABELS = {
     unknown: ''
 };
 const UNIT_FILTER_SETTING_KEY = 'recruiting_unit_codes';
+const UNIT_FILTER_MODE_SETTING_KEY = 'recruiting_unit_mode';
+const UNIT_FILTER_EXTRAS_SETTING_KEY = 'recruiting_unit_visibility_extras';
+const UNIT_FILTER_EXTRA_KEYS = Object.freeze({
+    INCLUDE_NO_UNIT: 'include_no_unit',
+    INCLUDE_NOT_IN_SCOPE: 'include_not_in_scope'
+});
+const PATIENT_SCOPE_SETTING_KEY = 'patient_scope_mode';
+const PATIENT_SCOPE_MODES = Object.freeze({
+    PARTICIPATING: 'participating_only',
+    OUT_OF_SCOPE: 'out_of_scope_only',
+    ALL: 'all_patients'
+});
+const PATIENT_SCOPE_LABELS = Object.freeze({
+    [PATIENT_SCOPE_MODES.PARTICIPATING]: 'Participating units',
+    [PATIENT_SCOPE_MODES.OUT_OF_SCOPE]: 'Not in participating unit / no unit',
+    [PATIENT_SCOPE_MODES.ALL]: 'All patients'
+});
 let availableUnitCodes = [];
 let recruitingUnitCodes = [];
 let recruitingUnitCodeSet = new Set();
+let recruitingUnitAllSelected = true;
+let recruitingUnitIncludeNoUnit = false;
+let recruitingUnitIncludeNotInScope = false;
 let SQL;
 let db = null;
 let patientsData = [];
@@ -776,6 +796,7 @@ let dbChanged = false;
 let encryptionState = null;
 let currentUser = null;
 let currentFilter = 'all';
+let currentPatientScope = PATIENT_SCOPE_MODES.PARTICIPATING;
 let currentSearchTerm = '';
 const currentSortKey = 'mrn';
 const supportsDirectoryPicker = typeof window.showDirectoryPicker === 'function';

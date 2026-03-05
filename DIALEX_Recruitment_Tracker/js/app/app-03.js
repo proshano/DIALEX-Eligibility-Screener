@@ -1437,7 +1437,6 @@ function computeMissingEligibilityReasons(patient = {}) {
     const hasHealthCard = Boolean(String(patient.health_card || '').trim());
     const hcnProvince = normalizeProvinceCode(patient.health_card_province || '');
     const invalidProvince = hcnProvince && !isProvinceTerritoryCode(hcnProvince);
-    const hcnIneligible = invalidProvince || isIneligibleHealthCardValue(patient.health_card, hcnProvince);
     const requiresDialysisUnit = patient.incl_incentre_hd === 1;
     const locationValue = requiresDialysisUnit ? getDialysisUnitCanonical(patient) : '';
     const hasDialysisUnit = requiresDialysisUnit && Boolean(normalizeLocationValue(locationValue));
@@ -1450,7 +1449,7 @@ function computeMissingEligibilityReasons(patient = {}) {
     if (!hasHealthCard && !invalidProvince) reasons.push('Health card number missing');
     if (hasHealthCard && !hcnProvince) reasons.push('HCN province/territory missing');
     const hcnFormatError = hasHealthCard ? validateHealthCardFormat(patient.health_card, hcnProvince || '') : '';
-    if (hcnFormatError && !hcnIneligible) reasons.push(hcnFormatError);
+    if (hcnFormatError) reasons.push(hcnFormatError);
     if (requiresDialysisUnit && !hasDialysisUnit) reasons.push('Dialysis unit at randomization missing');
     if (!hasDialysisHistory) reasons.push('Dialysis start date or ≥90-day confirmation missing');
     return reasons;

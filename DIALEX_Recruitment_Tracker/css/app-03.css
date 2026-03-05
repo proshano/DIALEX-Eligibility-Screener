@@ -430,6 +430,14 @@ label {
     padding: 10px;
     background: var(--table-header-bg);
 }
+#unit-filter-modal .modal-content.modal-narrow {
+    max-width: 620px;
+    width: min(620px, 100%);
+    max-height: 92vh;
+}
+#unit-filter-modal .unit-filter-list {
+    max-height: 68vh;
+}
 .unit-filter-option {
     display: flex;
     align-items: flex-start;
@@ -437,6 +445,18 @@ label {
 }
 .unit-filter-option input {
     margin-top: 3px;
+}
+.unit-filter-divider {
+    border-top: 1px solid var(--border);
+    margin: 2px 0 0;
+}
+.unit-filter-section-label {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--muted);
+    font-weight: 700;
+    margin-top: 4px;
 }
 .copy-field {
     display: flex;

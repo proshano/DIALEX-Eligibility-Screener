@@ -1069,7 +1069,24 @@ function promptNewPatient() {
     const tempMrn = generateTemporaryMrn();
     const patient = createBlankPatientRecord(tempMrn);
     persistPatient(patient);
-    showRecordWarning('Blank patient row added (listed under "Missing Data" until required fields are completed). Enter the patient details directly in the table.', 'status');
+    const searchInput = $('search-input');
+    if (searchInput) {
+        searchInput.value = '';
+    }
+    currentSearchTerm = '';
+    if (typeof setRecruitingUnitExtras === 'function') {
+        setRecruitingUnitExtras({
+            [UNIT_FILTER_EXTRA_KEYS.INCLUDE_NO_UNIT]: true,
+            [UNIT_FILTER_EXTRA_KEYS.INCLUDE_NOT_IN_SCOPE]: recruitingUnitIncludeNotInScope
+        }, { persist: false, refresh: false });
+    }
+    if (typeof setFilter === 'function') {
+        setFilter('all');
+    } else {
+        currentFilter = 'all';
+        renderPatientTable();
+    }
+    showRecordWarning('Blank patient row added. Enter the patient details directly in the table.', 'status');
     showStatus('Blank patient row added', 'success');
     focusPatientRow(tempMrn);
 }

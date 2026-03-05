@@ -44,8 +44,8 @@ function computeBucketFlags(patient = {}) {
     const inCentreIneligible = Number(patient.incl_incentre_hd) !== 1;
     const missingHcnInfo = (!hasHealthCard && !invalidProvince) || (hasHealthCard && !hcnProvince);
     const hcnFormatError = hasHealthCard ? validateHealthCardFormat(patient.health_card, hcnProvince || '') : '';
-    const hcnMissingError = !!hcnFormatError && !hcnIneligible;
-    const missingData = missingAge || missingDiabetes || missingHcnInfo || hcnMissingError || (requiresDialysisUnit && !hasDialysisUnit) || !hasDialysisHistory;
+    const hcnEligibilityFailure = missingHcnInfo || Boolean(hcnFormatError) || hcnIneligible;
+    const missingData = missingAge || missingDiabetes || hcnEligibilityFailure || (requiresDialysisUnit && !hasDialysisUnit) || !hasDialysisHistory;
 
     const optOutStatus = patient.opt_out_status || OPT_OUT_STATUS.PENDING;
     const isOptedOutStatus = optOutStatus === OPT_OUT_STATUS.OPTED_OUT;
@@ -53,12 +53,12 @@ function computeBucketFlags(patient = {}) {
     const hasAnyExclusion = patient.hasAnyExclusion || false;
     const hasNonMissingIneligible = isOptedOutStatus
         || hasAnyExclusion
-        || hcnIneligible
+        || hcnEligibilityFailure
         || ageIneligible
         || dialysisIneligible
         || inCentreIneligible;
     flags.ineligible = hasNonMissingIneligible;
-    flags.missing = !hasNonMissingIneligible && !hcnIneligible && missingData;
+    flags.missing = missingData;
 
     const today = startOfToday();
     const hasNotification = Boolean(patient.notification_date);
@@ -73,7 +73,9 @@ function computeBucketFlags(patient = {}) {
     const hasConfirmedNoExclusions = Boolean(patient.no_exclusions_confirmed);
     const meetsEligibility = patient.inclusionMet && !hasAnyExclusion && hasConfirmedNoExclusions;
 
-    const unitCode = hasDialysisUnit ? normalizeUnitCode(getLocationCodeFromValue(locationValue)) : '';
+    const unitCode = hasDialysisUnit
+        ? normalizeUnitCode(resolveUnitCodeAlias(getLocationCodeFromValue(locationValue)))
+        : '';
     const unitHasStudyIds = !unitCode || (Array.isArray(availableUnitCodes) && availableUnitCodes.map(normalizeUnitCode).indexOf(unitCode) >= 0);
     const noStudyIdsForUnit = !unitHasStudyIds && Boolean(unitCode);
     flags.noStudyIdsForUnit = noStudyIdsForUnit;
@@ -122,6 +124,9 @@ function computeBucketFlags(patient = {}) {
 }
 
 function determinePrimaryBucket(flags = {}) {
+    if (flags.ineligible && flags.missing) {
+        return 'ineligible';
+    }
     for (const key of PRIMARY_BUCKET_ORDER) {
         if (flags[key]) {
             return key;
@@ -149,7 +154,7 @@ function matchesVisibilityFilter(patient) {
     if (isSearchActive()) {
         return matchesSearchTerm(patient);
     }
-    return matchesUnitFilter(patient) && matchesActiveFilter(patient);
+    return matchesPatientScope(patient) && matchesActiveFilter(patient);
 }
 
 function renderPatientTableNow() {
@@ -240,10 +245,28 @@ function getStatusBadgeHtml(patient) {
     const primary = statusLabels[rawPrimary] ? rawPrimary : 'all';
     let label = statusLabels[primary] || 'All';
     const statusClass = `status-${primary.replace(/_/g, '-')}`;
+    const notChronicInCentreHd = Number(patient.incl_incentre_hd) !== 1;
+    const hasHealthCard = Boolean(String(patient.health_card || '').trim());
+    const hcnProvince = normalizeProvinceCode(patient.health_card_province || '');
+    const missingHcn = !hasHealthCard;
+    const missingHcnProvince = hasHealthCard && !hcnProvince;
+    const invalidHcn = hasHealthCard && !missingHcnProvince && Boolean(validateHealthCardFormat(patient.health_card, hcnProvince || ''));
 
     // Add study ID availability warning
-    if (flags.noStudyIdsForUnit) {
-        label += ' — no Study IDs for unit';
+    if (primary === 'ineligible') {
+        if (missingHcn) {
+            label += ' — missing HCN';
+        } else if (missingHcnProvince) {
+            label += ' — missing HCN province/territory';
+        } else if (invalidHcn) {
+            label += ' — invalid HCN';
+        } else if (notChronicInCentreHd) {
+            label += ' — not chronic in-centre HD';
+        } else if (flags.noStudyIdsForUnit) {
+            label += ' — not in a recruiting dialysis unit';
+        }
+    } else if (flags.noStudyIdsForUnit) {
+        label += ' — not in a recruiting dialysis unit';
     }
 
     // Add allocation info for randomized patients
@@ -340,6 +363,10 @@ function buildPatientSummaryRow(patient, isExpanded) {
     const missingName = !String(patient.patient_name || '').trim();
     const missingAge = !Number.isFinite(patient.age);
     const missingDialysisUnit = !normalizeLocationValue(dialysisUnitCanonical);
+    const notInCentreHd = Number(patient.incl_incentre_hd) !== 1;
+    const bucketFlags = patient.bucketFlags || computeBucketFlags(patient);
+    const notInRecruitingUnit = Boolean(bucketFlags.noStudyIdsForUnit);
+    const dialysisUnitNeedsWarning = missingDialysisUnit || notInCentreHd || notInRecruitingUnit;
     const hasHealthCard = !!String(patient.health_card || '').trim();
     const hcnProvince = normalizeProvinceCode(patient.health_card_province || inferProvinceFromHealthCard(patient.health_card || ''));
     const hcnFormatError = hasHealthCard ? validateHealthCardFormat(patient.health_card, hcnProvince || '') : '';
@@ -354,7 +381,7 @@ function buildPatientSummaryRow(patient, isExpanded) {
     const provinceFieldClass = hcnProvinceReviewError ? 'hcn-review-warning' : '';
     const nameFieldClass = missingName ? 'required-missing' : '';
     const ageFieldClass = missingAge ? 'required-missing' : '';
-    const dialysisFieldClass = missingDialysisUnit ? 'required-missing' : '';
+    const dialysisFieldClass = dialysisUnitNeedsWarning ? 'required-missing' : '';
     const copyHcnDisabled = !hasHealthCard ? 'disabled' : '';
     const statusBadge = getStatusBadgeHtml(patient);
     const expandedClass = isExpanded ? 'expanded' : '';
@@ -397,7 +424,7 @@ function buildPatientSummaryRow(patient, isExpanded) {
                     </select>
                 </div>
                 <div class="compact-field compact-dialysis ${dialysisFieldClass}" data-field="dialysis_unit">
-                    <label${missingDialysisUnit ? ' title="Dialysis unit missing"' : ''}>Dialysis Unit</label>
+                    <label${dialysisUnitNeedsWarning ? ` title="${escapeHtml(missingDialysisUnit ? 'Dialysis unit missing' : (notInCentreHd ? 'Not receiving in-centre HD' : 'Not in a recruiting dialysis unit'))}"` : ''}>Dialysis Unit</label>
                     <select class="table-input" ${eligibilityLocked ? 'disabled' : ''} onchange="updateDialysisUnit(${patient._index}, this.value)">
                         ${dialysisUnitOptions}
                     </select>
@@ -481,7 +508,7 @@ function buildPatientDetailsRow(patient) {
     `;
     const missingReasons = computeMissingEligibilityReasons(patient);
     const flags = patient.bucketFlags || computeBucketFlags(patient);
-    const missingMessage = flags.missing && !flags.ineligible && missingReasons.length
+    const missingMessage = flags.missing && missingReasons.length
         ? `<div class="status-subtext" style="color:#ffcc66; font-weight:700; margin-top:10px;">Missing: ${escapeHtml(missingReasons.join('; '))}</div>`
         : '';
     const diabetesButton = (status, label) => {

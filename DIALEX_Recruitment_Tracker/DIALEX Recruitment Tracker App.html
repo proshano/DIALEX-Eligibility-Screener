@@ -48,7 +48,7 @@
         <div class="header">
             <h1>DIALEX Recruitment Tracker</h1>
             <div class="meta-row">
-                <div class="meta-pill version-pill" aria-label="Version date">Version: Mar 4 2026</div>
+                <div class="meta-pill version-pill" aria-label="Version date">Version: Mar 5 2026</div>
                 <div class="meta-pill owner-pill" aria-label="Ownership">Copyright 2026 DIALEX trial project office</div>
                 <button id="theme-toggle" class="meta-pill theme-toggle" onclick="toggleTheme()" aria-pressed="true" type="button">Dark theme</button>
             </div>
@@ -323,9 +323,9 @@
                 <input type="text" id="search-input" placeholder="Search by name, MRN, health card, or unit. Use spaces to require multiple matches.">
             </div>
             <div class="unit-filter-bar">
-                <div class="unit-filter-label">Filter by dialysis unit:</div>
-                <div id="unit-filter-summary" class="unit-filter-summary">All units</div>
-                <button type="button" id="unit-filter-btn" class="secondary small" disabled>Select units</button>
+                <div class="unit-filter-label">Show patients:</div>
+                <div id="unit-filter-summary" class="unit-filter-summary">All listed units</div>
+                <button type="button" id="unit-filter-btn" class="secondary small" disabled>Show</button>
             </div>
             <!-- Stage Pipeline: Visual progression of recruitment stages -->
             <div class="stage-pipeline">
@@ -587,15 +587,15 @@
         </div>
     </div>
 
-    <!-- Recruiting Units Modal -->
+    <!-- Show Patients Modal -->
     <div id="unit-filter-modal" class="patient-modal" role="dialog" aria-modal="true" aria-labelledby="unit-filter-title">
         <div class="modal-content modal-narrow">
             <div class="modal-header">
-                <h2 id="unit-filter-title">Recruiting units</h2>
-                <span id="unit-filter-close" class="close" role="button" tabindex="0" aria-label="Close recruiting units dialog">&times;</span>
+                <h2 id="unit-filter-title">Which patients to show</h2>
+                <span id="unit-filter-close" class="close" role="button" tabindex="0" aria-label="Close show patients dialog">&times;</span>
             </div>
             <div class="modal-body">
-                <p class="modal-message">Select the dialysis units currently recruiting at this site.</p>
+                <p class="modal-message">Select which patient groups to show in the table.</p>
                 <div id="unit-filter-empty" class="status-subtext hidden">No unit codes found in Study IDs.</div>
                 <div id="unit-filter-list" class="unit-filter-list"></div>
             </div>
