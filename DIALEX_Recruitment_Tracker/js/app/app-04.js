@@ -2,7 +2,7 @@
 function isHealthCardValid(patient) {
     if (!patient) return false;
     const province = patient.health_card_province || inferProvinceFromHealthCard(patient.health_card || '');
-    const error = validateHealthCardFormat(patient.health_card || '', province || '');
+    const error = getHealthCardEligibilityError(patient.health_card || '', province || '');
     return !error;
 }
 
@@ -26,8 +26,6 @@ function computeBucketFlags(patient = {}) {
     }
     const hasHealthCard = Boolean(String(patient.health_card || '').trim());
     const hcnProvince = normalizeProvinceCode(patient.health_card_province || '');
-    const invalidProvince = hcnProvince && !isProvinceTerritoryCode(hcnProvince);
-    const hcnIneligible = invalidProvince || isIneligibleHealthCardValue(patient.health_card, hcnProvince);
     const ageValue = Number.isFinite(patient.age) ? patient.age : null;
     const missingAge = !Number.isFinite(ageValue);
     const needsDiabetesStatus = Number.isFinite(ageValue) && ageValue >= 45 && ageValue < 60;
@@ -42,9 +40,9 @@ function computeBucketFlags(patient = {}) {
     const hasDialysisHistory = Boolean(patient.dialysis_start_date) || Boolean(patient.dialysis_duration_confirmed);
     const dialysisIneligible = hasDialysisHistory && Number(patient.incl_dialysis_90d) !== 1;
     const inCentreIneligible = Number(patient.incl_incentre_hd) !== 1;
-    const missingHcnInfo = (!hasHealthCard && !invalidProvince) || (hasHealthCard && !hcnProvince);
-    const hcnFormatError = hasHealthCard ? validateHealthCardFormat(patient.health_card, hcnProvince || '') : '';
-    const hcnEligibilityFailure = missingHcnInfo || Boolean(hcnFormatError) || hcnIneligible;
+    const missingHcnInfo = !hasHealthCard || (hasHealthCard && !hcnProvince);
+    const hcnEligibilityError = hasHealthCard ? getHealthCardEligibilityError(patient.health_card, hcnProvince || '') : '';
+    const hcnEligibilityFailure = missingHcnInfo || Boolean(hcnEligibilityError);
     const missingData = missingAge || missingDiabetes || hcnEligibilityFailure || (requiresDialysisUnit && !hasDialysisUnit) || !hasDialysisHistory;
 
     const optOutStatus = patient.opt_out_status || OPT_OUT_STATUS.PENDING;
@@ -228,6 +226,9 @@ function insertRowSorted(tbody, row, patient) {
 let expandedPatientIndex = null;
 
 function getStatusBadgeHtml(patient) {
+    if (typeof isPristineManualPatientRecord === 'function' && isPristineManualPatientRecord(patient)) {
+        return '<div class="status-badge status-missing">Missing data</div>';
+    }
     const flags = patient.bucketFlags || computeBucketFlags(patient);
     const rawPrimary = flags.primary;
     const statusLabels = {
@@ -250,7 +251,7 @@ function getStatusBadgeHtml(patient) {
     const hcnProvince = normalizeProvinceCode(patient.health_card_province || '');
     const missingHcn = !hasHealthCard;
     const missingHcnProvince = hasHealthCard && !hcnProvince;
-    const invalidHcn = hasHealthCard && !missingHcnProvince && Boolean(validateHealthCardFormat(patient.health_card, hcnProvince || ''));
+    const invalidHcn = hasHealthCard && !missingHcnProvince && Boolean(getHealthCardEligibilityError(patient.health_card, hcnProvince || ''));
 
     // Add study ID availability warning
     if (primary === 'ineligible') {
@@ -358,27 +359,33 @@ function buildPatientSummaryRow(patient, isExpanded) {
     const diabetesStatus = normalizeDiabetesStatus(patient.diabetes_known);
     const needsDiabetesStatus = Number.isFinite(patient.age) && patient.age >= 45 && patient.age < 60;
     const dialysisUnitCanonical = getDialysisUnitCanonical(patient);
-    const dialysisUnitOptions = buildLocationOptionsHtml(dialysisUnitCanonical);
+    const isPristineManualRecord = typeof isPristineManualPatientRecord === 'function' && isPristineManualPatientRecord(patient);
+    const dialysisUnitOptions = buildLocationOptionsHtml(dialysisUnitCanonical, {
+        emptyLabel: isPristineManualRecord ? 'Dialysis unit' : 'Not chronic in-centre HD'
+    });
     const provinceOptions = buildProvinceOptions(patient.health_card_province || '');
     const missingName = !String(patient.patient_name || '').trim();
     const missingAge = !Number.isFinite(patient.age);
     const missingDialysisUnit = !normalizeLocationValue(dialysisUnitCanonical);
-    const notInCentreHd = Number(patient.incl_incentre_hd) !== 1;
+    const notInCentreHd = !isPristineManualRecord && Number(patient.incl_incentre_hd) !== 1;
     const bucketFlags = patient.bucketFlags || computeBucketFlags(patient);
     const notInRecruitingUnit = Boolean(bucketFlags.noStudyIdsForUnit);
     const dialysisUnitNeedsWarning = missingDialysisUnit || notInCentreHd || notInRecruitingUnit;
     const hasHealthCard = !!String(patient.health_card || '').trim();
     const hcnProvince = normalizeProvinceCode(patient.health_card_province || inferProvinceFromHealthCard(patient.health_card || ''));
-    const hcnFormatError = hasHealthCard ? validateHealthCardFormat(patient.health_card, hcnProvince || '') : '';
+    const hcnFormatError = hasHealthCard ? getHealthCardEligibilityError(patient.health_card, hcnProvince || '') : '';
     const hcnProvinceReviewError = hcnFormatError === 'Select province/territory to validate HCN.'
         || hcnFormatError === 'Province of Healthcard No. must be blank or a valid province/territory code.';
     const hcnMissingError = !hasHealthCard;
+    const hcnProvinceMissingError = !hcnProvince;
     const hcnLabelTitle = hcnMissingError
         ? ' title="Health card number missing"'
         : (hcnFormatError && !hcnProvinceReviewError ? ` title="${escapeHtml(hcnFormatError)}"` : '');
     const hcnFieldClass = hcnMissingError || (hcnFormatError && !hcnProvinceReviewError) ? 'hcn-review-warning' : '';
-    const provinceLabelTitle = hcnProvinceReviewError ? ` title="${escapeHtml(hcnFormatError)}"` : '';
-    const provinceFieldClass = hcnProvinceReviewError ? 'hcn-review-warning' : '';
+    const provinceLabelTitle = hcnProvinceMissingError
+        ? ' title="HCN province/territory missing"'
+        : (hcnProvinceReviewError ? ` title="${escapeHtml(hcnFormatError)}"` : '');
+    const provinceFieldClass = hcnProvinceMissingError || hcnProvinceReviewError ? 'hcn-review-warning' : '';
     const nameFieldClass = missingName ? 'required-missing' : '';
     const ageFieldClass = missingAge ? 'required-missing' : '';
     const dialysisFieldClass = dialysisUnitNeedsWarning ? 'required-missing' : '';
@@ -935,7 +942,7 @@ function updateCriterion(index, key, checked) {
             return;
         }
         const province = patient.health_card_province || inferProvinceFromHealthCard(patient.health_card || '');
-        const formatError = validateHealthCardFormat(patient.health_card, province || '');
+        const formatError = getHealthCardEligibilityError(patient.health_card, province || '');
         if (formatError) {
             patient[key] = 0;
             showRecordWarning(formatError, 'error');
@@ -975,8 +982,9 @@ function updateInlineNotification(index, value) {
             showRecordWarning('');
             return;
         }
-        if (!patient.no_exclusions_confirmed) {
-            showRecordWarning('Confirm "No exclusions" before recording a notification date.', 'error');
+        const notificationIssue = getNotificationEligibilityIssue(patient);
+        if (notificationIssue) {
+            showRecordWarning(notificationIssue, 'error');
             renderPatientTable();
             return;
         }
@@ -1010,7 +1018,7 @@ function updateInlineNotification(index, value) {
         releaseStudyId(patient.study_id);
         patient.study_id = '';
         patient.therapy_prescribed = 0;
-        patient.enrollment_status = (patient.noExclusions && patient.inclusionMet && patient.no_exclusions_confirmed && patient.hasHealthCard) ? 'eligible' : 'pending';
+        patient.enrollment_status = getNonRandomizedEnrollmentStatus(patient);
     } else {
         patient.location_at_notification = getCanonicalLocationValue(patient.location) || '';
     }
@@ -1060,7 +1068,7 @@ function updateOptOutStatus(index, value) {
         releaseStudyId(patient.study_id);
         patient.study_id = '';
         patient.therapy_prescribed = 0;
-        patient.enrollment_status = (patient.noExclusions && patient.inclusionMet && patient.no_exclusions_confirmed && patient.hasHealthCard) ? 'eligible' : 'pending';
+        patient.enrollment_status = getNonRandomizedEnrollmentStatus(patient);
     }
     showRecordWarning('');
     persistPatient(patient, false);
@@ -1121,7 +1129,7 @@ function updateOptOutDate(index, value) {
     releaseStudyId(patient.study_id);
     patient.study_id = '';
     patient.therapy_prescribed = 0;
-    patient.enrollment_status = (patient.noExclusions && patient.inclusionMet && patient.no_exclusions_confirmed && patient.hasHealthCard) ? 'eligible' : 'pending';
+    patient.enrollment_status = getNonRandomizedEnrollmentStatus(patient);
     showRecordWarning('');
     persistPatient(patient, false);
     refreshPatientRow(patient);

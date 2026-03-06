@@ -384,7 +384,7 @@ function analyzePreScreeningRows(rows) {
         const provinceRaw = getField(row, [HCN_PROVINCE_HEADER]) || '';
         const provinceCode = normalizeProvinceCode(provinceRaw);
         const invalidProvince = provinceCode && !isProvinceTerritoryCode(provinceCode);
-        const hcnFormatError = healthCard ? validateHealthCardFormat(healthCard, provinceCode) : '';
+        const hcnFormatError = healthCard ? getHealthCardEligibilityError(healthCard, provinceCode) : '';
         const birthDate = parseLegacyDate(getField(row, [BIRTH_DATE_HEADER]));
         const dialysisStart = parseLegacyDate(getField(row, [START_DATE_HEADER]));
         let modalityCode = getField(row, [MODALITY_HEADER, 'Current Modality', 'Latest Modality']) || '';
@@ -560,6 +560,10 @@ function canRandomizePatient(patient) {
 function getRandomizationIssues(patient) {
     const issues = [];
     if (!patient) return ['Missing patient record'];
+    const hcnEligibilityError = getPatientHealthCardEligibilityError(patient);
+    if (hcnEligibilityError) {
+        issues.push(hcnEligibilityError);
+    }
     if (!patient.inclusionMet) {
         issues.push('Complete inclusion checklist');
     }
@@ -574,9 +578,6 @@ function getRandomizationIssues(patient) {
     }
     if (patient.opt_out_status === OPT_OUT_STATUS.OPTED_OUT) {
         issues.push('Patient opted out');
-    }
-    if (!patient.incl_health_card) {
-        issues.push('Enter valid health insurance card number');
     }
     if (!patient.notification_date) {
         issues.push('Set notification date');
@@ -739,9 +740,12 @@ function isFutureISODateString(value) {
     return isDateInFuture(date);
 }
 
-function buildLocationOptionsHtml(selectedValue = '') {
+function buildLocationOptionsHtml(selectedValue = '', options = {}) {
+    const emptyLabel = Object.prototype.hasOwnProperty.call(options || {}, 'emptyLabel')
+        ? String(options.emptyLabel)
+        : 'Not chronic in-centre HD';
     const normalizedSelected = normalizeLocationValue(selectedValue);
-    const options = ['<option value="">Not chronic in-centre HD</option>'];
+    const optionHtml = [`<option value="">${escapeHtml(emptyLabel)}</option>`];
     const hasAvailableUnits = !!(db && Array.isArray(availableUnitCodes) && availableUnitCodes.length);
     const shouldMarkUnavailable = hasAvailableUnits;
     const allowedSet = hasAvailableUnits
@@ -763,16 +767,16 @@ function buildLocationOptionsHtml(selectedValue = '') {
         if (selected) {
             selectedListed = true;
         }
-        options.push(`<option value="${escapeHtml(option.canonical)}"${selected}>${escapeHtml(option.display)}</option>`);
+        optionHtml.push(`<option value="${escapeHtml(option.canonical)}"${selected}>${escapeHtml(option.display)}</option>`);
     });
     if (normalizedSelected && !selectedListed) {
         const display = getLocationDisplayFromCanonical(selectedValue) || formatLocationDisplay(selectedValue) || selectedValue;
         const suffix = shouldMarkUnavailable ? ' (not in program)' : '';
-        options.push(`<option value="${escapeHtml(selectedValue)}" selected>${escapeHtml(`${display}${suffix}`)}</option>`);
+        optionHtml.push(`<option value="${escapeHtml(selectedValue)}" selected>${escapeHtml(`${display}${suffix}`)}</option>`);
     } else if (db && !hasAvailableUnits) {
-        options.push('<option value="" disabled>No program units loaded</option>');
+        optionHtml.push('<option value="" disabled>No program units loaded</option>');
     }
-    return options.join('');
+    return optionHtml.join('');
 }
 
 function getDialysisUnitCanonical(patient = {}) {

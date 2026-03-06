@@ -1374,8 +1374,8 @@ function normalizePatientRow(row, index) {
         }
     }
     patient.hasHealthCard = normalizedHcn.length > 0;
-    const hcnFormatError = validateHealthCardFormat(normalizedHcn, provinceForHcn || '');
-    patient.incl_health_card = patient.hasHealthCard && !hcnFormatError ? 1 : 0;
+    const hcnEligibilityError = getHealthCardEligibilityError(normalizedHcn, provinceForHcn || '');
+    patient.incl_health_card = patient.hasHealthCard && !hcnEligibilityError ? 1 : 0;
     patient.health_card_province = provinceForHcn || '';
     recalcDialysisInclusion(patient);
     patient.inclusionMet = INCLUSION_KEYS.every(key => patient[key] === 1);
@@ -1387,6 +1387,9 @@ function normalizePatientRow(row, index) {
 }
 
 function rowClassFromStatus(patient) {
+    if (typeof isPristineManualPatientRecord === 'function' && isPristineManualPatientRecord(patient)) {
+        return '';
+    }
     const flags = (patient && patient.bucketFlags) || {};
     if (flags.opted_out || flags.ineligible) return 'ineligible-row';
     if (flags.randomized_rx) return 'enrolled-row';
@@ -1419,17 +1422,6 @@ function isProvinceTerritoryCode(value) {
     return code !== '' && Boolean(PROVINCE_LABELS[code]);
 }
 
-function isIneligibleHealthCardValue(hcn, province) {
-    const normalized = String(hcn || '').replace(/[^A-Za-z0-9]/g, '').toUpperCase();
-    if (!normalized) return false;
-    if (/^M[0-9]{8}$/.test(normalized)) return true;
-    if (/^R[0-9]{8}$/.test(normalized)) return true;
-    if (/^K[0-9]{7}$/.test(normalized)) return true;
-    if (/^[A-Z]{4}[0-9]{8}$/.test(normalized)) return true;
-    const provinceCode = normalizeProvinceCode(province);
-    return provinceCode === 'QC';
-}
-
 function computeMissingEligibilityReasons(patient = {}) {
     const reasons = [];
     const ageValue = Number.isFinite(patient.age) ? patient.age : null;
@@ -1448,8 +1440,8 @@ function computeMissingEligibilityReasons(patient = {}) {
     }
     if (!hasHealthCard && !invalidProvince) reasons.push('Health card number missing');
     if (hasHealthCard && !hcnProvince) reasons.push('HCN province/territory missing');
-    const hcnFormatError = hasHealthCard ? validateHealthCardFormat(patient.health_card, hcnProvince || '') : '';
-    if (hcnFormatError) reasons.push(hcnFormatError);
+    const hcnEligibilityError = hasHealthCard ? getHealthCardEligibilityError(patient.health_card, hcnProvince || '') : '';
+    if (hcnEligibilityError) reasons.push(hcnEligibilityError);
     if (requiresDialysisUnit && !hasDialysisUnit) reasons.push('Dialysis unit at randomization missing');
     if (!hasDialysisHistory) reasons.push('Dialysis start date or ≥90-day confirmation missing');
     return reasons;
@@ -1486,28 +1478,7 @@ function isScientificNotationNumericText(value = '') {
     return /[0-9](?:\.[0-9]+)?e[+-]?[0-9]+/i.test(rawValue);
 }
 
-function validateHealthCardFormat(hcn, province) {
-    const rawValue = String(hcn || '').trim();
-    if (!rawValue) return '';
-    if (isScientificNotationNumericText(rawValue)) {
-        return 'Possible Excel corruption: HCN is in scientific notation. Replace with full HCN digits from the source record.';
-    }
-    const normalized = rawValue.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
-    const provinceCode = normalizeProvinceCode(province);
-    if (!normalized) return '';
-    if (/^M[0-9]{8}$/.test(normalized)) {
-        return 'Canadian Forces (CF) health card numbers are not eligible.';
-    }
-    if (/^R[0-9]{8}$/.test(normalized)) {
-        return 'RCMP health card numbers are not eligible.';
-    }
-    if (/^K[0-9]{7}$/.test(normalized)) {
-        return 'Veterans Affairs (VAC) health card numbers are not eligible.';
-    }
-    if (provinceCode && !isProvinceTerritoryCode(provinceCode)) {
-        return 'Province of Healthcard No. must be blank or a valid province/territory code.';
-    }
-    if (!provinceCode) return 'Select province/territory to validate HCN.';
+function getProvincialHealthCardFormatError(normalized, provinceCode) {
     const len = normalized.length;
     const isNumeric = /^[0-9]+$/.test(normalized);
     switch (provinceCode) {
@@ -1559,9 +1530,76 @@ function validateHealthCardFormat(hcn, province) {
             }
             break;
         case 'QC':
-            break;
+            return 'Quebec health card numbers are not eligible.';
         default:
             return 'Select a valid province/territory to validate HCN.';
     }
     return '';
+}
+
+function getHealthCardEligibilityError(hcn, province) {
+    const rawValue = String(hcn || '').trim();
+    if (!rawValue) return '';
+    if (isScientificNotationNumericText(rawValue)) {
+        return 'Possible Excel corruption: HCN is in scientific notation. Replace with full HCN digits from the source record.';
+    }
+    const normalized = rawValue.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+    const provinceCode = normalizeProvinceCode(province);
+    if (!normalized) return '';
+    if (/^M[0-9]{8}$/.test(normalized)) {
+        return 'Canadian Forces (CF) health card numbers are not eligible.';
+    }
+    if (/^R[0-9]{8}$/.test(normalized)) {
+        return 'RCMP health card numbers are not eligible.';
+    }
+    if (/^K[0-9]{7}$/.test(normalized)) {
+        return 'Veterans Affairs (VAC) health card numbers are not eligible.';
+    }
+    if (/^[A-Z]{4}[0-9]{8}$/.test(normalized)) {
+        return 'This health card number is not eligible.';
+    }
+    if (provinceCode && !isProvinceTerritoryCode(provinceCode)) {
+        return 'Province of Healthcard No. must be blank or a valid province/territory code.';
+    }
+    if (!provinceCode) return 'Select province/territory to validate HCN.';
+    return getProvincialHealthCardFormatError(normalized, provinceCode);
+}
+
+function validateHealthCardFormat(hcn, province) {
+    return getHealthCardEligibilityError(hcn, province);
+}
+
+function getPatientHealthCardEligibilityError(patient) {
+    if (!patient) return '';
+    const hasHealthCard = Boolean(String(patient.health_card || '').trim());
+    if (!hasHealthCard) return '';
+    const provinceCode = normalizeProvinceCode(patient.health_card_province || inferProvinceFromHealthCard(patient.health_card || ''));
+    return getHealthCardEligibilityError(patient.health_card, provinceCode || '');
+}
+
+function getNotificationEligibilityIssue(patient) {
+    if (!patient) return 'Missing patient record.';
+    const hcnEligibilityError = getPatientHealthCardEligibilityError(patient);
+    if (hcnEligibilityError) {
+        return hcnEligibilityError;
+    }
+    if (!patient.inclusionMet) {
+        return 'Complete inclusion checklist before recording a notification date.';
+    }
+    if (!patient.noExclusions) {
+        return 'Resolve exclusions before recording a notification date.';
+    }
+    if (!patient.no_exclusions_confirmed) {
+        return 'Confirm "No exclusions" before recording a notification date.';
+    }
+    return '';
+}
+
+function getNonRandomizedEnrollmentStatus(patient) {
+    if (patient && patient.randomized) {
+        return 'enrolled';
+    }
+    return (patient && patient.noExclusions && patient.inclusionMet && patient.no_exclusions_confirmed)
+        ? 'eligible'
+        : 'pending';
 }

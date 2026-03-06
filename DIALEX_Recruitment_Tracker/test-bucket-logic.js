@@ -20,13 +20,18 @@ const PRIMARY_BUCKET_ORDER = [
 
 function normalizeProvinceCode(v) { return String(v || '').trim().toUpperCase(); }
 function isProvinceTerritoryCode(v) { return ['ON','AB','BC','SK','MB','QC','NB','NS','PE','NL','NT','YT','NU'].includes(normalizeProvinceCode(v)); }
-function isIneligibleHealthCardValue(hcn, prov) {
+function getHealthCardEligibilityError(hcn, prov) {
     const n = String(hcn || '').replace(/[^A-Za-z0-9]/g, '').toUpperCase();
-    if (!n) return false;
-    if (/^[A-Z]{4}[0-9]{8}$/.test(n)) return true;
-    return normalizeProvinceCode(prov) === 'QC';
+    const province = normalizeProvinceCode(prov);
+    if (!n) return '';
+    if (/^M[0-9]{8}$/.test(n)) return 'CF not eligible';
+    if (/^R[0-9]{8}$/.test(n)) return 'RCMP not eligible';
+    if (/^K[0-9]{7}$/.test(n)) return 'VAC not eligible';
+    if (/^[A-Z]{4}[0-9]{8}$/.test(n)) return 'Excluded HCN pattern';
+    if (province === 'QC') return 'QC not eligible';
+    return '';
 }
-function validateHealthCardFormat() { return ''; }
+function validateHealthCardFormat(hcn, prov) { return getHealthCardEligibilityError(hcn, prov); }
 function normalizeDiabetesStatus(v) { return Number(v) || 0; }
 function normalizeLocationValue(v) { return String(v || '').trim().toLowerCase(); }
 function normalizeUnitCode(v) { return (v || '').trim().toUpperCase(); }
@@ -46,6 +51,9 @@ function parseISODate(v) { if (!v) return null; const d = new Date(v); return is
 function addDays(d, n) { const r = new Date(d); r.setDate(r.getDate() + n); return r; }
 
 function determinePrimaryBucket(flags) {
+    if (flags.ineligible && flags.missing) {
+        return 'ineligible';
+    }
     for (const key of PRIMARY_BUCKET_ORDER) {
         if (flags[key]) return key;
     }
@@ -66,7 +74,6 @@ function computeBucketFlags(patient = {}) {
     const hasHealthCard = Boolean(String(patient.health_card || '').trim());
     const hcnProvince = normalizeProvinceCode(patient.health_card_province || '');
     const invalidProvince = hcnProvince && !isProvinceTerritoryCode(hcnProvince);
-    const hcnIneligible = invalidProvince || isIneligibleHealthCardValue(patient.health_card, hcnProvince);
     const ageValue = Number.isFinite(patient.age) ? patient.age : null;
     const missingAge = !Number.isFinite(ageValue);
     const needsDiabetesStatus = Number.isFinite(ageValue) && ageValue >= 45 && ageValue < 60;
@@ -81,18 +88,17 @@ function computeBucketFlags(patient = {}) {
     const hasDialysisHistory = Boolean(patient.dialysis_start_date) || Boolean(patient.dialysis_duration_confirmed);
     const dialysisIneligible = hasDialysisHistory && Number(patient.incl_dialysis_90d) !== 1;
     const inCentreIneligible = Number(patient.incl_incentre_hd) !== 1;
-    const missingHcnInfo = (!hasHealthCard && !invalidProvince) || (hasHealthCard && !hcnProvince);
+    const missingHcnInfo = !hasHealthCard || (hasHealthCard && !hcnProvince);
     const hcnFormatError = hasHealthCard ? validateHealthCardFormat(patient.health_card, hcnProvince || '') : '';
-    const hcnMissingError = !!hcnFormatError && !hcnIneligible;
-    const missingData = missingAge || missingDiabetes || missingHcnInfo || hcnMissingError || (requiresDialysisUnit && !hasDialysisUnit) || !hasDialysisHistory;
+    const missingData = missingAge || missingDiabetes || missingHcnInfo || !!hcnFormatError || (requiresDialysisUnit && !hasDialysisUnit) || !hasDialysisHistory;
 
     const optOutStatus = patient.opt_out_status || OPT_OUT_STATUS.PENDING;
     const isOptedOutStatus = optOutStatus === OPT_OUT_STATUS.OPTED_OUT;
     flags.opted_out = isOptedOutStatus;
     const hasAnyExclusion = patient.hasAnyExclusion || false;
-    const hasNonMissingIneligible = isOptedOutStatus || hasAnyExclusion || hcnIneligible || ageIneligible || dialysisIneligible || inCentreIneligible;
+    const hasNonMissingIneligible = isOptedOutStatus || hasAnyExclusion || invalidProvince || missingHcnInfo || !!hcnFormatError || ageIneligible || dialysisIneligible || inCentreIneligible;
     flags.ineligible = hasNonMissingIneligible;
-    flags.missing = !hasNonMissingIneligible && !hcnIneligible && missingData;
+    flags.missing = missingData;
 
     const today = startOfToday();
     const hasNotification = Boolean(patient.notification_date);
@@ -224,6 +230,34 @@ test('No study IDs loaded at all → pending + noStudyIdsForUnit', () => {
     assert.strictEqual(flags.primary, 'pending');
     assert.strictEqual(flags.pending, true);
     assert.strictEqual(flags.noStudyIdsForUnit, true);
+});
+
+test('QC HCN never becomes ready_notify', () => {
+    availableUnitCodes = ['SLH'];
+    const p = makeEligiblePatient('SLH: St. Lukes Hospital', {
+        health_card: '1',
+        health_card_province: 'QC',
+        inclusionMet: false,
+        incl_health_card: 0
+    });
+    const flags = computeBucketFlags(p);
+    assert.strictEqual(flags.ineligible, true);
+    assert.strictEqual(flags.ready_notify, false);
+    assert.strictEqual(flags.primary, 'ineligible');
+});
+
+test('Excluded federal-style HCN never becomes ready_notify', () => {
+    availableUnitCodes = ['SLH'];
+    const p = makeEligiblePatient('SLH: St. Lukes Hospital', {
+        health_card: 'ABCD12345678',
+        health_card_province: 'ON',
+        inclusionMet: false,
+        incl_health_card: 0
+    });
+    const flags = computeBucketFlags(p);
+    assert.strictEqual(flags.ineligible, true);
+    assert.strictEqual(flags.ready_notify, false);
+    assert.strictEqual(flags.primary, 'ineligible');
 });
 
 test('Patient with notification date at unit without study IDs → noStudyIdsForUnit flag set', () => {

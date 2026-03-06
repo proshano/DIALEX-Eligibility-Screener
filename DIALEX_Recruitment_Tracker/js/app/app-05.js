@@ -251,7 +251,7 @@ function updatePatientHcn(index, value) {
         patient.health_card_province = inferredProvince;
     }
     patient.hasHealthCard = patient.health_card.length > 0;
-    const formatError = validateHealthCardFormat(patient.health_card, patient.health_card_province || '');
+    const formatError = getHealthCardEligibilityError(patient.health_card, patient.health_card_province || '');
     patient.incl_health_card = patient.hasHealthCard && !formatError ? 1 : 0;
     persistPatient(patient, false);
     refreshPatientRow(patient);
@@ -274,7 +274,7 @@ function updateHealthCardProvince(index, value) {
     }
     patient.health_card_province = code;
     if (patient.health_card) {
-        const formatError = validateHealthCardFormat(patient.health_card, code);
+        const formatError = getHealthCardEligibilityError(patient.health_card, code);
         if (formatError) {
             patient.incl_health_card = 0;
             showRecordWarning(formatError, 'error');
@@ -283,7 +283,7 @@ function updateHealthCardProvince(index, value) {
             return;
         }
     }
-    patient.incl_health_card = patient.health_card && !validateHealthCardFormat(patient.health_card, code) ? 1 : 0;
+    patient.incl_health_card = patient.health_card && !getHealthCardEligibilityError(patient.health_card, code) ? 1 : 0;
     persistPatient(patient, false);
     refreshPatientRow(patient);
     showRecordWarning('');
@@ -311,7 +311,7 @@ function updateRandomizedStatus(index, value) {
     if (!shouldMark) {
         releaseStudyId(patient.study_id);
         patient.randomized = 0;
-        patient.enrollment_status = (patient.noExclusions && patient.inclusionMet && patient.no_exclusions_confirmed && patient.hasHealthCard) ? 'eligible' : 'pending';
+        patient.enrollment_status = getNonRandomizedEnrollmentStatus(patient);
         patient.therapy_prescribed = 0;
         patient.allocation = '';
         patient.study_id = '';
@@ -328,6 +328,12 @@ function updateRandomizedStatus(index, value) {
     }
     if (patient.opt_out_status !== OPT_OUT_STATUS.DID_NOT) {
         showRecordWarning('Select "Did not opt out" before marking randomized.', 'error');
+        renderPatientTable();
+        return;
+    }
+    const hcnEligibilityError = getPatientHealthCardEligibilityError(patient);
+    if (hcnEligibilityError) {
+        showRecordWarning(hcnEligibilityError, 'error');
         renderPatientTable();
         return;
     }
@@ -535,6 +541,12 @@ function assignStudyId(index) {
     }
     if (patient.opt_out_status !== OPT_OUT_STATUS.DID_NOT) {
         showRecordWarning('Select "Did not opt out" before assigning a Study ID.', 'error');
+        renderPatientTable();
+        return;
+    }
+    const hcnEligibilityError = getPatientHealthCardEligibilityError(patient);
+    if (hcnEligibilityError) {
+        showRecordWarning(hcnEligibilityError, 'error');
         renderPatientTable();
         return;
     }
@@ -930,6 +942,25 @@ function isManualPatientRecord(patient) {
     return isTemporaryMrn(patient.mrn);
 }
 
+function isPristineManualPatientRecord(patient) {
+    if (!isManualPatientRecord(patient)) return false;
+    return !String(patient.patient_name || '').trim()
+        && !Number.isFinite(patient.age)
+        && !String(patient.location || '').trim()
+        && !String(patient.location_at_notification || '').trim()
+        && !String(patient.location_at_randomization || '').trim()
+        && !String(patient.health_card || '').trim()
+        && !String(patient.health_card_province || '').trim()
+        && !String(patient.birth_date || '').trim()
+        && !String(patient.dialysis_start_date || '').trim()
+        && !patient.dialysis_duration_confirmed
+        && !String(patient.notification_date || '').trim()
+        && !String(patient.randomization_date || '').trim()
+        && !patient.randomized
+        && !String(patient.study_id || '').trim()
+        && !String(patient.notes || '').trim();
+}
+
 function getDisplayMrnValue(mrn) {
     const trimmed = (mrn || '').toString().trim();
     if (!trimmed || isTemporaryMrn(trimmed)) return '';
@@ -950,7 +981,7 @@ function createBlankPatientRecord(mrn) {
     const currentUsername = getCurrentUsername();
     const patient = {
         mrn,
-        patient_name: 'New patient',
+        patient_name: '',
         age: null,
         location: '',
         location_at_notification: '',
@@ -1521,7 +1552,7 @@ const stmt = db.prepare(`
         const mrn = rawMrn || nextMissingMrn();
         const province = healthCardProvince;
         const hcnValidationError = normalizedHealthCard
-            ? validateHealthCardFormat(normalizedHealthCard, province || '')
+            ? getHealthCardEligibilityError(normalizedHealthCard, province || '')
             : '';
         const hcnImportNote = scientificNotationHcn ? buildScientificHcnImportNote(healthCard) : '';
         if (scientificNotationHcn) {
