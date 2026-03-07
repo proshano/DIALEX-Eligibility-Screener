@@ -187,6 +187,18 @@ $('show-prescribed-btn').addEventListener('click', () => setFilter('randomized_r
 $('show-ineligible-btn').addEventListener('click', () => setFilter('ineligible'));
 $('show-optedout-btn').addEventListener('click', () => setFilter('opted_out'));
 $('show-notes-btn').addEventListener('click', () => setFilter('notes'));
+const patientSortButtons = document.querySelectorAll('.patient-sort-btn');
+for (let i = 0; i < patientSortButtons.length; i += 1) {
+    patientSortButtons[i].addEventListener('click', event => {
+        const sortKey = event.currentTarget && event.currentTarget.dataset
+            ? event.currentTarget.dataset.sortKey
+            : '';
+        togglePatientSort(sortKey);
+    });
+}
+if (typeof updatePatientSortControls === 'function') {
+    updatePatientSortControls();
+}
 const stageRoleButtons = document.querySelectorAll('.stage-pipeline [role="button"]');
 for (let i = 0; i < stageRoleButtons.length; i += 1) {
     bindRoleButtonKeyboardActivation(stageRoleButtons[i]);

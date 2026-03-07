@@ -802,7 +802,24 @@ let currentUser = null;
 let currentFilter = 'all';
 let currentPatientScope = PATIENT_SCOPE_MODES.PARTICIPATING;
 let currentSearchTerm = '';
-const currentSortKey = 'mrn';
+const PATIENT_SORT_KEYS = Object.freeze({
+    MRN: 'mrn',
+    HCN: 'hcn',
+    AGE: 'age',
+    DATE_NOTIFIED: 'date-notified'
+});
+const SORT_DIRECTIONS = Object.freeze({
+    ASC: 'asc',
+    DESC: 'desc'
+});
+const PATIENT_SORT_DEFAULT_DIRECTIONS = Object.freeze({
+    [PATIENT_SORT_KEYS.MRN]: SORT_DIRECTIONS.ASC,
+    [PATIENT_SORT_KEYS.HCN]: SORT_DIRECTIONS.ASC,
+    [PATIENT_SORT_KEYS.AGE]: SORT_DIRECTIONS.DESC,
+    [PATIENT_SORT_KEYS.DATE_NOTIFIED]: SORT_DIRECTIONS.ASC
+});
+let currentSortKey = PATIENT_SORT_KEYS.MRN;
+let currentSortDirection = PATIENT_SORT_DEFAULT_DIRECTIONS[PATIENT_SORT_KEYS.MRN];
 const supportsDirectoryPicker = typeof window.showDirectoryPicker === 'function';
 const supportsSaveFilePicker = typeof window.showSaveFilePicker === 'function';
 let saveDirectoryHandle = null;

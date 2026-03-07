@@ -158,6 +158,7 @@ function matchesVisibilityFilter(patient) {
 function renderPatientTableNow() {
     const tbody = $('patient-table-body');
     const fragment = document.createDocumentFragment();
+    updatePatientSortControls();
     const visible = patientsData
         .filter(matchesVisibilityFilter)
         .sort(comparePatients);
@@ -224,6 +225,56 @@ function insertRowSorted(tbody, row, patient) {
 }
 
 let expandedPatientIndex = null;
+
+function getDefaultPatientSortDirection(sortKey) {
+    return PATIENT_SORT_DEFAULT_DIRECTIONS[sortKey] || SORT_DIRECTIONS.ASC;
+}
+
+function togglePatientSort(sortKey) {
+    if (!sortKey) return;
+    if (currentSortKey === sortKey) {
+        currentSortDirection = currentSortDirection === SORT_DIRECTIONS.ASC ? SORT_DIRECTIONS.DESC : SORT_DIRECTIONS.ASC;
+    } else {
+        currentSortKey = sortKey;
+        currentSortDirection = getDefaultPatientSortDirection(sortKey);
+    }
+    updatePatientSortControls();
+    renderPatientTable();
+}
+
+function updatePatientSortControls() {
+    const buttons = document.querySelectorAll('.patient-sort-btn');
+    buttons.forEach(button => {
+        const sortKey = button.dataset.sortKey || '';
+        const buttonLabel = button.dataset.sortLabel || button.textContent.replace(/\s+/g, ' ').trim();
+        const isActive = sortKey === currentSortKey;
+        const directionNode = button.querySelector('.patient-sort-dir');
+        button.classList.toggle('active', isActive);
+        button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+        if (isActive) {
+            button.setAttribute('aria-label', `${buttonLabel} (${getPatientSortDirectionLabel(sortKey, currentSortDirection)})`);
+        } else {
+            button.setAttribute('aria-label', buttonLabel);
+        }
+        if (directionNode) {
+            directionNode.textContent = isActive ? getPatientSortDirectionIcon(currentSortDirection) : '';
+        }
+    });
+}
+
+function getPatientSortDirectionLabel(sortKey, direction) {
+    if (sortKey === PATIENT_SORT_KEYS.AGE) {
+        return direction === SORT_DIRECTIONS.DESC ? 'oldest first' : 'youngest first';
+    }
+    if (sortKey === PATIENT_SORT_KEYS.DATE_NOTIFIED) {
+        return direction === SORT_DIRECTIONS.ASC ? 'oldest first' : 'newest first';
+    }
+    return direction === SORT_DIRECTIONS.ASC ? 'ascending' : 'descending';
+}
+
+function getPatientSortDirectionIcon(direction) {
+    return direction === SORT_DIRECTIONS.ASC ? '↑' : '↓';
+}
 
 function getStatusBadgeHtml(patient) {
     if (typeof isPristineManualPatientRecord === 'function' && isPristineManualPatientRecord(patient)) {
@@ -785,34 +836,73 @@ function comparePatients(a, b) {
     const primary = aLocation.localeCompare(bLocation, undefined, { sensitivity: 'base' });
     if (primary !== 0) return primary;
 
-    const aSecondary = getSortValue(a, currentSortKey);
-    const bSecondary = getSortValue(b, currentSortKey);
-    const secondary = aSecondary.localeCompare(bSecondary, undefined, { sensitivity: 'base' });
+    const secondary = comparePatientSortValues(a, b, currentSortKey, currentSortDirection);
     if (secondary !== 0) return secondary;
 
     const aName = (a.patient_name || '').toLowerCase();
     const bName = (b.patient_name || '').toLowerCase();
-    return aName.localeCompare(bName, undefined, { sensitivity: 'base' });
+    const byName = aName.localeCompare(bName, undefined, { sensitivity: 'base' });
+    if (byName !== 0) return byName;
+
+    return getPatientStableIndex(a) - getPatientStableIndex(b);
 }
 
-function getSortValue(patient, key) {
-    if (key === 'mrn') {
+function comparePatientSortValues(a, b, sortKey, direction) {
+    if (sortKey === PATIENT_SORT_KEYS.AGE) {
+        return compareSortNumbers(getPatientAgeSortValue(a), getPatientAgeSortValue(b), direction);
+    }
+    if (sortKey === PATIENT_SORT_KEYS.DATE_NOTIFIED) {
+        return compareSortTextValues(getPatientDateNotifiedSortValue(a), getPatientDateNotifiedSortValue(b), direction);
+    }
+    return compareSortTextValues(getPatientTextSortValue(a, sortKey), getPatientTextSortValue(b, sortKey), direction);
+}
+
+function getPatientTextSortValue(patient, sortKey) {
+    if (sortKey === PATIENT_SORT_KEYS.MRN) {
         return getDisplayMrnValue(patient.mrn).toLowerCase();
     }
-    if (key === 'date-notified') {
-        return sortableDateValue(patient.notification_date);
-    }
-    if (key === 'date-eligible') {
-        return sortableDateValue(patient.first_ready_iso);
-    }
-    if (key === 'date-randomized') {
-        return patient.randomized ? '0' : '1';
+    if (sortKey === PATIENT_SORT_KEYS.HCN) {
+        return String(patient.health_card || '').trim().toLowerCase();
     }
     return (patient.patient_name || '').toLowerCase();
 }
 
-function sortableDateValue(value) {
-    return value && value.trim() ? value : '9999-12-31';
+function getPatientAgeSortValue(patient) {
+    const ageValue = Number(patient && patient.age);
+    return Number.isFinite(ageValue) ? ageValue : null;
+}
+
+function getPatientDateNotifiedSortValue(patient) {
+    return String(patient.notification_date || '').trim();
+}
+
+function compareSortTextValues(aValue, bValue, direction) {
+    const aMissing = !aValue;
+    const bMissing = !bValue;
+    if (aMissing || bMissing) {
+        if (aMissing && bMissing) return 0;
+        return aMissing ? 1 : -1;
+    }
+    const result = aValue.localeCompare(bValue, undefined, { sensitivity: 'base' });
+    return direction === SORT_DIRECTIONS.DESC ? -result : result;
+}
+
+function compareSortNumbers(aValue, bValue, direction) {
+    const aMissing = !Number.isFinite(aValue);
+    const bMissing = !Number.isFinite(bValue);
+    if (aMissing || bMissing) {
+        if (aMissing && bMissing) return 0;
+        return aMissing ? 1 : -1;
+    }
+    if (aValue === bValue) return 0;
+    if (direction === SORT_DIRECTIONS.DESC) {
+        return aValue > bValue ? -1 : 1;
+    }
+    return aValue < bValue ? -1 : 1;
+}
+
+function getPatientStableIndex(patient) {
+    return Number.isFinite(patient && patient._index) ? patient._index : Number.MAX_SAFE_INTEGER;
 }
 
 function highlightPatientFields(index, fields = []) {

@@ -375,7 +375,29 @@
             <table>
                 <thead>
                     <tr>
-                        <th id="sort-name" colspan="4">Patients (click arrows to expand/collapse rows)</th>
+                        <th id="patient-table-sort-header" class="patient-table-sort-header" colspan="4">
+                            <div class="patient-table-header">
+                                <div class="patient-sort-controls" role="group" aria-label="Patient sort controls">
+                                    <span class="patient-sort-label">Sort within dialysis unit by:</span>
+                                    <button type="button" class="patient-sort-btn" id="sort-age-btn" data-sort-key="age" data-sort-label="Age" aria-pressed="false">
+                                        <span>Age</span>
+                                        <span class="patient-sort-dir" aria-hidden="true"></span>
+                                    </button>
+                                    <button type="button" class="patient-sort-btn" id="sort-mrn-btn" data-sort-key="mrn" data-sort-label="MRN" aria-pressed="false">
+                                        <span>MRN</span>
+                                        <span class="patient-sort-dir" aria-hidden="true"></span>
+                                    </button>
+                                    <button type="button" class="patient-sort-btn" id="sort-hcn-btn" data-sort-key="hcn" data-sort-label="HCN" aria-pressed="false">
+                                        <span>HCN</span>
+                                        <span class="patient-sort-dir" aria-hidden="true"></span>
+                                    </button>
+                                    <button type="button" class="patient-sort-btn" id="sort-date-notified-btn" data-sort-key="date-notified" data-sort-label="Date notified" aria-pressed="false">
+                                        <span>Date notified</span>
+                                        <span class="patient-sort-dir" aria-hidden="true"></span>
+                                    </button>
+                                </div>
+                            </div>
+                        </th>
                     </tr>
                 </thead>
                 <tbody id="patient-table-body">

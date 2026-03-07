@@ -176,6 +176,68 @@ th.sorted-desc::after {
     color: var(--brand);
 }
 
+.patient-table-sort-header {
+    cursor: default;
+}
+
+.patient-table-header {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+}
+
+.patient-sort-controls {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.patient-sort-label {
+    color: var(--muted);
+    font-size: 13px;
+    font-weight: 500;
+}
+
+.patient-sort-controls .patient-sort-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: var(--card);
+    color: var(--text);
+    font-size: 13px;
+    line-height: 1.2;
+    font-weight: 600;
+}
+
+.patient-sort-controls .patient-sort-btn:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--brand) 8%, var(--card));
+    border-color: color-mix(in srgb, var(--brand) 30%, var(--border));
+    transform: none;
+    filter: none;
+}
+
+.patient-sort-controls .patient-sort-btn.active {
+    background: color-mix(in srgb, var(--brand) 12%, var(--card));
+    border-color: var(--brand);
+    color: var(--brand);
+}
+
+.patient-sort-controls .patient-sort-btn.active .patient-sort-dir {
+    opacity: 1;
+}
+
+.patient-sort-dir {
+    min-width: 12px;
+    font-size: 12px;
+    opacity: 0.75;
+}
+
 select, input[type="text"], input[type="date"], input[type="number"], button {
     padding: 6px 8px;
     border: 1px solid var(--border);
