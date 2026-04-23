@@ -3,6 +3,11 @@
 This repository contains a self-contained, offline, browser-based recruitment tracker for hospital environments.
 
 ## Priority Principles
+- **Backward compatibility is paramount:** This software is in production and is actively being used to screen patients. Any change going forward MUST preserve the ability to open databases saved by previous versions of the app. Never make a change that would cause a previously saved database to fail to load, lose data, or become corrupted on open.
+  - Treat the on-disk database schema and encrypted save-file format as a public contract.
+  - Schema changes must be additive and performed via forward-only migrations in the patient load / DB setup path (`js/app/app-03.js`). Do not rename, drop, or retype existing columns/tables; add new ones and migrate data in place.
+  - Before merging any change that touches database setup, schema, save/load, encryption, or file format, manually verify that a database saved by the prior released version still opens cleanly and all existing records render and behave correctly.
+  - If a change cannot be made backward compatible, stop and escalate to the user before proceeding.
 - **Offline-first:** The app must run without internet access. Do not add network calls or dependencies that assume connectivity.
 - **Self-contained:** No external CDN assets, remote fonts, or hosted libraries. Bundle everything locally in this repo.
 - **No install step:** Users should be able to open the HTML file directly in a browser. Avoid build steps or package managers unless explicitly requested.
