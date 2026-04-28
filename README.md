@@ -2,6 +2,8 @@
 
 This repository contains the offline recruitment tracking tools for the **DIALEX** study: **DIALysis With EXpanded Solute Removal**, a pragmatic randomized trial evaluating expanded hemodialysis compared with conventional high-flux hemodialysis.
 
+The tracker was created and is maintained by the DIALEX Principal Investigator, Pavel Roshanov.
+
 Study links:
 
 - DIALEX study website: [https://dialex.study](https://dialex.study)
