@@ -45,4 +45,5 @@ Operator test checklist (offline)
 6) As a non-admin user, confirm Allocation + Prescribed can still be edited on a randomized record.
 7) As an admin user, unlock a record and confirm re-authentication is required.
 8) Enter a notification date before dialysis start date (or dialysis start date after notification date) and confirm a validation error appears.
-9) Export `Export recruitment summary (.csv)` and confirm the file includes count and `Percent of notified` columns.
+9) Select "Opted out" for a notified patient and confirm the tool asks for the opt-out date before moving the patient to Opted out.
+10) Export `Export recruitment summary (.csv)` and confirm the file includes count and `Percent of notified` columns.

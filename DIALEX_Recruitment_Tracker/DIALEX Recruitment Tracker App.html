@@ -48,7 +48,7 @@
         <div class="header">
             <h1>DIALEX Recruitment Tracker</h1>
             <div class="meta-row">
-                <div class="meta-pill version-pill" aria-label="Version date">Version: Apr 20 2026</div>
+                <div class="meta-pill version-pill" aria-label="Version date">Version: Apr 28 2026</div>
                 <div class="meta-pill owner-pill" aria-label="Ownership">Copyright 2026 DIALEX trial project office</div>
                 <button id="theme-toggle" class="meta-pill theme-toggle" onclick="toggleTheme()" aria-pressed="true" type="button">Dark theme</button>
             </div>
@@ -469,6 +469,30 @@
                 <div class="modal-footer">
                     <button type="button" id="acknowledge-modal-btn">Acknowledged</button>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Date Prompt Modal -->
+    <div id="date-prompt-modal" class="patient-modal" role="dialog" aria-modal="true" aria-labelledby="date-prompt-title" aria-describedby="date-prompt-message">
+        <div class="modal-content modal-narrow">
+            <div class="modal-header">
+                <h2 id="date-prompt-title">Enter date</h2>
+                <span id="date-prompt-close" class="close" role="button" tabindex="0" aria-label="Close date dialog">&times;</span>
+            </div>
+            <div class="modal-body">
+                <p id="date-prompt-message" class="modal-message"></p>
+                <form id="date-prompt-form">
+                    <div>
+                        <label id="date-prompt-label" for="date-prompt-input">Date</label>
+                        <input type="text" id="date-prompt-input" class="modal-input" placeholder="DD/MM/YYYY" title="DD/MM/YYYY or YYYY-MM-DD" inputmode="numeric" autocomplete="off" spellcheck="false" data-date-entry="true" required>
+                    </div>
+                    <p id="date-prompt-error" class="form-error hidden" role="alert"></p>
+                    <div class="modal-footer">
+                        <button type="button" class="secondary" id="date-prompt-cancel-btn">Cancel</button>
+                        <button type="submit" id="date-prompt-submit-btn">Save</button>
+                    </div>
+                </form>
             </div>
         </div>
     </div>

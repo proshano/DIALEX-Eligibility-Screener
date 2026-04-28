@@ -197,18 +197,44 @@ function renderPatientRow(index) {
         return;
     }
 
+    const placeholder = tbody.querySelector('tr:not([data-index])');
+    if (placeholder) {
+        placeholder.remove();
+    }
+
+    if (existing && expandedPatientIndex === index) {
+        replaceExpandedPatientRowInPlace(index, patient);
+        return;
+    }
+
     if (existing) {
         existing.remove();
         const existingDetails = document.getElementById(`row-details-${index}`);
         if (existingDetails) existingDetails.remove();
     }
 
-    const placeholder = tbody.querySelector('tr:not([data-index])');
-    if (placeholder) {
-        placeholder.remove();
-    }
-
     insertRowSorted(tbody, buildPatientRow(patient), patient);
+}
+
+function replaceExpandedPatientRowInPlace(index, patient) {
+    const existingSummary = document.getElementById(`row-${index}`);
+    if (!existingSummary) {
+        insertRowSorted($('patient-table-body'), buildPatientRow(patient), patient);
+        return;
+    }
+    const existingDetails = document.getElementById(`row-details-${index}`);
+    const newRows = Array.from(buildPatientRow(patient).childNodes);
+    const newSummary = newRows[0];
+    const newDetails = newRows[1] || null;
+
+    existingSummary.replaceWith(newSummary);
+    if (existingDetails && newDetails) {
+        existingDetails.replaceWith(newDetails);
+    } else if (existingDetails) {
+        existingDetails.remove();
+    } else if (newDetails) {
+        newSummary.after(newDetails);
+    }
 }
 
 function insertRowSorted(tbody, row, patient) {
@@ -394,6 +420,39 @@ function buildPatientRow(patient) {
     }
 
     return fragment;
+}
+
+function getPatientViewportAnchor(index) {
+    const detailsRow = document.getElementById(`row-details-${index}`);
+    const summaryRow = document.getElementById(`row-${index}`);
+    const anchor = detailsRow || summaryRow;
+    if (!anchor) return null;
+    return {
+        index,
+        hadDetails: Boolean(detailsRow),
+        top: anchor.getBoundingClientRect().top,
+        scrollY: window.scrollY
+    };
+}
+
+function restorePatientViewportAnchor(snapshot) {
+    if (!snapshot) return;
+    const schedule = window.requestAnimationFrame || function (cb) { return setTimeout(cb, 0); };
+    const restore = () => {
+        const anchor = snapshot.hadDetails
+            ? (document.getElementById(`row-details-${snapshot.index}`) || document.getElementById(`row-${snapshot.index}`))
+            : document.getElementById(`row-${snapshot.index}`);
+        if (!anchor) {
+            window.scrollTo(window.scrollX, snapshot.scrollY);
+            return;
+        }
+        const delta = anchor.getBoundingClientRect().top - snapshot.top;
+        if (Math.abs(delta) > 1) {
+            window.scrollBy(0, delta);
+        }
+    };
+    restore();
+    schedule(restore);
 }
 
 function buildPatientSummaryRow(patient, isExpanded) {
@@ -713,7 +772,7 @@ function buildPatientDetailsRow(patient) {
                 </div>
                 <div>
                     <label class="patient-sub">Opt-out status:</label>
-                    <select class="table-input" onchange="updateOptOutStatus(${patient._index}, this.value)" ${optOutDisabled}>
+                    <select class="table-input" onchange="updateOptOutStatus(${patient._index}, this.value, this)" ${optOutDisabled}>
                         ${optOutOptions}
                     </select>
                     ${optOutHelper}
@@ -787,9 +846,11 @@ function buildPatientDetailsRow(patient) {
 
 function refreshPatientRow(patient) {
     if (!patient) return patient;
+    const viewportAnchor = getPatientViewportAnchor(patient._index);
     const normalized = normalizePatientRow(patient, patient._index);
     patientsData[patient._index] = normalized;
     renderPatientRow(normalized._index);
+    restorePatientViewportAnchor(viewportAnchor);
     updateFilterCounts();
     return normalized;
 }
@@ -1129,11 +1190,53 @@ function updateInlineNotification(index, value) {
     showRecordWarning('');
 }
 
-function updateOptOutStatus(index, value) {
+function validateOptOutDateEntry(patient, value) {
+    const dateVal = (value || '').trim();
+    if (!dateVal) {
+        return { ok: false, message: 'Enter opt-out date as DD/MM/YYYY.' };
+    }
+    const normalized = normalizeISODateString(dateVal);
+    if (!normalized) {
+        return { ok: false, message: 'Enter opt-out date as DD/MM/YYYY.' };
+    }
+    if (isFutureISODateString(normalized)) {
+        return { ok: false, message: 'Opt-out date cannot be in the future.' };
+    }
+    const notification = parseISODate(patient.notification_date);
+    const optOutDate = parseISODate(normalized);
+    if (notification && optOutDate && optOutDate.getTime() < notification.getTime()) {
+        return { ok: false, message: 'Opt-out date cannot be before notification date.' };
+    }
+    return { ok: true, value: normalized };
+}
+
+async function promptForOptOutDate(patient) {
+    const existingDisplay = formatEntryDate(patient.opt_out_date || '');
+    const result = await promptDateModal({
+        title: 'Record opt-out',
+        message: 'Enter the date the patient opted out before saving the opt-out status.',
+        label: 'Date opted out',
+        value: existingDisplay,
+        submitLabel: 'Save opt-out',
+        validate: value => validateOptOutDateEntry(patient, value)
+    });
+    if (result == null) return null;
+    const validation = validateOptOutDateEntry(patient, result);
+    return validation.ok ? validation.value : null;
+}
+
+function restoreOptOutStatusControl(control, patient) {
+    if (control) {
+        control.value = patient.opt_out_status || OPT_OUT_STATUS.PENDING;
+    }
+}
+
+async function updateOptOutStatus(index, value, control = null) {
     const patient = patientsData[index];
     if (!patient) return;
     if (!ensureEligibilityEditablePatient(patient)) return;
     if (!patient.notification_date) {
+        restoreOptOutStatusControl(control, patient);
         showRecordWarning('Set a notification date before updating opt-out status.', 'error');
         renderPatientTable();
         return;
@@ -1142,15 +1245,23 @@ function updateOptOutStatus(index, value) {
     const wantsPending = normalized === OPT_OUT_STATUS.PENDING;
     const firstEligible = computeFirstEligibleDate(patient);
     if (!firstEligible && !wantsPending) {
+        restoreOptOutStatusControl(control, patient);
         showRecordWarning('Calculate the eligible date before updating opt-out status.', 'error');
         renderPatientTable();
         return;
     }
+    let optOutDate = patient.opt_out_date || '';
+    if (normalized === OPT_OUT_STATUS.OPTED_OUT) {
+        optOutDate = await promptForOptOutDate(patient);
+        if (!optOutDate) {
+            restoreOptOutStatusControl(control, patient);
+            showRecordWarning('');
+            return;
+        }
+    }
     patient.opt_out_status = normalized;
     patient.did_not_opt_out = normalized === OPT_OUT_STATUS.DID_NOT ? 1 : 0;
-    if (normalized !== OPT_OUT_STATUS.OPTED_OUT) {
-        patient.opt_out_date = '';
-    }
+    patient.opt_out_date = normalized === OPT_OUT_STATUS.OPTED_OUT ? optOutDate : '';
     if (normalized !== OPT_OUT_STATUS.DID_NOT) {
         patient.randomization_date = '';
         patient.randomized = 0;
@@ -1174,40 +1285,28 @@ function updateOptOutDate(index, value) {
         renderPatientTable();
         return;
     }
-    if (patient.opt_out_status !== OPT_OUT_STATUS.OPTED_OUT) {
-        patient.opt_out_status = OPT_OUT_STATUS.OPTED_OUT;
-    }
     const dateVal = (value || '').trim();
     if (!dateVal) {
-        if (!patient.opt_out_date) {
+        if (!patient.opt_out_date && patient.opt_out_status !== OPT_OUT_STATUS.OPTED_OUT) {
             showRecordWarning('');
             return;
         }
         patient.opt_out_date = '';
+        patient.opt_out_status = OPT_OUT_STATUS.PENDING;
+        patient.did_not_opt_out = 0;
         persistPatient(patient, false);
         refreshPatientRow(patient);
         return;
     }
-    const normalized = normalizeISODateString(dateVal);
-    if (!normalized) {
-        showRecordWarning('Enter opt-out date as DD/MM/YYYY.', 'error');
+    const validation = validateOptOutDateEntry(patient, dateVal);
+    if (!validation.ok) {
+        showRecordWarning(validation.message, 'error');
         renderPatientTable();
         return;
     }
-    if (normalized === patient.opt_out_date) {
+    const normalized = validation.value;
+    if (normalized === patient.opt_out_date && patient.opt_out_status === OPT_OUT_STATUS.OPTED_OUT) {
         showRecordWarning('');
-        return;
-    }
-    if (isFutureISODateString(normalized)) {
-        showRecordWarning('Opt-out date cannot be in the future.', 'error');
-        renderPatientTable();
-        return;
-    }
-    const notification = parseISODate(patient.notification_date);
-    const optOutDate = parseISODate(normalized);
-    if (notification && optOutDate && optOutDate.getTime() < notification.getTime()) {
-        showRecordWarning('Opt-out date cannot be before notification date.', 'error');
-        renderPatientTable();
         return;
     }
     patient.opt_out_status = OPT_OUT_STATUS.OPTED_OUT;

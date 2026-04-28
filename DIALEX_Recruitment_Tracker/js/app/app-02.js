@@ -353,7 +353,11 @@ function promptPasswordModal(options = {}) {
             modal.removeEventListener('click', onBackdropClick);
             document.removeEventListener('keydown', onKeyDown);
             if (previouslyFocused && typeof previouslyFocused.focus === 'function') {
-                previouslyFocused.focus();
+                try {
+                    previouslyFocused.focus({ preventScroll: true });
+                } catch (error) {
+                    previouslyFocused.focus();
+                }
             }
             resolve(result);
         };
@@ -492,7 +496,11 @@ function promptImportBackupModal() {
             modal.removeEventListener('click', onBackdropClick);
             document.removeEventListener('keydown', onKeyDown);
             if (previouslyFocused && typeof previouslyFocused.focus === 'function') {
-                previouslyFocused.focus();
+                try {
+                    previouslyFocused.focus({ preventScroll: true });
+                } catch (error) {
+                    previouslyFocused.focus();
+                }
             }
             resolve(result);
         };
@@ -596,6 +604,124 @@ function promptAcknowledgeModal(options = {}) {
         acknowledgeBtn.addEventListener('click', onAcknowledge);
 
         requestAnimationFrame(() => acknowledgeBtn.focus());
+    });
+}
+
+function promptDateModal(options = {}) {
+    return new Promise(resolve => {
+        const modal = $('date-prompt-modal');
+        const titleEl = $('date-prompt-title');
+        const messageEl = $('date-prompt-message');
+        const form = $('date-prompt-form');
+        const labelEl = $('date-prompt-label');
+        const dateInput = $('date-prompt-input');
+        const errorEl = $('date-prompt-error');
+        const cancelBtn = $('date-prompt-cancel-btn');
+        const submitBtn = $('date-prompt-submit-btn');
+        const closeBtn = $('date-prompt-close');
+        const validate = typeof options.validate === 'function' ? options.validate : null;
+
+        if (!modal || !titleEl || !messageEl || !form || !labelEl || !dateInput || !errorEl || !cancelBtn || !submitBtn || !closeBtn) {
+            const fallback = window.prompt(options.message || 'Enter date:', options.value || '');
+            resolve(fallback == null ? null : fallback);
+            return;
+        }
+
+        const previouslyFocused = document.activeElement;
+        let resolved = false;
+
+        const cleanup = (result) => {
+            if (resolved) return;
+            resolved = true;
+            modal.classList.remove('active');
+            form.removeEventListener('submit', onSubmit);
+            cancelBtn.removeEventListener('click', onCancel);
+            closeBtn.removeEventListener('click', onCancel);
+            closeBtn.removeEventListener('keydown', onCloseKeydown);
+            modal.removeEventListener('click', onBackdropClick);
+            document.removeEventListener('keydown', onKeyDown);
+            if (previouslyFocused && typeof previouslyFocused.focus === 'function') {
+                try {
+                    previouslyFocused.focus({ preventScroll: true });
+                } catch (error) {
+                    previouslyFocused.focus();
+                }
+            }
+            resolve(result);
+        };
+
+        const showError = (message) => {
+            errorEl.textContent = message;
+            errorEl.classList.remove('hidden');
+        };
+
+        const onSubmit = (event) => {
+            event.preventDefault();
+            errorEl.textContent = '';
+            errorEl.classList.add('hidden');
+            const rawDate = dateInput.value;
+            if (validate) {
+                const validation = validate(rawDate);
+                if (!validation || !validation.ok) {
+                    showError(validation && validation.message ? validation.message : 'Enter a valid date.');
+                    dateInput.focus();
+                    dateInput.select();
+                    return;
+                }
+                cleanup(validation.value);
+                return;
+            }
+            if (!rawDate.trim()) {
+                showError('Enter a date.');
+                dateInput.focus();
+                return;
+            }
+            cleanup(rawDate);
+        };
+
+        const onCancel = () => cleanup(null);
+
+        const onBackdropClick = (event) => {
+            if (event.target === modal) {
+                onCancel();
+            }
+        };
+
+        const onKeyDown = (event) => {
+            if (event.key === 'Escape') {
+                event.preventDefault();
+                onCancel();
+            }
+        };
+
+        const onCloseKeydown = (event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                onCancel();
+            }
+        };
+
+        titleEl.textContent = options.title || 'Enter date';
+        messageEl.textContent = options.message || '';
+        labelEl.textContent = options.label || 'Date';
+        dateInput.value = options.value || '';
+        dateInput.placeholder = options.placeholder || 'DD/MM/YYYY';
+        submitBtn.textContent = options.submitLabel || 'Save';
+        errorEl.textContent = '';
+        errorEl.classList.add('hidden');
+
+        modal.classList.add('active');
+        form.addEventListener('submit', onSubmit);
+        cancelBtn.addEventListener('click', onCancel);
+        closeBtn.addEventListener('click', onCancel);
+        closeBtn.addEventListener('keydown', onCloseKeydown);
+        modal.addEventListener('click', onBackdropClick);
+        document.addEventListener('keydown', onKeyDown);
+
+        requestAnimationFrame(() => {
+            dateInput.focus();
+            dateInput.select();
+        });
     });
 }
 
