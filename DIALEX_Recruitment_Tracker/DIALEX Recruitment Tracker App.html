@@ -48,7 +48,7 @@
         <div class="header">
             <h1>DIALEX Recruitment Tracker</h1>
             <div class="meta-row">
-                <div class="meta-pill version-pill" aria-label="Version date">Version: Apr 28 2026</div>
+                <div class="meta-pill version-pill" aria-label="Version date">Version: Apr 29 2026</div>
                 <div class="meta-pill owner-pill" aria-label="Ownership">Copyright 2026 DIALEX trial project office</div>
                 <button id="theme-toggle" class="meta-pill theme-toggle" onclick="toggleTheme()" aria-pressed="true" type="button">Dark theme</button>
             </div>
@@ -491,6 +491,31 @@
                     <div class="modal-footer">
                         <button type="button" class="secondary" id="date-prompt-cancel-btn">Cancel</button>
                         <button type="submit" id="date-prompt-submit-btn">Save</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Randomization Eligibility Confirmation Modal -->
+    <div id="randomization-confirmation-modal" class="patient-modal" role="dialog" aria-modal="true" aria-labelledby="randomization-confirmation-title" aria-describedby="randomization-confirmation-message">
+        <div class="modal-content randomization-confirmation-content">
+            <div class="modal-header">
+                <h2 id="randomization-confirmation-title">Confirm eligibility before randomization</h2>
+                <span id="randomization-confirmation-close" class="close" role="button" tabindex="0" aria-label="Close eligibility confirmation dialog">&times;</span>
+            </div>
+            <div class="modal-body">
+                <p id="randomization-confirmation-message" class="modal-message"></p>
+                <form id="randomization-confirmation-form">
+                    <div id="randomization-confirmation-summary"></div>
+                    <label class="confirmation-attestation">
+                        <input type="checkbox" id="randomization-confirmation-checkbox">
+                        <span>I confirm that all eligibility criteria remain satisfied and the vital-status checks have been completed.</span>
+                    </label>
+                    <p id="randomization-confirmation-error" class="form-error hidden" role="alert"></p>
+                    <div class="modal-footer">
+                        <button type="button" class="secondary" id="randomization-confirmation-cancel-btn">Cancel</button>
+                        <button type="submit" id="randomization-confirmation-submit-btn">Confirm</button>
                     </div>
                 </form>
             </div>

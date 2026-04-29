@@ -676,7 +676,7 @@ function buildPatientDetailsRow(patient) {
     const studyRowStyle = studyRowVisible ? '' : 'display:none;';
     const studyCopyDisabled = studyIdValue ? '' : 'disabled';
     const assignStudyIdButtonHtml = canAssignStudyId && !hasStudyId
-        ? `<button class="copy-btn assign-study-id-btn" ${eligibilityLocked ? 'disabled' : ''} onclick="assignStudyId(${patient._index})">I confirm this patient is still eligible</button>`
+        ? `<button class="copy-btn assign-study-id-btn" ${eligibilityLocked ? 'disabled' : ''} onclick="assignStudyId(${patient._index})">Confirm eligibility and assign Study ID</button>`
         : '';
     const studyHelper = (!hasStudyId && canAssignStudyId)
         ? '<div class="status-subtext">Assign a Study ID to enable randomization.</div>'
@@ -799,7 +799,7 @@ function buildPatientDetailsRow(patient) {
                 ${randomizationHelper}
                 <div class="inline-field-row" style="${randomizationRowStyle}">
                     <label class="patient-sub">Randomized:</label>
-                    <select class="table-input inline-select" ${randomizedDisabled} onchange="updateRandomizedStatus(${patient._index}, this.value)">
+                    <select class="table-input inline-select" ${randomizedDisabled} onchange="updateRandomizedStatus(${patient._index}, this.value, this)">
                         <option value="0" ${randomizedSelectValue === '0' ? 'selected' : ''}>No</option>
                         <option value="1" ${randomizedSelectValue === '1' ? 'selected' : ''}>Yes</option>
                     </select>
@@ -1067,6 +1067,7 @@ function toggleMasterExclusion(index, checkbox) {
     } else {
         patient.no_exclusions_confirmed = 0;
     }
+    clearRandomizationEligibilityConfirmation(patient);
     persistPatient(patient, false);
     refreshPatientRow(patient);
     showRecordWarning('');
@@ -1111,6 +1112,7 @@ function updateCriterion(index, key, checked) {
     if (EXCLUSION_KEYS.includes(key) && checked) {
         patient.no_exclusions_confirmed = 0;
     }
+    clearRandomizationEligibilityConfirmation(patient);
     persistPatient(patient, false);
     refreshPatientRow(patient);
     showRecordWarning('');
@@ -1173,6 +1175,7 @@ function updateInlineNotification(index, value) {
     } else {
         patient.location_at_notification = getCanonicalLocationValue(patient.location) || '';
     }
+    clearRandomizationEligibilityConfirmation(patient);
     persistPatient(patient, false);
     refreshPatientRow(patient);
     if (patient.notification_date) {
@@ -1271,6 +1274,7 @@ async function updateOptOutStatus(index, value, control = null) {
         patient.therapy_prescribed = 0;
         patient.enrollment_status = getNonRandomizedEnrollmentStatus(patient);
     }
+    clearRandomizationEligibilityConfirmation(patient);
     showRecordWarning('');
     persistPatient(patient, false);
     refreshPatientRow(patient);
@@ -1294,6 +1298,7 @@ function updateOptOutDate(index, value) {
         patient.opt_out_date = '';
         patient.opt_out_status = OPT_OUT_STATUS.PENDING;
         patient.did_not_opt_out = 0;
+        clearRandomizationEligibilityConfirmation(patient);
         persistPatient(patient, false);
         refreshPatientRow(patient);
         return;
@@ -1319,6 +1324,7 @@ function updateOptOutDate(index, value) {
     patient.study_id = '';
     patient.therapy_prescribed = 0;
     patient.enrollment_status = getNonRandomizedEnrollmentStatus(patient);
+    clearRandomizationEligibilityConfirmation(patient);
     showRecordWarning('');
     persistPatient(patient, false);
     refreshPatientRow(patient);
@@ -1345,6 +1351,7 @@ function updateDialysisUnit(index, value) {
     showRecordWarning('');
     patient.location_at_randomization = canonical;
     patient.incl_incentre_hd = canonical ? 1 : 0;
+    clearRandomizationEligibilityConfirmation(patient);
     persistPatient(patient, false);
     refreshPatientRow(patient);
 }

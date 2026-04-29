@@ -462,6 +462,8 @@ function setupDatabase() {
             did_not_opt_out INTEGER DEFAULT 0,
             dialysis_duration_confirmed INTEGER DEFAULT 0,
             study_id TEXT,
+            randomization_eligibility_confirmed_at TEXT,
+            randomization_eligibility_confirmed_by TEXT,
             locked_at TEXT,
             diabetes_known INTEGER DEFAULT 0,
             incl_age INTEGER DEFAULT 0,
@@ -611,6 +613,20 @@ function setupDatabase() {
     } catch (error) {
         if (!/duplicate column/i.test((error && error.message) || '')) {
             console.warn('Unable to add study_id column', error);
+        }
+    }
+    try {
+        db.run(`ALTER TABLE patient_assessments ADD COLUMN randomization_eligibility_confirmed_at TEXT`);
+    } catch (error) {
+        if (!/duplicate column/i.test((error && error.message) || '')) {
+            console.warn('Unable to add randomization_eligibility_confirmed_at column', error);
+        }
+    }
+    try {
+        db.run(`ALTER TABLE patient_assessments ADD COLUMN randomization_eligibility_confirmed_by TEXT`);
+    } catch (error) {
+        if (!/duplicate column/i.test((error && error.message) || '')) {
+            console.warn('Unable to add randomization_eligibility_confirmed_by column', error);
         }
     }
     try {
@@ -1315,6 +1331,8 @@ function normalizePatientRow(row, index) {
     patient.opt_out_date = normalizeISODateString(row.opt_out_date || '');
     patient.allocation = row.allocation || '';
     patient.study_id = normalizeStudyIdValue(row.study_id);
+    patient.randomization_eligibility_confirmed_at = row.randomization_eligibility_confirmed_at || '';
+    patient.randomization_eligibility_confirmed_by = row.randomization_eligibility_confirmed_by || '';
     patient.locked_at = row.locked_at || '';
     patient.diabetes_known = normalizeDiabetesStatus(row.diabetes_known);
     patient.location = patient.location || '';
