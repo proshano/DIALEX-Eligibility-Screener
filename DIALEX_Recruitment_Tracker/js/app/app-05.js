@@ -380,18 +380,16 @@ async function updateRandomizedStatus(index, value, control = null) {
     const confirmation = await getRandomizationEligibilityConfirmation(patient);
     if (!confirmation.ok) {
         if (control) control.value = '0';
+        if (confirmation.status === RANDOMIZATION_CONFIRMATION_STATUS.INELIGIBLE) {
+            saveIneligibleRandomizationConfirmation(patient, confirmation, 'Eligibility criteria saved. Patient was not marked randomized.');
+            return;
+        }
         showRecordWarning('Eligibility confirmation is required before marking randomized.', 'status');
         refreshPatientRow(patient);
         return;
     }
-    const previousState = {
-        randomization_eligibility_confirmed_at: patient.randomization_eligibility_confirmed_at || '',
-        randomization_eligibility_confirmed_by: patient.randomization_eligibility_confirmed_by || '',
-        randomized: patient.randomized || 0,
-        enrollment_status: patient.enrollment_status || '',
-        locked_at: patient.locked_at || '',
-        location_at_randomization: patient.location_at_randomization || ''
-    };
+    const previousState = { ...patient };
+    applyRandomizationConfirmationCriteria(patient, confirmation.criteria);
     applyRandomizationEligibilityConfirmation(patient, confirmation);
     patient.randomized = 1;
     patient.enrollment_status = 'enrolled';
@@ -573,20 +571,6 @@ function isRandomizationEligibilityConfirmationCurrent(patient) {
     return String(patient.randomization_eligibility_confirmed_at).slice(0, 10) === getTorontoTodayIsoString();
 }
 
-function buildConfirmationIndicator(label, passed) {
-    const className = passed ? 'pass' : 'fail';
-    return `<span class="confirmation-indicator ${className}">${escapeHtml(label)}</span>`;
-}
-
-function buildConfirmationListItem(label, passed, passLabel = 'Met', failLabel = 'Check') {
-    return `
-        <li>
-            ${buildConfirmationIndicator(passed ? passLabel : failLabel, passed)}
-            <span>${escapeHtml(label)}</span>
-        </li>
-    `;
-}
-
 function getOptOutStatusDisplay(status) {
     if (status === OPT_OUT_STATUS.DID_NOT) return 'Did not opt out';
     if (status === OPT_OUT_STATUS.OPTED_OUT) return 'Opted out';
@@ -602,24 +586,89 @@ function buildConfirmationStatusRow(label, value) {
     `;
 }
 
-function buildRandomizationConfirmationSummary(patient) {
-    const inclusionHtml = INCLUSION_KEYS
-        .map(key => buildConfirmationListItem(labelForKey(key), patient[key] === 1))
-        .join('');
-    const exclusionHtml = EXCLUSION_KEYS
-        .map(key => buildConfirmationListItem(labelForKey(key), patient[key] !== 1, 'Absent', 'Present'))
-        .join('');
-    const vitalStatusItems = [
+const RANDOMIZATION_CONFIRMATION_STATUS = {
+    CONFIRMED: 'confirmed',
+    INELIGIBLE: 'ineligible',
+    CANCELLED: 'cancelled'
+};
+
+function buildRandomizationConfirmationDraft(patient) {
+    const draft = {
+        no_exclusions_confirmed: patient.no_exclusions_confirmed ? 1 : 0
+    };
+    INCLUSION_KEYS.concat(EXCLUSION_KEYS).forEach(key => {
+        draft[key] = patient[key] === 1 ? 1 : 0;
+    });
+    return draft;
+}
+
+function getRandomizationConfirmationCriteriaSnapshot(draft, confirmNoExclusions = false) {
+    const snapshot = {
+        no_exclusions_confirmed: confirmNoExclusions && !hasAnyConfirmationDraftExclusion(draft)
+            ? 1
+            : (draft.no_exclusions_confirmed && !hasAnyConfirmationDraftExclusion(draft) ? 1 : 0)
+    };
+    INCLUSION_KEYS.concat(EXCLUSION_KEYS).forEach(key => {
+        snapshot[key] = draft[key] === 1 ? 1 : 0;
+    });
+    return snapshot;
+}
+
+function hasAnyConfirmationDraftExclusion(draft) {
+    return EXCLUSION_KEYS.some(key => draft[key] === 1);
+}
+
+function isRandomizationConfirmationDraftEligible(draft) {
+    return INCLUSION_KEYS.every(key => draft[key] === 1)
+        && !hasAnyConfirmationDraftExclusion(draft);
+}
+
+function buildEditableConfirmationCheckbox(key, draft, group) {
+    const checked = draft[key] === 1 ? 'checked' : '';
+    const id = `randomization-confirmation-${key}`;
+    return `
+        <li class="confirmation-checkbox-item">
+            <input id="${escapeHtml(id)}" type="checkbox" ${checked} data-confirmation-criterion="${escapeHtml(key)}" data-confirmation-group="${escapeHtml(group)}">
+            <label class="confirmation-checkbox-label" for="${escapeHtml(id)}">${escapeHtml(labelForKey(key))}</label>
+        </li>
+    `;
+}
+
+function buildVitalStatusInstructions() {
+    const items = [
         'Open the patient chart in the EMR and confirm no deceased flag or icon is active.',
         'Confirm documented attendance to an in-centre hemodialysis session within the preceding 48 hours.',
         'Review key chart elements for evidence of death, dialysis withdrawal, or transfer to hospice.',
         'Review the EMR messaging or inbox function for communication indicating the patient is deceased.'
-    ].map(item => `
-        <li>
-            ${buildConfirmationIndicator('Review', true)}
+    ];
+    return items.map(item => `
+        <li class="confirmation-instruction">
             <span>${escapeHtml(item)}</span>
         </li>
     `).join('');
+}
+
+function applyRandomizationConfirmationCriteria(patient, criteria) {
+    if (!patient || !criteria) return;
+    INCLUSION_KEYS.concat(EXCLUSION_KEYS).forEach(key => {
+        patient[key] = criteria[key] === 1 ? 1 : 0;
+    });
+    patient.no_exclusions_confirmed = criteria.no_exclusions_confirmed ? 1 : 0;
+    patient.inclusionMet = INCLUSION_KEYS.every(key => patient[key] === 1);
+    patient.noExclusions = EXCLUSION_KEYS.every(key => patient[key] === 0);
+    patient.hasAnyExclusion = !patient.noExclusions;
+    if (!patient.randomized) {
+        patient.enrollment_status = getNonRandomizedEnrollmentStatus(patient);
+    }
+}
+
+function buildRandomizationConfirmationSummary(patient, draft) {
+    const inclusionHtml = INCLUSION_KEYS
+        .map(key => buildEditableConfirmationCheckbox(key, draft, 'inclusion'))
+        .join('');
+    const exclusionHtml = EXCLUSION_KEYS
+        .map(key => buildEditableConfirmationCheckbox(key, draft, 'exclusion'))
+        .join('');
     const notificationDisplay = formatFriendlyDate(patient.notification_date || '') || '-';
     const eligibleDisplay = patient.first_ready_iso ? formatFriendlyDate(patient.first_ready_iso) : '-';
     const optOutDisplay = getOptOutStatusDisplay(patient.opt_out_status || OPT_OUT_STATUS.PENDING);
@@ -636,15 +685,15 @@ function buildRandomizationConfirmationSummary(patient) {
             </div>
             <div class="confirmation-section">
                 <h3>Inclusion criteria</h3>
-                <ul class="confirmation-list">${inclusionHtml}</ul>
+                <ul class="confirmation-list confirmation-checkbox-list">${inclusionHtml}</ul>
             </div>
             <div class="confirmation-section">
                 <h3>Exclusion criteria</h3>
-                <ul class="confirmation-list">${exclusionHtml}</ul>
+                <ul class="confirmation-list confirmation-checkbox-list">${exclusionHtml}</ul>
             </div>
             <div class="confirmation-section full-width">
                 <h3>Vital-status checks</h3>
-                <ul class="confirmation-list">${vitalStatusItems}</ul>
+                <ul class="confirmation-list confirmation-instructions">${buildVitalStatusInstructions()}</ul>
             </div>
         </div>
     `;
@@ -658,18 +707,21 @@ function promptRandomizationEligibilityConfirmation(patient) {
         const form = $('randomization-confirmation-form');
         const summaryEl = $('randomization-confirmation-summary');
         const checkbox = $('randomization-confirmation-checkbox');
+        const stateEl = $('randomization-confirmation-state');
         const errorEl = $('randomization-confirmation-error');
         const cancelBtn = $('randomization-confirmation-cancel-btn');
         const submitBtn = $('randomization-confirmation-submit-btn');
         const closeBtn = $('randomization-confirmation-close');
 
-        if (!modal || !titleEl || !messageEl || !form || !summaryEl || !checkbox || !errorEl || !cancelBtn || !submitBtn || !closeBtn) {
+        if (!modal || !titleEl || !messageEl || !form || !summaryEl || !checkbox || !stateEl || !errorEl || !cancelBtn || !submitBtn || !closeBtn) {
             const fallback = window.confirm('Confirm that all eligibility criteria remain satisfied and the vital-status checks have been completed.');
-            resolve(fallback);
+            resolve({ status: fallback ? RANDOMIZATION_CONFIRMATION_STATUS.CONFIRMED : RANDOMIZATION_CONFIRMATION_STATUS.CANCELLED, criteria: null });
             return;
         }
 
         const previouslyFocused = document.activeElement;
+        const draft = buildRandomizationConfirmationDraft(patient);
+        const attestationEl = checkbox.closest('.confirmation-attestation');
         let resolved = false;
 
         const cleanup = (result) => {
@@ -677,6 +729,7 @@ function promptRandomizationEligibilityConfirmation(patient) {
             resolved = true;
             modal.classList.remove('active');
             form.removeEventListener('submit', onSubmit);
+            summaryEl.removeEventListener('change', onSummaryChange);
             cancelBtn.removeEventListener('click', onCancel);
             closeBtn.removeEventListener('click', onCancel);
             closeBtn.removeEventListener('keydown', onCloseKeydown);
@@ -697,19 +750,61 @@ function promptRandomizationEligibilityConfirmation(patient) {
             errorEl.classList.remove('hidden');
         };
 
-        const onSubmit = (event) => {
-            event.preventDefault();
+        const clearError = () => {
             errorEl.textContent = '';
             errorEl.classList.add('hidden');
+        };
+
+        const renderState = () => {
+            const isEligible = isRandomizationConfirmationDraftEligible(draft);
+            if (attestationEl) {
+                attestationEl.classList.toggle('hidden', !isEligible);
+            }
+            checkbox.disabled = !isEligible;
+            if (!isEligible) {
+                checkbox.checked = false;
+                stateEl.textContent = 'Patient does not meet criteria for randomization. Save the criteria to stop this action.';
+                stateEl.classList.remove('hidden');
+                submitBtn.textContent = 'Save criteria';
+                return;
+            }
+            stateEl.textContent = '';
+            stateEl.classList.add('hidden');
+            submitBtn.textContent = 'Confirm';
+        };
+
+        const onSummaryChange = (event) => {
+            const target = event.target;
+            if (!target || target.type !== 'checkbox') return;
+            clearError();
+            const key = target.dataset.confirmationCriterion;
+            if (key) {
+                draft[key] = target.checked ? 1 : 0;
+                if (EXCLUSION_KEYS.includes(key) && target.checked) {
+                    draft.no_exclusions_confirmed = 0;
+                }
+                renderState();
+            }
+        };
+
+        const onSubmit = (event) => {
+            event.preventDefault();
+            clearError();
+            if (!isRandomizationConfirmationDraftEligible(draft)) {
+                const criteria = getRandomizationConfirmationCriteriaSnapshot(draft);
+                cleanup({ status: RANDOMIZATION_CONFIRMATION_STATUS.INELIGIBLE, criteria });
+                return;
+            }
             if (!checkbox.checked) {
                 showError('Check the confirmation box before continuing.');
                 checkbox.focus();
                 return;
             }
-            cleanup(true);
+            const criteria = getRandomizationConfirmationCriteriaSnapshot(draft, true);
+            cleanup({ status: RANDOMIZATION_CONFIRMATION_STATUS.CONFIRMED, criteria });
         };
 
-        const onCancel = () => cleanup(false);
+        const onCancel = () => cleanup({ status: RANDOMIZATION_CONFIRMATION_STATUS.CANCELLED, criteria: null });
 
         const onBackdropClick = (event) => {
             if (event.target === modal) {
@@ -734,21 +829,28 @@ function promptRandomizationEligibilityConfirmation(patient) {
         const patientLabel = patient.patient_name || getDisplayMrnValue(patient.mrn) || 'this patient';
         titleEl.textContent = 'Confirm eligibility before randomization';
         messageEl.textContent = `Review current eligibility and vital-status checks for ${patientLabel}.`;
-        summaryEl.innerHTML = buildRandomizationConfirmationSummary(patient);
+        summaryEl.innerHTML = buildRandomizationConfirmationSummary(patient, draft);
         checkbox.checked = false;
-        errorEl.textContent = '';
-        errorEl.classList.add('hidden');
-        submitBtn.textContent = 'Confirm';
+        clearError();
+        renderState();
         modal.classList.add('active');
 
         form.addEventListener('submit', onSubmit);
+        summaryEl.addEventListener('change', onSummaryChange);
         cancelBtn.addEventListener('click', onCancel);
         closeBtn.addEventListener('click', onCancel);
         closeBtn.addEventListener('keydown', onCloseKeydown);
         modal.addEventListener('click', onBackdropClick);
         document.addEventListener('keydown', onKeyDown);
 
-        requestAnimationFrame(() => checkbox.focus());
+        requestAnimationFrame(() => {
+            const firstCriterion = summaryEl.querySelector('[data-confirmation-criterion]');
+            if (firstCriterion) {
+                firstCriterion.focus();
+            } else {
+                checkbox.focus();
+            }
+        });
     });
 }
 
@@ -756,20 +858,31 @@ async function getRandomizationEligibilityConfirmation(patient, options = {}) {
     if (!options.forcePrompt && isRandomizationEligibilityConfirmationCurrent(patient)) {
         return {
             ok: true,
+            status: RANDOMIZATION_CONFIRMATION_STATUS.CONFIRMED,
             newlyConfirmed: false,
             timestamp: patient.randomization_eligibility_confirmed_at || '',
-            username: patient.randomization_eligibility_confirmed_by || ''
+            username: patient.randomization_eligibility_confirmed_by || '',
+            criteria: null
         };
     }
-    const confirmed = await promptRandomizationEligibilityConfirmation(patient);
-    if (!confirmed) {
-        return { ok: false, newlyConfirmed: false, timestamp: '', username: '' };
+    const result = await promptRandomizationEligibilityConfirmation(patient);
+    if (!result || result.status !== RANDOMIZATION_CONFIRMATION_STATUS.CONFIRMED) {
+        return {
+            ok: false,
+            status: result ? result.status : RANDOMIZATION_CONFIRMATION_STATUS.CANCELLED,
+            newlyConfirmed: false,
+            timestamp: '',
+            username: '',
+            criteria: result ? result.criteria : null
+        };
     }
     return {
         ok: true,
+        status: RANDOMIZATION_CONFIRMATION_STATUS.CONFIRMED,
         newlyConfirmed: true,
         timestamp: getSqlTimestamp(),
-        username: getCurrentUsername()
+        username: getCurrentUsername(),
+        criteria: result.criteria
     };
 }
 
@@ -779,10 +892,51 @@ function applyRandomizationEligibilityConfirmation(patient, confirmation) {
     patient.randomization_eligibility_confirmed_by = confirmation.username || patient.randomization_eligibility_confirmed_by || '';
 }
 
+function patientStillQualifiesForAssignedStudyId(patient) {
+    if (!patient) return false;
+    const firstEligible = computeFirstEligibleDate(patient);
+    return Boolean(patient.notification_date)
+        && patient.opt_out_status === OPT_OUT_STATUS.DID_NOT
+        && !getPatientHealthCardEligibilityError(patient)
+        && INCLUSION_KEYS.every(key => patient[key] === 1)
+        && EXCLUSION_KEYS.every(key => patient[key] !== 1)
+        && Boolean(patient.no_exclusions_confirmed)
+        && Boolean(firstEligible && firstEligible.getTime() <= getTorontoNowTimestamp())
+        && Boolean(getPatientRandomizationCode(patient));
+}
+
+function releaseStudyIdIfNonRandomizedAndNoLongerEligible(patient) {
+    if (!patient || patient.randomized || !patient.study_id) return false;
+    if (patientStillQualifiesForAssignedStudyId(patient)) return false;
+    releaseStudyId(patient.study_id);
+    patient.study_id = '';
+    patient.allocation = '';
+    patient.therapy_prescribed = 0;
+    patient.randomization_eligibility_confirmed_at = '';
+    patient.randomization_eligibility_confirmed_by = '';
+    patient.inclusionMet = INCLUSION_KEYS.every(key => patient[key] === 1);
+    patient.noExclusions = EXCLUSION_KEYS.every(key => patient[key] !== 1);
+    patient.hasAnyExclusion = !patient.noExclusions;
+    patient.enrollment_status = getNonRandomizedEnrollmentStatus(patient);
+    return true;
+}
+
+function reconcileAssignedStudyIdsForEligibility(patientList) {
+    if (!db || !Array.isArray(patientList)) return 0;
+    let releasedCount = 0;
+    patientList.forEach(patient => {
+        if (!releaseStudyIdIfNonRandomizedAndNoLongerEligible(patient)) return;
+        releasedCount += 1;
+        persistPatient(patient, false, { suppressStatus: true });
+    });
+    return releasedCount;
+}
+
 function clearRandomizationEligibilityConfirmation(patient) {
     if (!patient) return;
     patient.randomization_eligibility_confirmed_at = '';
     patient.randomization_eligibility_confirmed_by = '';
+    releaseStudyIdIfNonRandomizedAndNoLongerEligible(patient);
 }
 
 function logRandomizationEligibilityConfirmation(patient, confirmation) {
@@ -796,6 +950,14 @@ function logRandomizationEligibilityConfirmation(patient, confirmation) {
         targetType: 'patient',
         targetId: patient.mrn || ''
     });
+}
+
+function saveIneligibleRandomizationConfirmation(patient, confirmation, message) {
+    applyRandomizationConfirmationCriteria(patient, confirmation.criteria);
+    clearRandomizationEligibilityConfirmation(patient);
+    persistPatient(patient, false);
+    refreshPatientRow(patient);
+    showRecordWarning(message, 'status');
 }
 
 async function assignStudyId(index) {
@@ -866,10 +1028,15 @@ async function assignStudyId(index) {
     }
     const confirmation = await getRandomizationEligibilityConfirmation(patient, { forcePrompt: true });
     if (!confirmation.ok) {
+        if (confirmation.status === RANDOMIZATION_CONFIRMATION_STATUS.INELIGIBLE) {
+            saveIneligibleRandomizationConfirmation(patient, confirmation, 'Eligibility criteria saved. Study ID was not assigned.');
+            return;
+        }
         showRecordWarning('Eligibility confirmation is required before assigning a Study ID.', 'status');
         return;
     }
     const patientToPersist = { ...patient, study_id: available };
+    applyRandomizationConfirmationCriteria(patientToPersist, confirmation.criteria);
     applyRandomizationEligibilityConfirmation(patientToPersist, confirmation);
     if (!normalizeLocationValue(patientToPersist.location_at_randomization)) {
         patientToPersist.location_at_randomization = getCanonicalLocationValue(patientToPersist.location);

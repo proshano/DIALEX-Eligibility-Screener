@@ -307,6 +307,34 @@
     line-height: 1.35;
 }
 
+.confirmation-checkbox-list {
+    gap: 8px;
+}
+
+.confirmation-checkbox-item {
+    min-height: 44px;
+    align-items: center !important;
+}
+
+.confirmation-checkbox-item input {
+    flex: 0 0 auto;
+    margin-top: 2px;
+    accent-color: var(--brand);
+}
+
+.modal-body .confirmation-checkbox-label,
+.modal-body .confirmation-attestation,
+.modal-body .confirmation-instruction {
+    text-transform: none !important;
+    letter-spacing: 0 !important;
+}
+
+.confirmation-checkbox-label {
+    color: var(--text) !important;
+    font-size: 14px !important;
+    line-height: 1.35;
+}
+
 .confirmation-status-row {
     margin-bottom: 6px;
 }
@@ -353,9 +381,23 @@
     color: var(--text) !important;
 }
 
+.confirmation-attestation.hidden {
+    display: none;
+}
+
 .confirmation-attestation input {
     margin-top: 2px;
     accent-color: var(--brand);
+}
+
+.confirmation-instructions {
+    margin: 0;
+}
+
+.confirmation-instruction {
+    color: var(--text) !important;
+    font-size: 14px !important;
+    line-height: 1.35;
 }
 
 @media (max-width: 720px) {

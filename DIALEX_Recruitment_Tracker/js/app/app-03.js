@@ -1307,6 +1307,13 @@ function refreshPatientData() {
         console.error(error);
         showStatus('Error reading database', 'error');
     }
+    if (typeof reconcileAssignedStudyIdsForEligibility === 'function') {
+        try {
+            reconcileAssignedStudyIdsForEligibility(patientsData);
+        } catch (error) {
+            console.warn('Unable to reconcile assigned Study IDs', error);
+        }
+    }
     renderPatientTable();
     updateFilterCounts();
 }
@@ -1380,22 +1387,8 @@ function normalizePatientRow(row, index) {
     patient.first_ready_iso = patient.first_ready_date ? formatISODate(patient.first_ready_date) : '';
     patient.noExclusions = !legacyDeclined && EXCLUSION_KEYS.every(key => patient[key] === 0);
     patient.hasAnyExclusion = !patient.noExclusions;
-    const needsDiabetesInfo = Number.isFinite(patient.age) && patient.age >= 45 && patient.age < 60;
-    const hasDiabetes = patient.diabetes_known === DIABETES_STATUS.YES;
-    if (Number.isFinite(patient.age)) {
-        if (patient.age >= 60) {
-            patient.incl_age = 1;
-        } else if (needsDiabetesInfo) {
-            patient.incl_age = hasDiabetes ? 1 : 0;
-        } else {
-            patient.incl_age = 0;
-        }
-    }
     patient.hasHealthCard = normalizedHcn.length > 0;
-    const hcnEligibilityError = getHealthCardEligibilityError(normalizedHcn, provinceForHcn || '');
-    patient.incl_health_card = patient.hasHealthCard && !hcnEligibilityError ? 1 : 0;
     patient.health_card_province = provinceForHcn || '';
-    recalcDialysisInclusion(patient);
     patient.inclusionMet = INCLUSION_KEYS.every(key => patient[key] === 1);
     patient.bucketFlags = computeBucketFlags(patient);
     patient.primaryBucket = patient.bucketFlags.primary;

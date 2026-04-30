@@ -1023,7 +1023,7 @@ function labelForKey(key) {
         excl_discontinue: 'Expected to stop in-centre HD within 3 months',
         excl_nonadherence: 'Anticipated severe non-adherence',
         excl_preference: 'Overriding clinical preference for expanded HD',
-        excl_other_medical: 'Other medical / psychosocial / logistical reason',
+        excl_other_medical: 'Other medical / psychosocial / logistical reason (including death)',
         excl_other_trial: 'Enrolled in conflicting clinical trial',
         excl_previous: 'Previously enrolled in DIALEX'
     };
