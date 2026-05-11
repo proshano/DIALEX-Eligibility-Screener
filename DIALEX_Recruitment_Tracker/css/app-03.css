@@ -185,7 +185,8 @@
 }
 
 .randomization-confirmation-content {
-    max-width: 760px;
+    width: min(920px, calc(100vw - 32px));
+    max-width: 920px;
 }
 
 .modal-header {

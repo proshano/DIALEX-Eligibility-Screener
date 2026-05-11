@@ -21,7 +21,7 @@ When copying this tool to another computer, copy the entire DIALEX_Recruitment_T
 
 Recruitment summary export
 - In the Patient data section, use "Export recruitment summary (.csv)" to download a CSV report.
-- The export includes: notified patients, in opt-out period, opt-out period ended with opt-out status not documented, opted out, did not opt-out but deemed ineligible for another reason after notification, did not opt out and waiting to be randomized, randomized not yet prescribed, and randomized and prescribed.
+- The export includes: notified patients, in opt-out period, opt-out period ended with opt-out status not documented, opted out, did not opt-out but deemed ineligible for another reason after notification, did not opt-out pending final eligibility confirmation, did not opt out and waiting to be randomized, randomized not yet prescribed, and randomized and prescribed.
 - Counts are shown for each recruitment state, and percentages are based on notified patients.
 
 Randomization and record locking

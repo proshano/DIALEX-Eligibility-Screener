@@ -85,6 +85,9 @@ if (exportRecruitmentSummaryBtn) {
     exportRecruitmentSummaryBtn.addEventListener('click', exportRecruitmentSummaryCsv);
 }
 $('search-input').addEventListener('input', event => {
+    if (typeof stopRandomizationFollow === 'function') {
+        stopRandomizationFollow();
+    }
     currentSearchTerm = event.target.value.trim().toLowerCase();
     renderPatientTable();
 });

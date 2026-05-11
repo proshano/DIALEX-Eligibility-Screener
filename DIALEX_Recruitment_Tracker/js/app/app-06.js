@@ -993,6 +993,9 @@ function updatePatientScopeSummary() {
 }
 
 function setPatientScope(scope, options = {}) {
+    if (!options.preserveRandomizationFollow && typeof stopRandomizationFollow === 'function') {
+        stopRandomizationFollow();
+    }
     const persist = Boolean(options.persist);
     const refresh = options.refresh !== false;
     const normalized = normalizePatientScopeMode(scope);
@@ -1192,6 +1195,9 @@ function closeRecruitingUnitModal() {
 function saveRecruitingUnitSelection() {
     const list = $('unit-filter-list');
     if (!list) return;
+    if (typeof stopRandomizationFollow === 'function') {
+        stopRandomizationFollow();
+    }
     const selected = Array.from(list.querySelectorAll('input[type="checkbox"][data-unit-code]'))
         .filter(input => input.checked)
         .map(input => input.dataset.unitCode);
@@ -1323,7 +1329,10 @@ function getLocationSourceLabel(source) {
     return LOCATION_SOURCE_LABELS[source] || '';
 }
 
-function setFilter(filter) {
+function setFilter(filter, options = {}) {
+    if (!options.preserveRandomizationFollow && typeof stopRandomizationFollow === 'function') {
+        stopRandomizationFollow();
+    }
     currentFilter = filter;
     FILTERS.forEach(({ key, buttonId }) => {
         const el = $(buttonId);

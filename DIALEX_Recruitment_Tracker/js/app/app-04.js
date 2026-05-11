@@ -104,7 +104,7 @@ function computeBucketFlags(patient = {}) {
         }
     }
 
-    if (noStudyIdsForUnit && !hasRandomization && !isOptedOutStatus) {
+    if (noStudyIdsForUnit && !hasStudyId && !hasRandomization && !isOptedOutStatus) {
         flags.ready_notify = false;
         flags.waiting = false;
         flags.final_eligibility = false;
@@ -251,6 +251,64 @@ function insertRowSorted(tbody, row, patient) {
 }
 
 let expandedPatientIndex = null;
+let randomizationFollowPatientKey = '';
+let randomizationFollowActive = false;
+
+function getRandomizationFollowPatientKey(patient) {
+    if (!patient) return '';
+    const mrn = String(patient.mrn || '').trim();
+    return mrn || `__idx-${patient._index}`;
+}
+
+function shouldStartRandomizationFollow() {
+    return currentFilter === 'final_eligibility' && !isSearchActive();
+}
+
+function startRandomizationFollow(patient) {
+    randomizationFollowPatientKey = getRandomizationFollowPatientKey(patient);
+    randomizationFollowActive = Boolean(randomizationFollowPatientKey);
+}
+
+function stopRandomizationFollow() {
+    randomizationFollowPatientKey = '';
+    randomizationFollowActive = false;
+}
+
+function isRandomizationFollowActiveFor(patient) {
+    return randomizationFollowActive
+        && getRandomizationFollowPatientKey(patient) === randomizationFollowPatientKey;
+}
+
+function focusRandomizationFollowPatient(index, filter) {
+    const schedule = window.requestAnimationFrame || function (cb) { return setTimeout(cb, 0); };
+    schedule(() => {
+        const detailsRow = document.getElementById(`row-details-${index}`);
+        const summaryRow = document.getElementById(`row-${index}`);
+        const anchor = detailsRow || summaryRow;
+        if (!anchor) return;
+        anchor.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        const selector = filter === 'ready_randomize'
+            ? 'select[onchange*="updateRandomizedStatus"]'
+            : (filter === 'randomized_np'
+                ? 'select[onchange*="updateAllocation"], input[onchange*="toggleTherapyPrescribed"]'
+                : 'input, select, textarea, button');
+        const focusTarget = anchor.querySelector(selector);
+        if (focusTarget && !focusTarget.disabled && typeof focusTarget.focus === 'function') {
+            focusTarget.focus();
+        }
+    });
+}
+
+function followRandomizationPatientToFilter(patient, filter, options = {}) {
+    if (!patient || !randomizationFollowActive) return;
+    const index = patient._index;
+    expandedPatientIndex = index;
+    setFilter(filter, { preserveRandomizationFollow: true });
+    focusRandomizationFollowPatient(index, filter);
+    if (options.complete) {
+        stopRandomizationFollow();
+    }
+}
 
 function getDefaultPatientSortDirection(sortKey) {
     return PATIENT_SORT_DEFAULT_DIRECTIONS[sortKey] || SORT_DIRECTIONS.ASC;
@@ -676,7 +734,7 @@ function buildPatientDetailsRow(patient) {
     const studyRowStyle = studyRowVisible ? '' : 'display:none;';
     const studyCopyDisabled = studyIdValue ? '' : 'disabled';
     const assignStudyIdButtonHtml = canAssignStudyId && !hasStudyId
-        ? `<button class="copy-btn assign-study-id-btn" ${eligibilityLocked ? 'disabled' : ''} onclick="assignStudyId(${patient._index})">Confirm eligibility and assign Study ID</button>`
+        ? `<button class="copy-btn assign-study-id-btn" ${eligibilityLocked ? 'disabled' : ''} onclick="assignStudyId(${patient._index})">Confirm eligible and randomize</button>`
         : '';
     const studyHelper = (!hasStudyId && canAssignStudyId)
         ? '<div class="status-subtext">Assign a Study ID to enable randomization.</div>'

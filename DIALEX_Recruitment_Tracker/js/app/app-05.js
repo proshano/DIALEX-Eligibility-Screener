@@ -327,7 +327,10 @@ async function updateRandomizedStatus(index, value, control = null) {
         clearRandomizationEligibilityConfirmation(patient);
         showRecordWarning('');
         persistPatient(patient, false);
-        refreshPatientRow(patient);
+        const refreshed = refreshPatientRow(patient);
+        if (isRandomizationFollowActiveFor(refreshed)) {
+            stopRandomizationFollow();
+        }
         return;
     }
     if (!patient.notification_date) {
@@ -377,20 +380,7 @@ async function updateRandomizedStatus(index, value, control = null) {
         renderPatientTable();
         return;
     }
-    const confirmation = await getRandomizationEligibilityConfirmation(patient);
-    if (!confirmation.ok) {
-        if (control) control.value = '0';
-        if (confirmation.status === RANDOMIZATION_CONFIRMATION_STATUS.INELIGIBLE) {
-            saveIneligibleRandomizationConfirmation(patient, confirmation, 'Eligibility criteria saved. Patient was not marked randomized.');
-            return;
-        }
-        showRecordWarning('Eligibility confirmation is required before marking randomized.', 'status');
-        refreshPatientRow(patient);
-        return;
-    }
     const previousState = { ...patient };
-    applyRandomizationConfirmationCriteria(patient, confirmation.criteria);
-    applyRandomizationEligibilityConfirmation(patient, confirmation);
     patient.randomized = 1;
     patient.enrollment_status = 'enrolled';
     patient.locked_at = getTorontoNow().toISOString();
@@ -408,8 +398,10 @@ async function updateRandomizedStatus(index, value, control = null) {
         refreshPatientRow(patient);
         return;
     }
-    logRandomizationEligibilityConfirmation(patient, confirmation);
-    refreshPatientRow(patient);
+    const refreshed = refreshPatientRow(patient);
+    if (isRandomizationFollowActiveFor(refreshed)) {
+        followRandomizationPatientToFilter(refreshed, 'randomized_np');
+    }
 }
 
 function updateDialysisStartDate(index, value) {
@@ -508,7 +500,10 @@ function toggleTherapyPrescribed(index, checkbox) {
     }
     patient.therapy_prescribed = checkbox.checked ? 1 : 0;
     persistPatient(patient, false);
-    refreshPatientRow(patient);
+    const refreshed = refreshPatientRow(patient);
+    if (checkbox.checked && isRandomizationFollowActiveFor(refreshed)) {
+        followRandomizationPatientToFilter(refreshed, 'randomized_rx', { complete: true });
+    }
 }
 
 function updateAllocation(index, value) {
@@ -972,6 +967,7 @@ async function assignStudyId(index) {
         showRecordWarning('Study ID already assigned.', 'error');
         return;
     }
+    const shouldFollowAfterAssignment = shouldStartRandomizationFollow();
     if (!patient.notification_date) {
         showRecordWarning('Set notification date before assigning a Study ID.', 'error');
         renderPatientTable();
@@ -1052,7 +1048,11 @@ async function assignStudyId(index) {
     Object.assign(patient, patientToPersist);
     logRandomizationEligibilityConfirmation(patient, confirmation);
     showRecordWarning('');
-    refreshPatientRow(patient);
+    const refreshed = refreshPatientRow(patient);
+    if (shouldFollowAfterAssignment) {
+        startRandomizationFollow(refreshed);
+        followRandomizationPatientToFilter(refreshed, 'ready_randomize');
+    }
 }
 
 function claimStudyIdAndPersistPatient(patient, studyId) {
@@ -1833,6 +1833,7 @@ function buildRecruitmentSummaryRows() {
     let notified = 0;
     let optedOut = 0;
     let ineligibleAfterNotified = 0;
+    let pendingFinalEligibilityConfirmation = 0;
     let waitingToBeRandomized = 0;
     let randomizedNotPrescribed = 0;
     let randomizedAndPrescribed = 0;
@@ -1845,6 +1846,7 @@ function buildRecruitmentSummaryRows() {
         const flags = patient.bucketFlags || computeBucketFlags(patient);
         const optOutStatus = patient.opt_out_status || OPT_OUT_STATUS.PENDING;
         const hasRandomization = Boolean(patient.randomized);
+        const hasStudyId = Boolean(String(patient.study_id || '').trim());
         const isOptedOut = optOutStatus === OPT_OUT_STATUS.OPTED_OUT;
         const isPrescribed = Boolean(patient.therapy_prescribed);
         const notificationDate = parseISODate(patient.notification_date);
@@ -1864,6 +1866,10 @@ function buildRecruitmentSummaryRows() {
             optedOut += 1;
             return;
         }
+        if (optOutStatus === OPT_OUT_STATUS.DID_NOT && hasStudyId) {
+            waitingToBeRandomized += 1;
+            return;
+        }
         if (flags.ineligible) {
             ineligibleAfterNotified += 1;
             return;
@@ -1877,7 +1883,7 @@ function buildRecruitmentSummaryRows() {
             return;
         }
         if (optOutStatus === OPT_OUT_STATUS.DID_NOT) {
-            waitingToBeRandomized += 1;
+            pendingFinalEligibilityConfirmation += 1;
             return;
         }
         optOutPeriodEndedNoStatus += 1;
@@ -1890,6 +1896,7 @@ function buildRecruitmentSummaryRows() {
         ['Opt-out period ended, opt-out status not documented', String(optOutPeriodEndedNoStatus), formatPercent(optOutPeriodEndedNoStatus, notifiedDenominator)],
         ['Opted out', String(optedOut), formatPercent(optedOut, notifiedDenominator)],
         ['Did not opt-out, but deemed ineligible for another reason after notification', String(ineligibleAfterNotified), formatPercent(ineligibleAfterNotified, notifiedDenominator)],
+        ['Did not opt-out, pending final eligibility confirmation', String(pendingFinalEligibilityConfirmation), formatPercent(pendingFinalEligibilityConfirmation, notifiedDenominator)],
         ['Did not opt out, waiting to be randomized', String(waitingToBeRandomized), formatPercent(waitingToBeRandomized, notifiedDenominator)],
         ['Randomized, not yet prescribed', String(randomizedNotPrescribed), formatPercent(randomizedNotPrescribed, notifiedDenominator)],
         ['Randomized and prescribed', String(randomizedAndPrescribed), formatPercent(randomizedAndPrescribed, notifiedDenominator)]
