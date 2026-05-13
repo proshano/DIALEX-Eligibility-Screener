@@ -253,6 +253,11 @@ function insertRowSorted(tbody, row, patient) {
 let expandedPatientIndex = null;
 let randomizationFollowPatientKey = '';
 let randomizationFollowActive = false;
+const STATUS_FOLLOW_FILTERS = new Set(
+    FILTERS
+        .map(filter => filter.key)
+        .filter(key => key !== 'all' && key !== 'notes')
+);
 
 function getRandomizationFollowPatientKey(patient) {
     if (!patient) return '';
@@ -262,6 +267,10 @@ function getRandomizationFollowPatientKey(patient) {
 
 function shouldStartRandomizationFollow() {
     return currentFilter === 'final_eligibility' && !isSearchActive();
+}
+
+function shouldFollowPatientStatusChange(filter = currentFilter) {
+    return STATUS_FOLLOW_FILTERS.has(filter) && !isSearchActive();
 }
 
 function startRandomizationFollow(patient) {
@@ -308,6 +317,34 @@ function followRandomizationPatientToFilter(patient, filter, options = {}) {
     if (options.complete) {
         stopRandomizationFollow();
     }
+}
+
+function getPatientPrimaryStatusFilter(patient) {
+    if (!patient) return '';
+    const flags = patient.bucketFlags || computeBucketFlags(patient);
+    return flags.primary && flags.primary !== 'all' ? flags.primary : '';
+}
+
+function followPatientToStatusFilter(patient, filter, options = {}) {
+    if (!patient || !filter || filter === 'all') return;
+    const fromFilter = options.fromFilter || currentFilter;
+    if (!options.force && !shouldFollowPatientStatusChange(fromFilter)) return;
+    expandedPatientIndex = patient._index;
+    setFilter(filter, { preserveRandomizationFollow: true });
+    focusRandomizationFollowPatient(patient._index, filter);
+    if (options.complete) {
+        stopRandomizationFollow();
+    }
+}
+
+function maybeFollowPatientStatusChange(patient, fromFilter, options = {}) {
+    if (!patient || !shouldFollowPatientStatusChange(fromFilter)) return;
+    const nextFilter = options.targetFilter || getPatientPrimaryStatusFilter(patient);
+    if (!nextFilter || nextFilter === fromFilter) return;
+    followPatientToStatusFilter(patient, nextFilter, {
+        fromFilter,
+        complete: options.complete
+    });
 }
 
 function getDefaultPatientSortDirection(sortKey) {
@@ -1180,6 +1217,7 @@ function updateInlineNotification(index, value) {
     const patient = patientsData[index];
     if (!patient) return;
     if (!ensureEligibilityEditablePatient(patient)) return;
+    const followFromFilter = shouldFollowPatientStatusChange() ? currentFilter : '';
     const newDate = (value || '').trim();
     if (!newDate) {
         if (!patient.notification_date) {
@@ -1235,14 +1273,15 @@ function updateInlineNotification(index, value) {
     }
     clearRandomizationEligibilityConfirmation(patient);
     persistPatient(patient, false);
-    refreshPatientRow(patient);
-    if (patient.notification_date) {
-        const patientFlags = computeBucketFlags(patient);
+    const refreshed = refreshPatientRow(patient);
+    maybeFollowPatientStatusChange(refreshed, followFromFilter);
+    if (refreshed.notification_date) {
+        const patientFlags = computeBucketFlags(refreshed);
         if (patientFlags.noStudyIdsForUnit) {
             showRecordWarning('No Study IDs loaded for this unit. Patient cannot be randomized until Study IDs are imported.', 'status');
             return;
         }
-        const notification = parseISODate(patient.notification_date);
+        const notification = parseISODate(refreshed.notification_date);
         if (notification && isDateOlderThanDays(notification, NOTIFICATION_WARNING_DAYS)) {
             showRecordWarning(`Check notification date: more than ${NOTIFICATION_WARNING_DAYS} days ago.`, 'status');
             return;
@@ -1296,6 +1335,7 @@ async function updateOptOutStatus(index, value, control = null) {
     const patient = patientsData[index];
     if (!patient) return;
     if (!ensureEligibilityEditablePatient(patient)) return;
+    const followFromFilter = shouldFollowPatientStatusChange() ? currentFilter : '';
     if (!patient.notification_date) {
         restoreOptOutStatusControl(control, patient);
         showRecordWarning('Set a notification date before updating opt-out status.', 'error');
@@ -1335,13 +1375,15 @@ async function updateOptOutStatus(index, value, control = null) {
     clearRandomizationEligibilityConfirmation(patient);
     showRecordWarning('');
     persistPatient(patient, false);
-    refreshPatientRow(patient);
+    const refreshed = refreshPatientRow(patient);
+    maybeFollowPatientStatusChange(refreshed, followFromFilter);
 }
 
 function updateOptOutDate(index, value) {
     const patient = patientsData[index];
     if (!patient) return;
     if (!ensureEligibilityEditablePatient(patient)) return;
+    const followFromFilter = shouldFollowPatientStatusChange() ? currentFilter : '';
     if (!patient.notification_date) {
         showRecordWarning('Set a notification date before recording opt-out date.', 'error');
         renderPatientTable();
@@ -1358,7 +1400,8 @@ function updateOptOutDate(index, value) {
         patient.did_not_opt_out = 0;
         clearRandomizationEligibilityConfirmation(patient);
         persistPatient(patient, false);
-        refreshPatientRow(patient);
+        const refreshed = refreshPatientRow(patient);
+        maybeFollowPatientStatusChange(refreshed, followFromFilter);
         return;
     }
     const validation = validateOptOutDateEntry(patient, dateVal);
@@ -1385,7 +1428,8 @@ function updateOptOutDate(index, value) {
     clearRandomizationEligibilityConfirmation(patient);
     showRecordWarning('');
     persistPatient(patient, false);
-    refreshPatientRow(patient);
+    const refreshed = refreshPatientRow(patient);
+    maybeFollowPatientStatusChange(refreshed, followFromFilter);
 }
 
 function updateDialysisUnit(index, value) {

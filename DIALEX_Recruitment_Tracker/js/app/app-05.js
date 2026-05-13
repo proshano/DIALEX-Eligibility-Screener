@@ -315,6 +315,7 @@ async function updateRandomizedStatus(index, value, control = null) {
     const patient = patientsData[index];
     if (!patient) return;
     if (!ensureEligibilityEditablePatient(patient)) return;
+    const followFromFilter = shouldFollowPatientStatusChange() ? currentFilter : '';
     const shouldMark = String(value) === '1';
     if (!shouldMark) {
         releaseStudyId(patient.study_id);
@@ -328,7 +329,9 @@ async function updateRandomizedStatus(index, value, control = null) {
         showRecordWarning('');
         persistPatient(patient, false);
         const refreshed = refreshPatientRow(patient);
-        if (isRandomizationFollowActiveFor(refreshed)) {
+        if (followFromFilter) {
+            maybeFollowPatientStatusChange(refreshed, followFromFilter);
+        } else if (isRandomizationFollowActiveFor(refreshed)) {
             stopRandomizationFollow();
         }
         return;
@@ -399,7 +402,9 @@ async function updateRandomizedStatus(index, value, control = null) {
         return;
     }
     const refreshed = refreshPatientRow(patient);
-    if (isRandomizationFollowActiveFor(refreshed)) {
+    if (followFromFilter) {
+        maybeFollowPatientStatusChange(refreshed, followFromFilter);
+    } else if (isRandomizationFollowActiveFor(refreshed)) {
         followRandomizationPatientToFilter(refreshed, 'randomized_np');
     }
 }
@@ -483,6 +488,7 @@ function toggleTherapyPrescribed(index, checkbox) {
         checkbox.checked = !!patient.therapy_prescribed;
         return;
     }
+    const followFromFilter = shouldFollowPatientStatusChange() ? currentFilter : '';
     if (checkbox.checked && !patient.randomized) {
         checkbox.checked = false;
         showRecordWarning('Mark randomized before marking as prescribed.', 'error');
@@ -501,7 +507,11 @@ function toggleTherapyPrescribed(index, checkbox) {
     patient.therapy_prescribed = checkbox.checked ? 1 : 0;
     persistPatient(patient, false);
     const refreshed = refreshPatientRow(patient);
-    if (checkbox.checked && isRandomizationFollowActiveFor(refreshed)) {
+    if (followFromFilter) {
+        maybeFollowPatientStatusChange(refreshed, followFromFilter, {
+            complete: checkbox.checked && getPatientPrimaryStatusFilter(refreshed) === 'randomized_rx'
+        });
+    } else if (checkbox.checked && isRandomizationFollowActiveFor(refreshed)) {
         followRandomizationPatientToFilter(refreshed, 'randomized_rx', { complete: true });
     }
 }
@@ -948,10 +958,12 @@ function logRandomizationEligibilityConfirmation(patient, confirmation) {
 }
 
 function saveIneligibleRandomizationConfirmation(patient, confirmation, message) {
+    const followFromFilter = shouldFollowPatientStatusChange() ? currentFilter : '';
     applyRandomizationConfirmationCriteria(patient, confirmation.criteria);
     clearRandomizationEligibilityConfirmation(patient);
     persistPatient(patient, false);
-    refreshPatientRow(patient);
+    const refreshed = refreshPatientRow(patient);
+    maybeFollowPatientStatusChange(refreshed, followFromFilter);
     showRecordWarning(message, 'status');
 }
 
@@ -967,6 +979,7 @@ async function assignStudyId(index) {
         showRecordWarning('Study ID already assigned.', 'error');
         return;
     }
+    const followFromFilter = shouldFollowPatientStatusChange() ? currentFilter : '';
     const shouldFollowAfterAssignment = shouldStartRandomizationFollow();
     if (!patient.notification_date) {
         showRecordWarning('Set notification date before assigning a Study ID.', 'error');
@@ -1049,7 +1062,9 @@ async function assignStudyId(index) {
     logRandomizationEligibilityConfirmation(patient, confirmation);
     showRecordWarning('');
     const refreshed = refreshPatientRow(patient);
-    if (shouldFollowAfterAssignment) {
+    if (followFromFilter) {
+        maybeFollowPatientStatusChange(refreshed, followFromFilter);
+    } else if (shouldFollowAfterAssignment) {
         startRandomizationFollow(refreshed);
         followRandomizationPatientToFilter(refreshed, 'ready_randomize');
     }
@@ -1209,7 +1224,7 @@ function copyPatientField(index, field) {
     if (!patient) return;
     const rawValue = field === 'mrn' ? getDisplayMrnValue(patient.mrn) : patient[field];
     const dateFields = new Set(['notification_date', 'opt_out_date', 'dialysis_start_date', 'birth_date']);
-    const value = dateFields.has(field) ? formatEntryDate(rawValue) : rawValue;
+    const value = dateFields.has(field) ? (normalizeISODateString(rawValue) || rawValue) : rawValue;
     const labels = {
         mrn: 'MRN',
         health_card: 'Health card number',
