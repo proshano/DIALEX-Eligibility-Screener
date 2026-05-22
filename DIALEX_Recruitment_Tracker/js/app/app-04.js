@@ -253,11 +253,12 @@ function insertRowSorted(tbody, row, patient) {
 let expandedPatientIndex = null;
 let randomizationFollowPatientKey = '';
 let randomizationFollowActive = false;
-const STATUS_FOLLOW_FILTERS = new Set(
-    FILTERS
-        .map(filter => filter.key)
-        .filter(key => key !== 'all' && key !== 'notes')
-);
+const RANDOMIZATION_FOLLOW_FILTERS = new Set([
+    'final_eligibility',
+    'ready_randomize',
+    'randomized_np',
+    'randomized_rx'
+]);
 
 function getRandomizationFollowPatientKey(patient) {
     if (!patient) return '';
@@ -269,8 +270,12 @@ function shouldStartRandomizationFollow() {
     return currentFilter === 'final_eligibility' && !isSearchActive();
 }
 
+function isRandomizationFollowFilter(filter) {
+    return RANDOMIZATION_FOLLOW_FILTERS.has(filter);
+}
+
 function shouldFollowPatientStatusChange(filter = currentFilter) {
-    return STATUS_FOLLOW_FILTERS.has(filter) && !isSearchActive();
+    return isRandomizationFollowFilter(filter) && !isSearchActive();
 }
 
 function startRandomizationFollow(patient) {
@@ -309,7 +314,7 @@ function focusRandomizationFollowPatient(index, filter) {
 }
 
 function followRandomizationPatientToFilter(patient, filter, options = {}) {
-    if (!patient || !randomizationFollowActive) return;
+    if (!patient || !randomizationFollowActive || !isRandomizationFollowFilter(filter)) return;
     const index = patient._index;
     expandedPatientIndex = index;
     setFilter(filter, { preserveRandomizationFollow: true });
@@ -326,7 +331,7 @@ function getPatientPrimaryStatusFilter(patient) {
 }
 
 function followPatientToStatusFilter(patient, filter, options = {}) {
-    if (!patient || !filter || filter === 'all') return;
+    if (!patient || !isRandomizationFollowFilter(filter)) return;
     const fromFilter = options.fromFilter || currentFilter;
     if (!options.force && !shouldFollowPatientStatusChange(fromFilter)) return;
     expandedPatientIndex = patient._index;
@@ -340,7 +345,7 @@ function followPatientToStatusFilter(patient, filter, options = {}) {
 function maybeFollowPatientStatusChange(patient, fromFilter, options = {}) {
     if (!patient || !shouldFollowPatientStatusChange(fromFilter)) return;
     const nextFilter = options.targetFilter || getPatientPrimaryStatusFilter(patient);
-    if (!nextFilter || nextFilter === fromFilter) return;
+    if (!nextFilter || nextFilter === fromFilter || !isRandomizationFollowFilter(nextFilter)) return;
     followPatientToStatusFilter(patient, nextFilter, {
         fromFilter,
         complete: options.complete
@@ -409,11 +414,11 @@ function getStatusBadgeHtml(patient) {
         ready_notify: 'Deliver notification',
         waiting: 'Notified and waiting',
         final_eligibility: 'Assess eligibility for randomization',
-        ready_randomize: 'Ready to Randomize',
-        randomized_np: 'Randomized (Not Prescribed)',
-        randomized_rx: 'Randomized (Prescribed)',
+        ready_randomize: 'Ready to randomize in REDCap',
+        randomized_np: 'Randomized (not prescribed)',
+        randomized_rx: 'Randomized (prescribed)',
         ineligible: 'Ineligible',
-        opted_out: 'Opted Out'
+        opted_out: 'Opted out'
     };
     const primary = statusLabels[rawPrimary] ? rawPrimary : 'all';
     let label = statusLabels[primary] || 'All';
@@ -761,8 +766,10 @@ function buildPatientDetailsRow(patient) {
     if (!randomizationRowVisible) {
         if (canAssignStudyId && !hasStudyId) {
             randomizationHelper = '';
+        } else if (optOutStatus === OPT_OUT_STATUS.OPTED_OUT) {
+            randomizationHelper = '<div class="status-subtext">This patient has opted out of participation and is therefore not eligible for randomization.</div>';
         } else if (optOutStatus === OPT_OUT_STATUS.DID_NOT && hasEligibleDate && !eligibleWindowStarted) {
-            randomizationHelper = `<div class="status-subtext">Eligible on ${firstEligibleDisplaySafe}. Mark randomized once eligible.</div>`;
+            randomizationHelper = `<div class="status-subtext">Return here to randomize on or after ${firstEligibleDisplaySafe}.</div>`;
         } else {
             randomizationHelper = '<div class="status-subtext">Complete eligibility and opt-out steps to mark randomized.</div>';
         }
@@ -771,10 +778,7 @@ function buildPatientDetailsRow(patient) {
     const studyRowStyle = studyRowVisible ? '' : 'display:none;';
     const studyCopyDisabled = studyIdValue ? '' : 'disabled';
     const assignStudyIdButtonHtml = canAssignStudyId && !hasStudyId
-        ? `<button class="copy-btn assign-study-id-btn" ${eligibilityLocked ? 'disabled' : ''} onclick="assignStudyId(${patient._index})">Confirm eligible and randomize</button>`
-        : '';
-    const studyHelper = (!hasStudyId && canAssignStudyId)
-        ? '<div class="status-subtext">Assign a Study ID to enable randomization.</div>'
+        ? `<button class="copy-btn assign-study-id-btn" ${eligibilityLocked ? 'disabled' : ''} onclick="assignStudyId(${patient._index})">Confirm eligible to randomize</button>`
         : '';
     const allocationRowVisible = isRandomized && (hasStudyId || hasAllocation || patient.therapy_prescribed);
     const allocationRowStyle = allocationRowVisible ? '' : 'display:none;';
@@ -829,7 +833,10 @@ function buildPatientDetailsRow(patient) {
                             <span class="date-display ${dialysisStartFriendly ? 'has-value' : ''}">${dialysisStartFriendlyDisplay}</span>
                         </div>
                         <div class="date-input-row">
-                            <input type="text" class="table-input inline-date" value="${dialysisStartDisplaySafe}" placeholder="DD/MM/YYYY" title="DD/MM/YYYY or YYYY-MM-DD" inputmode="numeric" autocomplete="off" spellcheck="false" data-date-entry="true" ${eligibilityLocked ? 'disabled' : ''} onblur="updateDialysisStartDate(${patient._index}, this.value)">
+                            <span class="date-entry-mask-wrap date-entry-mask-wrap-inline">
+                                <input type="text" class="table-input inline-date" value="${dialysisStartDisplaySafe}" placeholder="YYYY-MM-DD" title="YYYY-MM-DD" inputmode="numeric" autocomplete="off" spellcheck="false" data-date-entry="true" data-date-blur="dialysis_start_date" data-patient-index="${patient._index}" ${eligibilityLocked ? 'disabled' : ''}>
+                                <span class="date-entry-mask hidden" aria-hidden="true"><span class="date-entry-mask-prefix"></span><span class="date-entry-mask-suffix"></span></span>
+                            </span>
                         </div>
                     </div>
                     ${dialysisConfirmControls}
@@ -857,7 +864,10 @@ function buildPatientDetailsRow(patient) {
                         <span class="date-display ${notificationFriendly ? 'has-value' : ''}">${notificationFriendlyDisplay}</span>
                     </div>
                     <div class="date-input-row">
-                        <input type="text" class="table-input inline-date" value="${notificationDisplaySafe}" placeholder="DD/MM/YYYY" title="DD/MM/YYYY or YYYY-MM-DD" inputmode="numeric" autocomplete="off" spellcheck="false" data-date-entry="true" ${eligibilityLocked ? 'disabled' : ''} onblur="updateInlineNotification(${patient._index}, this.value)">
+                        <span class="date-entry-mask-wrap date-entry-mask-wrap-inline">
+                            <input type="text" class="table-input inline-date" value="${notificationDisplaySafe}" placeholder="YYYY-MM-DD" title="YYYY-MM-DD" inputmode="numeric" autocomplete="off" spellcheck="false" data-date-entry="true" data-date-blur="notification_date" data-patient-index="${patient._index}" ${eligibilityLocked ? 'disabled' : ''}>
+                            <span class="date-entry-mask hidden" aria-hidden="true"><span class="date-entry-mask-prefix"></span><span class="date-entry-mask-suffix"></span></span>
+                        </span>
                         ${notifiedCopyButton}
                     </div>
                 </div>
@@ -879,7 +889,10 @@ function buildPatientDetailsRow(patient) {
                             <span class="date-display ${optOutFriendly ? 'has-value' : ''}">${optOutFriendlyDisplay}</span>
                         </div>
                         <div class="date-input-row">
-                            <input type="text" class="table-input inline-date" value="${optOutDateDisplaySafe}" placeholder="DD/MM/YYYY" title="DD/MM/YYYY or YYYY-MM-DD" inputmode="numeric" autocomplete="off" spellcheck="false" data-date-entry="true" ${optOutDateDisabled} onblur="updateOptOutDate(${patient._index}, this.value)">
+                            <span class="date-entry-mask-wrap date-entry-mask-wrap-inline">
+                                <input type="text" class="table-input inline-date" value="${optOutDateDisplaySafe}" placeholder="YYYY-MM-DD" title="YYYY-MM-DD" inputmode="numeric" autocomplete="off" spellcheck="false" data-date-entry="true" data-date-blur="opt_out_date" data-patient-index="${patient._index}" ${optOutDateDisabled}>
+                                <span class="date-entry-mask hidden" aria-hidden="true"><span class="date-entry-mask-prefix"></span><span class="date-entry-mask-suffix"></span></span>
+                            </span>
                             <button class="copy-btn" ${optOutCopyDisabled} onclick="copyPatientField(${patient._index}, 'opt_out_date')">Copy date</button>
                         </div>
                     </div>
@@ -890,10 +903,9 @@ function buildPatientDetailsRow(patient) {
                     <span class="date-display study-id-display ${studyIdValue ? 'has-value' : ''}">${escapeHtml(studyIdValue || 'Not assigned')}</span>
                     <button class="copy-btn" ${studyCopyDisabled} onclick="copyPatientField(${patient._index}, 'study_id')">Copy</button>
                 </div>
-                ${studyHelper}
                 ${randomizationHelper}
                 <div class="inline-field-row" style="${randomizationRowStyle}">
-                    <label class="patient-sub">Randomized:</label>
+                    <label class="patient-sub">Randomized in REDCap:</label>
                     <select class="table-input inline-select" ${randomizedDisabled} onchange="updateRandomizedStatus(${patient._index}, this.value, this)">
                         <option value="0" ${randomizedSelectValue === '0' ? 'selected' : ''}>No</option>
                         <option value="1" ${randomizedSelectValue === '1' ? 'selected' : ''}>Yes</option>
@@ -912,7 +924,7 @@ function buildPatientDetailsRow(patient) {
                     <select class="table-input inline-select" ${allocationDisabled} onchange="updateAllocation(${patient._index}, this.value)">
                         <option value="" ${allocationValue === '' ? 'selected' : ''}>Select allocation</option>
                         <option value="conventional" ${allocationValue === 'conventional' ? 'selected' : ''}>Conventional high-flux HD</option>
-                        <option value="elisio_hx" ${allocationValue === 'elisio_hx' ? 'selected' : ''}>Elisio-HX Expanded HD</option>
+                        <option value="elisio_hx" ${allocationValue === 'elisio_hx' ? 'selected' : ''}>Elisio-HX expanded HD</option>
                     </select>
                     <label class="master-check-label" style="margin-left:8px; white-space:nowrap;">
                         <input type="checkbox" ${patient.therapy_prescribed ? 'checked' : ''} ${therapyDisabled} onchange="toggleTherapyPrescribed(${patient._index}, this)">
@@ -1218,27 +1230,30 @@ function updateInlineNotification(index, value) {
     if (!patient) return;
     if (!ensureEligibilityEditablePatient(patient)) return;
     const followFromFilter = shouldFollowPatientStatusChange() ? currentFilter : '';
-    const newDate = (value || '').trim();
-    if (!newDate) {
-        if (!patient.notification_date) {
-            showRecordWarning('');
-            return;
-        }
+    const entry = classifyManualDateEntry(value, patient.notification_date);
+    if (entry.kind === 'noop') {
+        showRecordWarning('');
+        return;
+    }
+    if (entry.kind === 'incomplete') {
+        handleIncompleteManualDateEntry(patient);
+        return;
+    }
+    if (entry.kind === 'unchanged') {
+        showRecordWarning('');
+        return;
+    }
+    if (entry.kind === 'clear') {
         patient.notification_date = '';
     } else {
-        const normalized = normalizeISODateString(newDate);
-        if (normalized && normalized === patient.notification_date) {
-            showRecordWarning('');
+        if (entry.kind === 'invalid') {
+            rejectInvalidManualDateEntry('Enter notification date as YYYY-MM-DD.', patient);
             return;
         }
+        const normalized = entry.normalized;
         const notificationIssue = getNotificationEligibilityIssue(patient);
         if (notificationIssue) {
             showRecordWarning(notificationIssue, 'error');
-            renderPatientTable();
-            return;
-        }
-        if (!normalized) {
-            showRecordWarning('Enter notification date as DD/MM/YYYY.', 'error');
             renderPatientTable();
             return;
         }
@@ -1293,11 +1308,14 @@ function updateInlineNotification(index, value) {
 function validateOptOutDateEntry(patient, value) {
     const dateVal = (value || '').trim();
     if (!dateVal) {
-        return { ok: false, message: 'Enter opt-out date as DD/MM/YYYY.' };
+        return { ok: false, message: 'Enter opt-out date as YYYY-MM-DD.' };
     }
-    const normalized = normalizeISODateString(dateVal);
+    if (isIncompleteManualISODate(dateVal)) {
+        return { ok: false, message: 'Enter opt-out date as YYYY-MM-DD.' };
+    }
+    const normalized = normalizeManualISODateString(dateVal);
     if (!normalized) {
-        return { ok: false, message: 'Enter opt-out date as DD/MM/YYYY.' };
+        return { ok: false, message: 'Enter opt-out date as YYYY-MM-DD.' };
     }
     if (isFutureISODateString(normalized)) {
         return { ok: false, message: 'Opt-out date cannot be in the future.' };
@@ -1404,10 +1422,18 @@ function updateOptOutDate(index, value) {
         maybeFollowPatientStatusChange(refreshed, followFromFilter);
         return;
     }
+    const entry = classifyManualDateEntry(dateVal, patient.opt_out_date);
+    if (entry.kind === 'incomplete') {
+        handleIncompleteManualDateEntry(patient);
+        return;
+    }
+    if (entry.kind === 'unchanged' && patient.opt_out_status === OPT_OUT_STATUS.OPTED_OUT) {
+        showRecordWarning('');
+        return;
+    }
     const validation = validateOptOutDateEntry(patient, dateVal);
     if (!validation.ok) {
-        showRecordWarning(validation.message, 'error');
-        renderPatientTable();
+        rejectInvalidManualDateEntry(validation.message, patient);
         return;
     }
     const normalized = validation.value;

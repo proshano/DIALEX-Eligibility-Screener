@@ -619,7 +619,9 @@ function promptDateModal(options = {}) {
         const cancelBtn = $('date-prompt-cancel-btn');
         const submitBtn = $('date-prompt-submit-btn');
         const closeBtn = $('date-prompt-close');
-        const validate = typeof options.validate === 'function' ? options.validate : null;
+        const validate = typeof options.validate === 'function'
+            ? options.validate
+            : (rawDate) => validateManualDateEntryModal(rawDate);
 
         if (!modal || !titleEl || !messageEl || !form || !labelEl || !dateInput || !errorEl || !cancelBtn || !submitBtn || !closeBtn) {
             const fallback = window.prompt(options.message || 'Enter date:', options.value || '');
@@ -660,23 +662,14 @@ function promptDateModal(options = {}) {
             errorEl.textContent = '';
             errorEl.classList.add('hidden');
             const rawDate = dateInput.value;
-            if (validate) {
-                const validation = validate(rawDate);
-                if (!validation || !validation.ok) {
-                    showError(validation && validation.message ? validation.message : 'Enter a valid date.');
-                    dateInput.focus();
-                    dateInput.select();
-                    return;
-                }
-                cleanup(validation.value);
-                return;
-            }
-            if (!rawDate.trim()) {
-                showError('Enter a date.');
+            const validation = validate(rawDate);
+            if (!validation || !validation.ok) {
+                showError(validation && validation.message ? validation.message : 'Enter a valid date.');
                 dateInput.focus();
+                dateInput.select();
                 return;
             }
-            cleanup(rawDate);
+            cleanup(validation.value);
         };
 
         const onCancel = () => cleanup(null);
@@ -705,7 +698,7 @@ function promptDateModal(options = {}) {
         messageEl.textContent = options.message || '';
         labelEl.textContent = options.label || 'Date';
         dateInput.value = options.value || '';
-        dateInput.placeholder = options.placeholder || 'DD/MM/YYYY';
+        dateInput.placeholder = options.placeholder || 'YYYY-MM-DD';
         submitBtn.textContent = options.submitLabel || 'Save';
         errorEl.textContent = '';
         errorEl.classList.add('hidden');
@@ -791,6 +784,8 @@ function updateAppAccessState() {
     if (unitFilterBtn) unitFilterBtn.disabled = !canEdit;
     const exportSummaryBtn = $('export-recruitment-summary-btn');
     if (exportSummaryBtn) exportSummaryBtn.disabled = !canEdit;
+    const exportRandomizedAllocationsBtn = $('export-randomized-allocations-btn');
+    if (exportRandomizedAllocationsBtn) exportRandomizedAllocationsBtn.disabled = !canEdit;
 
     const manageUsersBtn = $('manage-users-btn');
     if (manageUsersBtn) {

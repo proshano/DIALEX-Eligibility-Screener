@@ -621,35 +621,25 @@ function formatISODate(date) {
 
 function formatEntryDate(value) {
     if (!value) return '';
-    const date = parseISODate(value) || parseLegacyDate(value);
-    if (!date) return value;
-    const d = String(date.getDate()).padStart(2, '0');
-    const m = String(date.getMonth() + 1).padStart(2, '0');
-    const y = date.getFullYear();
-    return `${d}/${m}/${y}`;
+    const normalized = normalizeISODateString(value);
+    return normalized || value;
 }
 
 function formatDateEntryInput(value) {
     if (value === null || value === undefined) return '';
     const raw = String(value);
-    if (raw.includes('-') || /^\d{4}\//.test(raw)) {
-        return raw;
-    }
+    if (/[^\d-]/.test(raw)) return raw;
     const digits = raw.replace(/\D/g, '').slice(0, 8);
     if (!digits) return '';
-    if (digits.length <= 2) return digits;
-    if (digits.length <= 4) return `${digits.slice(0, 2)}/${digits.slice(2)}`;
-    return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}`;
+    if (digits.length <= 4) return digits;
+    if (digits.length <= 6) return `${digits.slice(0, 4)}-${digits.slice(4)}`;
+    return `${digits.slice(0, 4)}-${digits.slice(4, 6)}-${digits.slice(6)}`;
 }
 
 function formatFriendlyDate(value) {
     if (!value) return '';
-    const date = parseISODate(value);
-    if (!date) return '';
-    const d = String(date.getDate()).padStart(2, '0');
-    const m = String(date.getMonth() + 1).padStart(2, '0');
-    const y = date.getFullYear();
-    return `${d}/${m}/${y}`;
+    const normalized = normalizeISODateString(value);
+    return normalized || value;
 }
 
 function formatDisplayDateTime(value) {
@@ -660,7 +650,7 @@ function formatDisplayDateTime(value) {
 }
 
 function normalizeISODateString(value) {
-    const trimmed = (value || '').trim();
+    const trimmed = String(value || '').trim();
     if (!trimmed) return '';
     const isoMatch = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})$/);
     if (isoMatch) {
@@ -673,6 +663,98 @@ function normalizeISODateString(value) {
     }
     const parsed = parseLegacyDate(trimmed);
     return parsed ? formatISODate(parsed) : '';
+}
+
+function normalizeManualISODateString(value) {
+    const trimmed = String(value || '').trim();
+    if (!trimmed) return '';
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return '';
+    return normalizeISODateString(trimmed);
+}
+
+const MANUAL_ISO_DATE_PREFIX_PATTERNS = [
+    /^\d$/,
+    /^\d{2}$/,
+    /^\d{3}$/,
+    /^\d{4}$/,
+    /^\d{4}-$/,
+    /^\d{4}-\d$/,
+    /^\d{4}-\d{2}$/,
+    /^\d{4}-\d{2}-$/,
+    /^\d{4}-\d{2}-\d$/
+];
+
+function isManualISODatePrefix(value) {
+    const trimmed = String(value || '').trim();
+    return MANUAL_ISO_DATE_PREFIX_PATTERNS.some(pattern => pattern.test(trimmed));
+}
+
+function isIncompleteManualISODate(value) {
+    const trimmed = String(value || '').trim();
+    if (!trimmed) return false;
+    return isManualISODatePrefix(trimmed);
+}
+
+function classifyManualDateEntry(value, storedIso) {
+    const trimmed = String(value || '').trim();
+    if (!trimmed) {
+        return { kind: storedIso ? 'clear' : 'noop' };
+    }
+    if (isManualISODatePrefix(trimmed)) {
+        return { kind: 'incomplete' };
+    }
+    const normalized = normalizeManualISODateString(trimmed);
+    if (!normalized) {
+        return { kind: 'invalid' };
+    }
+    if (storedIso && normalized === storedIso) {
+        return { kind: 'unchanged', normalized };
+    }
+    return { kind: 'ready', normalized };
+}
+
+function handleIncompleteManualDateEntry(patient) {
+    if (typeof showRecordWarning === 'function') {
+        showRecordWarning('');
+    }
+    if (patient && typeof refreshPatientRow === 'function') {
+        refreshPatientRow(patient);
+        return;
+    }
+    if (typeof renderPatientTable === 'function') {
+        renderPatientTable();
+    }
+}
+
+function rejectInvalidManualDateEntry(message, patient) {
+    if (typeof showRecordWarning === 'function') {
+        showRecordWarning(message, 'error');
+    }
+    if (patient && typeof refreshPatientRow === 'function') {
+        refreshPatientRow(patient);
+        return;
+    }
+    if (typeof renderPatientTable === 'function') {
+        renderPatientTable();
+    }
+}
+
+function validateManualDateEntryModal(value, options = {}) {
+    const emptyMessage = options.emptyMessage || 'Enter a date.';
+    const formatMessage = options.formatMessage || 'Enter the date as YYYY-MM-DD.';
+    const invalidMessage = options.invalidMessage || 'Enter a valid date as YYYY-MM-DD.';
+    const trimmed = String(value || '').trim();
+    if (!trimmed) {
+        return { ok: false, message: emptyMessage };
+    }
+    if (isManualISODatePrefix(trimmed)) {
+        return { ok: false, message: formatMessage };
+    }
+    const normalized = normalizeManualISODateString(trimmed);
+    if (!normalized) {
+        return { ok: false, message: invalidMessage };
+    }
+    return { ok: true, value: normalized };
 }
 
 function normalizeStudyIdValue(value = '') {

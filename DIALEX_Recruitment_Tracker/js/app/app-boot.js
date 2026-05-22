@@ -84,6 +84,10 @@ const exportRecruitmentSummaryBtn = $('export-recruitment-summary-btn');
 if (exportRecruitmentSummaryBtn) {
     exportRecruitmentSummaryBtn.addEventListener('click', exportRecruitmentSummaryCsv);
 }
+const exportRandomizedAllocationsBtn = $('export-randomized-allocations-btn');
+if (exportRandomizedAllocationsBtn) {
+    exportRandomizedAllocationsBtn.addEventListener('click', exportRandomizedAllocationsCsv);
+}
 $('search-input').addEventListener('input', event => {
     if (typeof stopRandomizationFollow === 'function') {
         stopRandomizationFollow();
@@ -238,22 +242,136 @@ function caretIndexFromDigits(value, digitCount) {
     return value.length;
 }
 
+const DATE_ENTRY_MASK_TEXT = 'YYYY-MM-DD';
+
+function cssPixelValue(value) {
+    const number = parseFloat(value);
+    return Number.isFinite(number) ? number : 0;
+}
+
+function syncDateEntryMaskMetrics(input, mask) {
+    if (!input || !mask || typeof window.getComputedStyle !== 'function') return;
+    const style = window.getComputedStyle(input);
+    const paddingTop = cssPixelValue(style.paddingTop) + cssPixelValue(style.borderTopWidth);
+    const paddingRight = cssPixelValue(style.paddingRight) + cssPixelValue(style.borderRightWidth);
+    const paddingBottom = cssPixelValue(style.paddingBottom) + cssPixelValue(style.borderBottomWidth);
+    const paddingLeft = cssPixelValue(style.paddingLeft) + cssPixelValue(style.borderLeftWidth);
+    mask.style.top = `${cssPixelValue(style.marginTop)}px`;
+    mask.style.right = `${cssPixelValue(style.marginRight)}px`;
+    mask.style.bottom = `${cssPixelValue(style.marginBottom)}px`;
+    mask.style.left = `${cssPixelValue(style.marginLeft)}px`;
+    mask.style.padding = `${paddingTop}px ${paddingRight}px ${paddingBottom}px ${paddingLeft}px`;
+    mask.style.font = style.font;
+    mask.style.letterSpacing = style.letterSpacing;
+    mask.style.lineHeight = style.lineHeight;
+}
+
+function ensureDateEntryMask(input) {
+    if (!input || !input.parentElement || !input.parentElement.classList.contains('date-entry-mask-wrap')) {
+        return null;
+    }
+    const wrapper = input.parentElement;
+    const existingMask = wrapper.querySelector('.date-entry-mask');
+    if (existingMask) {
+        syncDateEntryMaskMetrics(input, existingMask);
+        return existingMask;
+    }
+    const mask = document.createElement('span');
+    mask.className = 'date-entry-mask hidden';
+    mask.setAttribute('aria-hidden', 'true');
+    const prefix = document.createElement('span');
+    prefix.className = 'date-entry-mask-prefix';
+    const suffix = document.createElement('span');
+    suffix.className = 'date-entry-mask-suffix';
+    mask.append(prefix, suffix);
+    wrapper.appendChild(mask);
+    syncDateEntryMaskMetrics(input, mask);
+    return mask;
+}
+
+function shouldShowDateEntryMask(input) {
+    if (!input) return false;
+    const value = String(input.value || '');
+    return document.activeElement === input
+        && value.length > 0
+        && value.length < DATE_ENTRY_MASK_TEXT.length
+        && typeof isManualISODatePrefix === 'function'
+        && isManualISODatePrefix(value);
+}
+
+function updateDateEntryMask(input) {
+    if (!input || !input.dataset || input.dataset.dateEntry !== 'true') return;
+    if (!shouldShowDateEntryMask(input)) {
+        hideDateEntryMask(input);
+        return;
+    }
+    const mask = ensureDateEntryMask(input);
+    if (!mask) return;
+    mask.classList.remove('hidden');
+    const value = String(input.value || '');
+    const prefix = mask.querySelector('.date-entry-mask-prefix');
+    const suffix = mask.querySelector('.date-entry-mask-suffix');
+    if (prefix) prefix.textContent = value;
+    if (suffix) suffix.textContent = DATE_ENTRY_MASK_TEXT.slice(value.length);
+}
+
+function hideDateEntryMask(input) {
+    if (!input || !input.parentElement) return;
+    const mask = input.parentElement.querySelector('.date-entry-mask');
+    if (mask) mask.classList.add('hidden');
+}
+
+function invokeManualDateFieldBlur(target) {
+    if (!target || !target.dataset || target.dataset.dateEntry !== 'true' || !target.dataset.dateBlur) {
+        return;
+    }
+    const index = Number(target.dataset.patientIndex);
+    if (!Number.isInteger(index)) return;
+    const field = target.dataset.dateBlur;
+    if (field === 'notification_date') {
+        updateInlineNotification(index, target.value);
+    } else if (field === 'dialysis_start_date') {
+        updateDialysisStartDate(index, target.value);
+    } else if (field === 'opt_out_date') {
+        updateOptOutDate(index, target.value);
+    } else if (field === 'birth_date') {
+        updatePatientBirthDate(index, target.value);
+    }
+}
+
 document.addEventListener('input', event => {
     const target = event.target;
     if (!target || !target.dataset || target.dataset.dateEntry !== 'true') return;
     const rawValue = target.value;
     const formatted = formatDateEntryInput(rawValue);
-    if (formatted === rawValue) return;
-    const selectionStart = typeof target.selectionStart === 'number' ? target.selectionStart : rawValue.length;
-    const selectionEnd = typeof target.selectionEnd === 'number' ? target.selectionEnd : selectionStart;
-    const digitsBeforeStart = countDigitsInRange(rawValue, selectionStart);
-    const digitsBeforeEnd = countDigitsInRange(rawValue, selectionEnd);
-    target.value = formatted;
-    if (typeof target.setSelectionRange === 'function') {
-        const newStart = caretIndexFromDigits(formatted, digitsBeforeStart);
-        const newEnd = caretIndexFromDigits(formatted, digitsBeforeEnd);
-        target.setSelectionRange(newStart, newEnd);
+    if (formatted !== rawValue) {
+        const selectionStart = typeof target.selectionStart === 'number' ? target.selectionStart : rawValue.length;
+        const selectionEnd = typeof target.selectionEnd === 'number' ? target.selectionEnd : selectionStart;
+        const digitsBeforeStart = countDigitsInRange(rawValue, selectionStart);
+        const digitsBeforeEnd = countDigitsInRange(rawValue, selectionEnd);
+        target.value = formatted;
+        if (typeof target.setSelectionRange === 'function') {
+            const newStart = caretIndexFromDigits(formatted, digitsBeforeStart);
+            const newEnd = caretIndexFromDigits(formatted, digitsBeforeEnd);
+            target.setSelectionRange(newStart, newEnd);
+        }
     }
+    updateDateEntryMask(target);
+});
+
+document.addEventListener('focusin', event => {
+    const target = event.target;
+    if (!target || !target.dataset || target.dataset.dateEntry !== 'true') return;
+    if (shouldShowDateEntryMask(target)) {
+        updateDateEntryMask(target);
+    }
+});
+
+document.addEventListener('focusout', event => {
+    const target = event.target;
+    if (!target || !target.dataset || target.dataset.dateEntry !== 'true') return;
+    invokeManualDateFieldBlur(target);
+    hideDateEntryMask(target);
 });
 
 document.addEventListener('keydown', event => {

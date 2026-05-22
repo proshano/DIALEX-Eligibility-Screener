@@ -14,12 +14,20 @@ function updatePatientBirthDate(index, value) {
     const patient = patientsData[index];
     if (!patient) return;
     if (!ensureEligibilityEditablePatient(patient)) return;
-    const raw = (value || '').trim();
-    if (!raw) {
-        if (!patient.birth_date) {
-            showRecordWarning('');
-            return;
-        }
+    const entry = classifyManualDateEntry(value, patient.birth_date);
+    if (entry.kind === 'noop') {
+        showRecordWarning('');
+        return;
+    }
+    if (entry.kind === 'incomplete') {
+        handleIncompleteManualDateEntry(patient);
+        return;
+    }
+    if (entry.kind === 'unchanged') {
+        showRecordWarning('');
+        return;
+    }
+    if (entry.kind === 'clear') {
         patient.birth_date = '';
         patient.age = null;
         patient.incl_age = 0;
@@ -29,16 +37,11 @@ function updatePatientBirthDate(index, value) {
         showRecordWarning('');
         return;
     }
-    const normalized = normalizeISODateString(raw);
-    if (!normalized) {
-        showRecordWarning('Enter birth date as DD/MM/YYYY.', 'error');
-        renderPatientTable();
+    if (entry.kind === 'invalid') {
+        rejectInvalidManualDateEntry('Enter birth date as YYYY-MM-DD.', patient);
         return;
     }
-    if (normalized === patient.birth_date) {
-        showRecordWarning('');
-        return;
-    }
+    const normalized = entry.normalized;
     const birth = parseISODate(normalized);
     if (!birth) {
         showRecordWarning('Enter a valid birth date.', 'error');
@@ -297,6 +300,10 @@ function updateHealthCardProvince(index, value) {
     showRecordWarning('');
 }
 
+const RANDOMIZATION_NOT_READY_LABEL = 'Not ready to randomize this patient now';
+const RANDOMIZATION_REDCAP_BUTTON_LABEL = 'I am going to randomize this patient in REDCap now';
+const RANDOMIZATION_REDCAP_DONE_LABEL = 'Patient has been randomized in REDCap';
+
 function updateInlineNotes(index, value) {
     const patient = patientsData[index];
     if (!patient) return;
@@ -336,53 +343,61 @@ async function updateRandomizedStatus(index, value, control = null) {
         }
         return;
     }
+    await markPatientRandomizedInRedcap(index, control);
+}
+
+async function markPatientRandomizedInRedcap(index, control = null) {
+    const patient = patientsData[index];
+    if (!patient) return null;
+    if (!ensureEligibilityEditablePatient(patient)) return null;
     if (!patient.notification_date) {
         showRecordWarning('Set notification date before marking randomized.', 'error');
         renderPatientTable();
-        return;
+        return null;
     }
     if (patient.opt_out_status !== OPT_OUT_STATUS.DID_NOT) {
         showRecordWarning('Select "Did not opt out" before marking randomized.', 'error');
         renderPatientTable();
-        return;
+        return null;
     }
     const hcnEligibilityError = getPatientHealthCardEligibilityError(patient);
     if (hcnEligibilityError) {
         showRecordWarning(hcnEligibilityError, 'error');
         renderPatientTable();
-        return;
+        return null;
     }
     if (!patient.inclusionMet) {
         showRecordWarning('Complete inclusion checklist before marking randomized.', 'error');
         renderPatientTable();
-        return;
+        return null;
     }
     if (!patient.noExclusions) {
         showRecordWarning('Resolve exclusions before marking randomized.', 'error');
         renderPatientTable();
-        return;
+        return null;
     }
     if (!patient.no_exclusions_confirmed) {
         showRecordWarning('Confirm "No exclusions" before marking randomized.', 'error');
         renderPatientTable();
-        return;
+        return null;
     }
     if (!patient.study_id) {
         showRecordWarning('Assign a Study ID before marking randomized.', 'error');
         renderPatientTable();
-        return;
+        return null;
     }
     const firstEligible = computeFirstEligibleDate(patient);
     if (!firstEligible) {
         showRecordWarning('Set notification and eligibility inputs before marking randomized.', 'error');
         renderPatientTable();
-        return;
+        return null;
     }
     if (firstEligible.getTime() > getTorontoNowTimestamp()) {
         showRecordWarning(`Eligible on ${formatISODate(firstEligible)}.`, 'error');
         renderPatientTable();
-        return;
+        return null;
     }
+    const followFromFilter = shouldFollowPatientStatusChange() ? currentFilter : '';
     const previousState = { ...patient };
     patient.randomized = 1;
     patient.enrollment_status = 'enrolled';
@@ -399,7 +414,7 @@ async function updateRandomizedStatus(index, value, control = null) {
         if (control) control.value = '0';
         showStatus('Error saving patient', 'error');
         refreshPatientRow(patient);
-        return;
+        return null;
     }
     const refreshed = refreshPatientRow(patient);
     if (followFromFilter) {
@@ -407,31 +422,35 @@ async function updateRandomizedStatus(index, value, control = null) {
     } else if (isRandomizationFollowActiveFor(refreshed)) {
         followRandomizationPatientToFilter(refreshed, 'randomized_np');
     }
+    return refreshed;
 }
 
 function updateDialysisStartDate(index, value) {
     const patient = patientsData[index];
     if (!patient) return;
     if (!ensureEligibilityEditablePatient(patient)) return;
-    const raw = (value || '').trim();
-    if (!raw) {
-        if (!patient.dialysis_start_date) {
-            showRecordWarning('');
-            return;
-        }
+    const entry = classifyManualDateEntry(value, patient.dialysis_start_date);
+    if (entry.kind === 'noop') {
+        showRecordWarning('');
+        return;
+    }
+    if (entry.kind === 'incomplete') {
+        handleIncompleteManualDateEntry(patient);
+        return;
+    }
+    if (entry.kind === 'unchanged') {
+        showRecordWarning('');
+        return;
+    }
+    if (entry.kind === 'clear') {
         patient.dialysis_start_date = '';
         patient.dialysis_duration_confirmed = 0;
     } else {
-        const normalized = normalizeISODateString(raw);
-        if (!normalized) {
-            showRecordWarning('Enter dialysis start date as DD/MM/YYYY.', 'error');
-            renderPatientTable();
+        if (entry.kind === 'invalid') {
+            rejectInvalidManualDateEntry('Enter dialysis start date as YYYY-MM-DD.', patient);
             return;
         }
-        if (normalized === patient.dialysis_start_date) {
-            showRecordWarning('');
-            return;
-        }
+        const normalized = entry.normalized;
         if (isFutureISODateString(normalized)) {
             showRecordWarning('Dialysis start date cannot be in the future.', 'error');
             renderPatientTable();
@@ -530,12 +549,14 @@ function updateAllocation(index, value) {
         renderPatientTable();
         return;
     }
+    const followFromFilter = shouldFollowPatientStatusChange() ? currentFilter : '';
     patient.allocation = (value || '').trim();
     if (!patient.allocation) {
         patient.therapy_prescribed = 0;
     }
     persistPatient(patient, false);
-    refreshPatientRow(patient);
+    const refreshed = refreshPatientRow(patient);
+    maybeFollowPatientStatusChange(refreshed, followFromFilter);
 }
 
 function updateStudyId(index, value) {
@@ -584,10 +605,60 @@ function getOptOutStatusDisplay(status) {
 
 function buildConfirmationStatusRow(label, value) {
     return `
-        <div class="confirmation-status-row">
-            <span class="confirmation-status-label">${escapeHtml(label)}</span>
-            <span>${escapeHtml(value || '-')}</span>
+        <div class="confirmation-field-row confirmation-readonly-row">
+            <span class="confirmation-field-label">${escapeHtml(label)}</span>
+            <div class="confirmation-field-control confirmation-readonly-value">${escapeHtml(value || '-')}</div>
         </div>
+    `;
+}
+
+function buildConfirmationFieldRow(label, controlHtml) {
+    return `
+        <div class="confirmation-field-row">
+            <label class="confirmation-field-label">${escapeHtml(label)}</label>
+            <div class="confirmation-field-control">${controlHtml}</div>
+        </div>
+    `;
+}
+
+function buildConfirmationOptOutOptions(selectedStatus) {
+    const status = selectedStatus || OPT_OUT_STATUS.PENDING;
+    return [
+        { value: OPT_OUT_STATUS.PENDING, label: 'Pending' },
+        { value: OPT_OUT_STATUS.DID_NOT, label: 'Did not opt out' },
+        { value: OPT_OUT_STATUS.OPTED_OUT, label: 'Opted out' }
+    ].map(option => {
+        const selected = option.value === status ? ' selected' : '';
+        return `<option value="${escapeHtml(option.value)}"${selected}>${escapeHtml(option.label)}</option>`;
+    }).join('');
+}
+
+function buildConfirmationEditableStatusRows(patient) {
+    const notificationDisplay = formatEntryDate(patient.notification_date || '');
+    const eligibleDisplay = patient.first_ready_iso ? formatFriendlyDate(patient.first_ready_iso) : '-';
+    const optOutStatus = patient.opt_out_status || OPT_OUT_STATUS.PENDING;
+    const dialysisUnitOptions = buildLocationOptionsHtml(getDialysisUnitCanonical(patient), {
+        emptyLabel: 'Select dialysis unit'
+    });
+
+    return `
+        ${buildConfirmationFieldRow('Date notified', `
+            <span class="date-entry-mask-wrap date-entry-mask-wrap-confirmation">
+                <input type="text" class="table-input confirmation-inline-input" value="${escapeHtml(notificationDisplay)}" placeholder="YYYY-MM-DD" title="YYYY-MM-DD" inputmode="numeric" autocomplete="off" spellcheck="false" data-date-entry="true" data-date-blur="notification_date" data-patient-index="${patient._index}" data-confirmation-field="notification_date">
+                <span class="date-entry-mask hidden" aria-hidden="true"><span class="date-entry-mask-prefix"></span><span class="date-entry-mask-suffix"></span></span>
+            </span>
+        `)}
+        ${buildConfirmationStatusRow('Eligible on', eligibleDisplay)}
+        ${buildConfirmationFieldRow('Opt-out status', `
+            <select class="table-input confirmation-inline-input" data-confirmation-field="opt_out_status">
+                ${buildConfirmationOptOutOptions(optOutStatus)}
+            </select>
+        `)}
+        ${buildConfirmationFieldRow('Dialysis unit at randomization', `
+            <select class="table-input confirmation-inline-input" data-confirmation-field="location_at_randomization">
+                ${dialysisUnitOptions}
+            </select>
+        `)}
     `;
 }
 
@@ -626,6 +697,25 @@ function hasAnyConfirmationDraftExclusion(draft) {
 function isRandomizationConfirmationDraftEligible(draft) {
     return INCLUSION_KEYS.every(key => draft[key] === 1)
         && !hasAnyConfirmationDraftExclusion(draft);
+}
+
+function getRandomizationConfirmationReadinessIssue(patient, draft) {
+    if (!patient || !isRandomizationConfirmationDraftEligible(draft)) return '';
+    const hcnEligibilityError = getPatientHealthCardEligibilityError(patient);
+    if (hcnEligibilityError) return hcnEligibilityError;
+    if (!patient.notification_date) return 'Set date notified before assigning a Study ID.';
+    if (patient.opt_out_status !== OPT_OUT_STATUS.DID_NOT) {
+        return 'Set opt-out status to "Did not opt out" before assigning a Study ID.';
+    }
+    const firstEligible = computeFirstEligibleDate(patient);
+    if (!firstEligible) return 'Set notification and dialysis timing before assigning a Study ID.';
+    if (firstEligible.getTime() > getTorontoNowTimestamp()) {
+        return `Eligible on ${formatISODate(firstEligible)}.`;
+    }
+    const siteCode = getPatientRandomizationCode(patient);
+    if (!siteCode) return 'Select a dialysis unit at randomization before assigning a Study ID.';
+    if (!getAvailableStudyId(siteCode)) return `No available Study IDs for site ${siteCode}.`;
+    return '';
 }
 
 function buildEditableConfirmationCheckbox(key, draft, group) {
@@ -674,19 +764,11 @@ function buildRandomizationConfirmationSummary(patient, draft) {
     const exclusionHtml = EXCLUSION_KEYS
         .map(key => buildEditableConfirmationCheckbox(key, draft, 'exclusion'))
         .join('');
-    const notificationDisplay = formatFriendlyDate(patient.notification_date || '') || '-';
-    const eligibleDisplay = patient.first_ready_iso ? formatFriendlyDate(patient.first_ready_iso) : '-';
-    const optOutDisplay = getOptOutStatusDisplay(patient.opt_out_status || OPT_OUT_STATUS.PENDING);
-    const unitDisplay = formatLocationDisplay(getDialysisUnitCanonical(patient)) || '-';
-
     return `
         <div class="confirmation-grid">
             <div class="confirmation-section full-width">
                 <h3>Pre-randomization status</h3>
-                ${buildConfirmationStatusRow('Date notified', notificationDisplay)}
-                ${buildConfirmationStatusRow('Eligible on', eligibleDisplay)}
-                ${buildConfirmationStatusRow('Opt-out status', optOutDisplay)}
-                ${buildConfirmationStatusRow('Dialysis unit', unitDisplay)}
+                ${buildConfirmationEditableStatusRows(patient)}
             </div>
             <div class="confirmation-section">
                 <h3>Inclusion criteria</h3>
@@ -694,7 +776,7 @@ function buildRandomizationConfirmationSummary(patient, draft) {
             </div>
             <div class="confirmation-section">
                 <h3>Exclusion criteria</h3>
-                <ul class="confirmation-list confirmation-checkbox-list">${exclusionHtml}</ul>
+                <ul class="confirmation-list confirmation-checkbox-list confirmation-exclusion-list">${exclusionHtml}</ul>
             </div>
             <div class="confirmation-section full-width">
                 <h3>Vital-status checks</h3>
@@ -719,7 +801,7 @@ function promptRandomizationEligibilityConfirmation(patient) {
         const closeBtn = $('randomization-confirmation-close');
 
         if (!modal || !titleEl || !messageEl || !form || !summaryEl || !checkbox || !stateEl || !errorEl || !cancelBtn || !submitBtn || !closeBtn) {
-            const fallback = window.confirm('Confirm that all eligibility criteria remain satisfied and the vital-status checks have been completed.');
+            const fallback = window.confirm('Confirm that all eligibility criteria remain satisfied and the vital-status checks have been completed. This assigns a Study ID in the tracker but does not randomize the patient. Proceed to REDCap to randomize the patient after confirming here.');
             resolve({ status: fallback ? RANDOMIZATION_CONFIRMATION_STATUS.CONFIRMED : RANDOMIZATION_CONFIRMATION_STATUS.CANCELLED, criteria: null });
             return;
         }
@@ -727,6 +809,7 @@ function promptRandomizationEligibilityConfirmation(patient) {
         const previouslyFocused = document.activeElement;
         const draft = buildRandomizationConfirmationDraft(patient);
         const attestationEl = checkbox.closest('.confirmation-attestation');
+        let modalPatient = patient;
         let resolved = false;
 
         const cleanup = (result) => {
@@ -735,6 +818,7 @@ function promptRandomizationEligibilityConfirmation(patient) {
             modal.classList.remove('active');
             form.removeEventListener('submit', onSubmit);
             summaryEl.removeEventListener('change', onSummaryChange);
+            checkbox.removeEventListener('change', onConfirmationCheckboxChange);
             cancelBtn.removeEventListener('click', onCancel);
             closeBtn.removeEventListener('click', onCancel);
             closeBtn.removeEventListener('keydown', onCloseKeydown);
@@ -750,6 +834,13 @@ function promptRandomizationEligibilityConfirmation(patient) {
             resolve(result);
         };
 
+        const getCurrentModalPatient = () => {
+            if (modalPatient && Number.isInteger(modalPatient._index) && patientsData[modalPatient._index]) {
+                modalPatient = patientsData[modalPatient._index];
+            }
+            return modalPatient;
+        };
+
         const showError = (message) => {
             errorEl.textContent = message;
             errorEl.classList.remove('hidden');
@@ -761,27 +852,67 @@ function promptRandomizationEligibilityConfirmation(patient) {
         };
 
         const renderState = () => {
+            const currentPatient = getCurrentModalPatient();
             const isEligible = isRandomizationConfirmationDraftEligible(draft);
+            const readinessIssue = getRandomizationConfirmationReadinessIssue(currentPatient, draft);
             if (attestationEl) {
-                attestationEl.classList.toggle('hidden', !isEligible);
+                attestationEl.classList.toggle('hidden', !isEligible || Boolean(readinessIssue));
             }
-            checkbox.disabled = !isEligible;
+            checkbox.disabled = !isEligible || Boolean(readinessIssue);
             if (!isEligible) {
                 checkbox.checked = false;
                 stateEl.textContent = 'Patient does not meet criteria for randomization. Save the criteria to stop this action.';
                 stateEl.classList.remove('hidden');
+                submitBtn.disabled = false;
                 submitBtn.textContent = 'Save criteria';
+                return;
+            }
+            if (readinessIssue) {
+                checkbox.checked = false;
+                stateEl.textContent = readinessIssue;
+                stateEl.classList.remove('hidden');
+                submitBtn.disabled = true;
+                submitBtn.textContent = RANDOMIZATION_REDCAP_BUTTON_LABEL;
                 return;
             }
             stateEl.textContent = '';
             stateEl.classList.add('hidden');
-            submitBtn.textContent = 'Confirm';
+            submitBtn.disabled = !checkbox.checked;
+            submitBtn.textContent = RANDOMIZATION_REDCAP_BUTTON_LABEL;
         };
 
-        const onSummaryChange = (event) => {
+        const rerenderSummary = () => {
+            const currentPatient = getCurrentModalPatient();
+            summaryEl.innerHTML = buildRandomizationConfirmationSummary(currentPatient, draft);
+            renderState();
+        };
+
+        const handleConfirmationFieldChange = async (target) => {
+            const field = target.dataset.confirmationField;
+            const index = getCurrentModalPatient()._index;
+            if (!Number.isInteger(index)) return;
+            if (field === 'notification_date') {
+                modalPatient = patientsData[index] || modalPatient;
+                rerenderSummary();
+                return;
+            } else if (field === 'opt_out_status') {
+                await updateOptOutStatus(index, target.value, target);
+            } else if (field === 'location_at_randomization') {
+                updateDialysisUnit(index, target.value);
+            }
+            modalPatient = patientsData[index] || modalPatient;
+            rerenderSummary();
+        };
+
+        const onSummaryChange = async (event) => {
             const target = event.target;
-            if (!target || target.type !== 'checkbox') return;
+            if (!target) return;
             clearError();
+            if (target.dataset && target.dataset.confirmationField) {
+                await handleConfirmationFieldChange(target);
+                return;
+            }
+            if (target.type !== 'checkbox') return;
             const key = target.dataset.confirmationCriterion;
             if (key) {
                 draft[key] = target.checked ? 1 : 0;
@@ -792,12 +923,23 @@ function promptRandomizationEligibilityConfirmation(patient) {
             }
         };
 
+        const onConfirmationCheckboxChange = () => {
+            clearError();
+            renderState();
+        };
+
         const onSubmit = (event) => {
             event.preventDefault();
             clearError();
             if (!isRandomizationConfirmationDraftEligible(draft)) {
                 const criteria = getRandomizationConfirmationCriteriaSnapshot(draft);
                 cleanup({ status: RANDOMIZATION_CONFIRMATION_STATUS.INELIGIBLE, criteria });
+                return;
+            }
+            const readinessIssue = getRandomizationConfirmationReadinessIssue(getCurrentModalPatient(), draft);
+            if (readinessIssue) {
+                showError(readinessIssue);
+                renderState();
                 return;
             }
             if (!checkbox.checked) {
@@ -832,8 +974,13 @@ function promptRandomizationEligibilityConfirmation(patient) {
         };
 
         const patientLabel = patient.patient_name || getDisplayMrnValue(patient.mrn) || 'this patient';
-        titleEl.textContent = 'Confirm eligibility before randomization';
-        messageEl.textContent = `Review current eligibility and vital-status checks for ${patientLabel}.`;
+        titleEl.textContent = 'Confirm eligibility to randomize';
+        messageEl.textContent = `Review current eligibility and vital-status checks for ${patientLabel}. If you click the REDCap randomization button below, this app will record eligibility confirmation and assign the next Study ID. It will not randomize the patient. Proceed to REDCap and randomize the patient there immediately after confirming here.`;
+        cancelBtn.textContent = RANDOMIZATION_NOT_READY_LABEL;
+        cancelBtn.classList.remove('hidden', 'redcap-randomized-btn');
+        cancelBtn.classList.add('secondary');
+        form.classList.remove('redcap-handoff-mode', 'allocation-selector-mode');
+        submitBtn.classList.remove('hidden');
         summaryEl.innerHTML = buildRandomizationConfirmationSummary(patient, draft);
         checkbox.checked = false;
         clearError();
@@ -842,6 +989,7 @@ function promptRandomizationEligibilityConfirmation(patient) {
 
         form.addEventListener('submit', onSubmit);
         summaryEl.addEventListener('change', onSummaryChange);
+        checkbox.addEventListener('change', onConfirmationCheckboxChange);
         cancelBtn.addEventListener('click', onCancel);
         closeBtn.addEventListener('click', onCancel);
         closeBtn.addEventListener('keydown', onCloseKeydown);
@@ -855,6 +1003,274 @@ function promptRandomizationEligibilityConfirmation(patient) {
             } else {
                 checkbox.focus();
             }
+        });
+    });
+}
+
+function buildRedcapCopyBlock(label, value, instruction, copyValue = value) {
+    const normalizedCopyValue = copyValue || '';
+    const disabled = normalizedCopyValue ? '' : 'disabled';
+    return `
+        <div class="redcap-copy-row">
+            <div class="redcap-copy-text">
+                <div class="redcap-copy-label">${escapeHtml(label)}</div>
+                <div class="redcap-copy-value">${escapeHtml(value || 'Not available')}</div>
+                <div class="redcap-copy-instruction">${escapeHtml(instruction)}</div>
+            </div>
+            <button type="button" class="copy-btn" ${disabled} data-redcap-copy-value="${escapeHtml(normalizedCopyValue)}" data-redcap-copy-label="${escapeHtml(label)}">Copy</button>
+        </div>
+    `;
+}
+
+function buildRandomizationRedcapHandoff(patient) {
+    const notificationDateDisplay = formatEntryDate(patient.notification_date || '');
+    const notificationDateRedcap = normalizeISODateString(patient.notification_date || '') || patient.notification_date || '';
+    return `
+        <div class="confirmation-grid">
+            <div class="confirmation-section full-width">
+                <h3>REDCap randomization</h3>
+                ${buildRedcapCopyBlock('Study ID', patient.study_id || '', 'Paste this Study ID into REDCap.')}
+                ${buildRedcapCopyBlock('Date notified', notificationDateDisplay, 'Paste this date notified into REDCap.', notificationDateRedcap)}
+                ${buildRedcapCopyBlock('Health card number', patient.health_card || '', 'Paste this health card number into REDCap.')}
+            </div>
+        </div>
+    `;
+}
+
+function buildRandomizationAllocationOptions(selectedAllocation) {
+    const allocation = String(selectedAllocation || '').trim();
+    const options = [
+        { value: '', label: 'Select allocation' },
+        { value: 'conventional', label: 'Conventional high-flux HD' },
+        { value: 'elisio_hx', label: 'Elisio-HX expanded HD' }
+    ];
+    return options.map(option => {
+        const selected = option.value === allocation ? ' selected' : '';
+        return `<option value="${escapeHtml(option.value)}"${selected}>${escapeHtml(option.label)}</option>`;
+    }).join('');
+}
+
+function buildRandomizationAllocationSelector(patient) {
+    return `
+        <div class="confirmation-grid">
+            <div class="confirmation-section full-width">
+                <h3>Allocation</h3>
+                <div class="confirmation-field-row allocation-selector-row">
+                    <label class="confirmation-field-label" for="randomization-allocation-select">Allocation assigned in REDCap</label>
+                    <div class="confirmation-field-control">
+                        <select id="randomization-allocation-select" class="table-input confirmation-inline-input">
+                            ${buildRandomizationAllocationOptions(patient.allocation || '')}
+                        </select>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function showRandomizationRedcapHandoff(patient) {
+    return new Promise(resolve => {
+        const modal = $('randomization-confirmation-modal');
+        const titleEl = $('randomization-confirmation-title');
+        const messageEl = $('randomization-confirmation-message');
+        const form = $('randomization-confirmation-form');
+        const summaryEl = $('randomization-confirmation-summary');
+        const checkbox = $('randomization-confirmation-checkbox');
+        const stateEl = $('randomization-confirmation-state');
+        const errorEl = $('randomization-confirmation-error');
+        const cancelBtn = $('randomization-confirmation-cancel-btn');
+        const submitBtn = $('randomization-confirmation-submit-btn');
+        const closeBtn = $('randomization-confirmation-close');
+        const attestationEl = checkbox ? checkbox.closest('.confirmation-attestation') : null;
+
+        if (!modal || !titleEl || !messageEl || !form || !summaryEl || !cancelBtn || !submitBtn || !closeBtn) {
+            showStatus(`Study ID assigned: ${patient.study_id || ''}`, 'success');
+            resolve();
+            return;
+        }
+
+        let resolved = false;
+        const cleanup = (confirmedRandomized = false) => {
+            if (resolved) return;
+            resolved = true;
+            modal.classList.remove('active');
+            summaryEl.removeEventListener('click', onCopyClick);
+            cancelBtn.removeEventListener('click', onDone);
+            closeBtn.removeEventListener('click', onClose);
+            closeBtn.removeEventListener('keydown', onCloseKeydown);
+            form.classList.remove('redcap-handoff-mode');
+            cancelBtn.classList.remove('redcap-randomized-btn');
+            cancelBtn.classList.add('secondary');
+            resolve(confirmedRandomized);
+        };
+
+        const onDone = () => cleanup(true);
+        const onClose = () => cleanup(false);
+
+        const onCopyClick = (event) => {
+            const button = event.target && event.target.closest ? event.target.closest('[data-redcap-copy-value]') : null;
+            if (!button) return;
+            copyTextToClipboard(button.dataset.redcapCopyValue || '', button.dataset.redcapCopyLabel || 'Value');
+        };
+
+        const onCloseKeydown = (event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                onClose();
+            }
+        };
+
+        titleEl.textContent = 'Study ID assigned';
+        messageEl.textContent = 'Use these values while randomizing the patient in REDCap.';
+        summaryEl.innerHTML = buildRandomizationRedcapHandoff(patient);
+        form.classList.add('redcap-handoff-mode');
+        form.classList.remove('allocation-selector-mode');
+        if (attestationEl) attestationEl.classList.add('hidden');
+        if (stateEl) {
+            stateEl.textContent = '';
+            stateEl.classList.add('hidden');
+        }
+        if (errorEl) {
+            errorEl.textContent = '';
+            errorEl.classList.add('hidden');
+        }
+        submitBtn.classList.add('hidden');
+        cancelBtn.textContent = RANDOMIZATION_REDCAP_DONE_LABEL;
+        cancelBtn.classList.remove('hidden', 'secondary');
+        cancelBtn.classList.add('redcap-randomized-btn');
+        modal.classList.add('active');
+
+        summaryEl.addEventListener('click', onCopyClick);
+        cancelBtn.addEventListener('click', onDone);
+        closeBtn.addEventListener('click', onClose);
+        closeBtn.addEventListener('keydown', onCloseKeydown);
+    });
+}
+
+function showRandomizationAllocationSelector(patient) {
+    return new Promise(resolve => {
+        const modal = $('randomization-confirmation-modal');
+        const titleEl = $('randomization-confirmation-title');
+        const messageEl = $('randomization-confirmation-message');
+        const form = $('randomization-confirmation-form');
+        const summaryEl = $('randomization-confirmation-summary');
+        const checkbox = $('randomization-confirmation-checkbox');
+        const stateEl = $('randomization-confirmation-state');
+        const errorEl = $('randomization-confirmation-error');
+        const cancelBtn = $('randomization-confirmation-cancel-btn');
+        const submitBtn = $('randomization-confirmation-submit-btn');
+        const closeBtn = $('randomization-confirmation-close');
+        const attestationEl = checkbox ? checkbox.closest('.confirmation-attestation') : null;
+
+        if (!modal || !titleEl || !messageEl || !form || !summaryEl || !cancelBtn || !submitBtn || !closeBtn) {
+            showRecordWarning('Select the allocation in the patient row.', 'status');
+            resolve();
+            return;
+        }
+
+        let resolved = false;
+        const cleanup = () => {
+            if (resolved) return;
+            resolved = true;
+            modal.classList.remove('active');
+            form.removeEventListener('submit', onSubmit);
+            summaryEl.removeEventListener('change', onAllocationChange);
+            cancelBtn.removeEventListener('click', cleanup);
+            closeBtn.removeEventListener('click', cleanup);
+            closeBtn.removeEventListener('keydown', onCloseKeydown);
+            modal.removeEventListener('click', onBackdropClick);
+            document.removeEventListener('keydown', onKeyDown);
+            form.classList.remove('allocation-selector-mode');
+            cancelBtn.classList.remove('hidden');
+            submitBtn.classList.remove('hidden');
+            resolve();
+        };
+
+        const getAllocationSelect = () => summaryEl.querySelector('#randomization-allocation-select');
+
+        const renderAllocationState = () => {
+            const select = getAllocationSelect();
+            submitBtn.disabled = !select || !select.value;
+        };
+
+        const onAllocationChange = () => {
+            if (errorEl) {
+                errorEl.textContent = '';
+                errorEl.classList.add('hidden');
+            }
+            renderAllocationState();
+        };
+
+        const onSubmit = (event) => {
+            event.preventDefault();
+            const select = getAllocationSelect();
+            const allocation = select ? select.value : '';
+            if (!allocation) {
+                if (errorEl) {
+                    errorEl.textContent = 'Select the allocation assigned in REDCap.';
+                    errorEl.classList.remove('hidden');
+                }
+                if (select) select.focus();
+                return;
+            }
+            const currentPatient = patientsData[patient._index] || patient;
+            updateAllocation(currentPatient._index, allocation);
+            cleanup();
+        };
+
+        const onBackdropClick = (event) => {
+            if (event.target === modal) {
+                cleanup();
+            }
+        };
+
+        const onKeyDown = (event) => {
+            if (event.key === 'Escape') {
+                event.preventDefault();
+                cleanup();
+            }
+        };
+
+        const onCloseKeydown = (event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                cleanup();
+            }
+        };
+
+        titleEl.textContent = 'Select allocation';
+        messageEl.textContent = 'Select the allocation assigned in REDCap for this patient.';
+        summaryEl.innerHTML = buildRandomizationAllocationSelector(patient);
+        form.classList.add('allocation-selector-mode');
+        form.classList.remove('redcap-handoff-mode');
+        if (attestationEl) attestationEl.classList.add('hidden');
+        if (stateEl) {
+            stateEl.textContent = '';
+            stateEl.classList.add('hidden');
+        }
+        if (errorEl) {
+            errorEl.textContent = '';
+            errorEl.classList.add('hidden');
+        }
+        cancelBtn.classList.add('hidden');
+        cancelBtn.classList.add('secondary');
+        cancelBtn.classList.remove('redcap-randomized-btn');
+        submitBtn.textContent = 'Save allocation';
+        submitBtn.classList.remove('hidden');
+        renderAllocationState();
+        modal.classList.add('active');
+
+        form.addEventListener('submit', onSubmit);
+        summaryEl.addEventListener('change', onAllocationChange);
+        cancelBtn.addEventListener('click', cleanup);
+        closeBtn.addEventListener('click', cleanup);
+        closeBtn.addEventListener('keydown', onCloseKeydown);
+        modal.addEventListener('click', onBackdropClick);
+        document.addEventListener('keydown', onKeyDown);
+
+        requestAnimationFrame(() => {
+            const select = getAllocationSelect();
+            if (select) select.focus();
         });
     });
 }
@@ -1038,35 +1454,55 @@ async function assignStudyId(index) {
     const confirmation = await getRandomizationEligibilityConfirmation(patient, { forcePrompt: true });
     if (!confirmation.ok) {
         if (confirmation.status === RANDOMIZATION_CONFIRMATION_STATUS.INELIGIBLE) {
-            saveIneligibleRandomizationConfirmation(patient, confirmation, 'Eligibility criteria saved. Study ID was not assigned.');
+            saveIneligibleRandomizationConfirmation(patientsData[index] || patient, confirmation, 'Eligibility criteria saved. Study ID was not assigned.');
             return;
         }
         showRecordWarning('Eligibility confirmation is required before assigning a Study ID.', 'status');
         return;
     }
-    const patientToPersist = { ...patient, study_id: available };
+    const currentPatient = patientsData[index] || patient;
+    const confirmedSiteCode = getPatientRandomizationCode(currentPatient);
+    if (!confirmedSiteCode) {
+        showRecordWarning('Select a dialysis unit at randomization before assigning a Study ID.', 'error');
+        renderPatientTable();
+        return;
+    }
+    const confirmedAvailable = getAvailableStudyId(confirmedSiteCode);
+    if (!confirmedAvailable) {
+        showRecordWarning(`No available Study IDs for site ${confirmedSiteCode}.`, 'error');
+        renderPatientTable();
+        return;
+    }
+    const patientToPersist = { ...currentPatient, study_id: confirmedAvailable };
     applyRandomizationConfirmationCriteria(patientToPersist, confirmation.criteria);
     applyRandomizationEligibilityConfirmation(patientToPersist, confirmation);
     if (!normalizeLocationValue(patientToPersist.location_at_randomization)) {
         patientToPersist.location_at_randomization = getCanonicalLocationValue(patientToPersist.location);
     }
     try {
-        claimStudyIdAndPersistPatient(patientToPersist, available);
+        claimStudyIdAndPersistPatient(patientToPersist, confirmedAvailable);
     } catch (error) {
         console.warn('Unable to claim Study ID', error);
         showRecordWarning('Unable to assign Study ID. Try again.', 'error');
         renderPatientTable();
         return;
     }
-    Object.assign(patient, patientToPersist);
-    logRandomizationEligibilityConfirmation(patient, confirmation);
+    Object.assign(currentPatient, patientToPersist);
+    logRandomizationEligibilityConfirmation(currentPatient, confirmation);
     showRecordWarning('');
-    const refreshed = refreshPatientRow(patient);
+    const refreshed = refreshPatientRow(currentPatient);
     if (followFromFilter) {
         maybeFollowPatientStatusChange(refreshed, followFromFilter);
     } else if (shouldFollowAfterAssignment) {
         startRandomizationFollow(refreshed);
         followRandomizationPatientToFilter(refreshed, 'ready_randomize');
+    }
+    const confirmedRandomized = await showRandomizationRedcapHandoff(refreshed);
+    if (confirmedRandomized) {
+        const randomizedPatient = await markPatientRandomizedInRedcap(refreshed._index);
+        if (randomizedPatient) {
+            await showRandomizationAllocationSelector(randomizedPatient);
+        }
     }
 }
 
@@ -1932,6 +2368,31 @@ function convertRowsToCsv(rows) {
         .join('\n');
 }
 
+const RANDOMIZED_ALLOCATION_EXPORT_LABELS = {
+    conventional: 'Conventional',
+    elisio_hx: 'Expanded'
+};
+
+function getRandomizedAllocationExportLabel(allocationCode) {
+    const normalizedCode = String(allocationCode || '').trim();
+    if (!normalizedCode) return '';
+    return RANDOMIZED_ALLOCATION_EXPORT_LABELS[normalizedCode] || normalizedCode;
+}
+
+function buildRandomizedAllocationRows() {
+    const rows = [['StudyID', 'Allocation', 'Prescribed']];
+    patientsData.forEach(patient => {
+        if (!patient || !patient.randomized) return;
+        const allocationCode = String(patient.allocation || '').trim();
+        rows.push([
+            patient.study_id || '',
+            getRandomizedAllocationExportLabel(allocationCode),
+            patient.therapy_prescribed ? 'Yes' : 'No'
+        ]);
+    });
+    return rows;
+}
+
 function exportRecruitmentSummaryCsv() {
     if (!db || !currentUser) {
         showStatus('Load and unlock a database first.', 'error');
@@ -1943,6 +2404,19 @@ function exportRecruitmentSummaryCsv() {
     const filename = `dialex-recruitment-summary-${formatTimestampForFilename()}.csv`;
     triggerBrowserDownload(blob, filename);
     showStatus('Recruitment summary exported.', 'success');
+}
+
+function exportRandomizedAllocationsCsv() {
+    if (!db || !currentUser) {
+        showStatus('Load and unlock a database first.', 'error');
+        return;
+    }
+    const rows = buildRandomizedAllocationRows();
+    const csv = convertRowsToCsv(rows);
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    const filename = `dialex-randomized-allocations-${formatTimestampForFilename()}.csv`;
+    triggerBrowserDownload(blob, filename);
+    showStatus('Randomized allocation export downloaded.', 'success');
 }
 
 function ingestRegistrationRows(rows) {

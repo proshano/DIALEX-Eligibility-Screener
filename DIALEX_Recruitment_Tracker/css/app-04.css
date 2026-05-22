@@ -434,6 +434,10 @@
     gap: 8px;
     flex-wrap: nowrap;
 }
+.date-input-row .date-entry-mask-wrap-inline {
+    flex: 1 1 auto;
+    min-width: 100px;
+}
 .date-display {
     font-size: 15px;
     letter-spacing: 0.2px;

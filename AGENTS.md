@@ -57,6 +57,14 @@ This repository contains a self-contained, offline, browser-based recruitment tr
 - Changes must be easy to audit: small, focused edits and clear variable/function names.
 - If a change adds risk or assumes network availability, call it out and propose an offline alternative.
 
+## Release Workflow
+- Release ZIP files are attached to GitHub Releases, not committed to the repository.
+- Before releasing, update the visible version date in `DIALEX_Recruitment_Tracker/DIALEX Recruitment Tracker App.html`.
+- Commit and push source changes first. Follow the existing release tag/name pattern: tag `YYYY-MM-DD`, title `DIALEX Recruitment Tracker YYYY-MM-DD`, asset `DIALEX_Recruitment_Tracker_YYYY-MM-DD.zip`.
+- Create the distributable ZIP from tracked files only using `git archive --format=zip --output="DIALEX_Recruitment_Tracker_YYYY-MM-DD.zip" HEAD "DIALEX_Recruitment_Tracker"`. Do not use `zip -r` on the working directory, because it can include local hidden/dev folders.
+- Create or update the GitHub Release with `gh release create` or `gh release upload --clobber`, and verify the asset list with `gh release view`.
+- If a bad asset is uploaded, replace it with a clean `git archive` ZIP before reporting the release complete.
+
 ## Recruitment Tracker Rules
 - In `DIALEX_Recruitment_Tracker`, marking a patient as randomized should automatically lock the record.
 - For randomized patients, eligibility and recruitment fields are admin-editable only; non-admins must not be able to modify those fields even if the record is unlocked.

@@ -48,7 +48,7 @@
         <div class="header">
             <h1>DIALEX Recruitment Tracker</h1>
             <div class="meta-row">
-                <div class="meta-pill version-pill" aria-label="Version date">Version: May 13 2026</div>
+                <div class="meta-pill version-pill" aria-label="Version date">Version: May 22 2026</div>
                 <div class="meta-pill owner-pill" aria-label="Ownership">Copyright 2026 DIALEX trial project office</div>
                 <button id="theme-toggle" class="meta-pill theme-toggle" onclick="toggleTheme()" aria-pressed="true" type="button">Dark theme</button>
             </div>
@@ -97,11 +97,11 @@
                     </li>
                     <li>
                         <div class="step-badge">7</div>
-                        <div class="step-content">For eligible patients, <strong>track notification and opt-out periods</strong>. Status flow: <code>Deliver notification</code> &rarr; <code>Notified and waiting</code> (15 days) &rarr; <code>Assess eligibility for randomization</code> &rarr; <code>Ready to randomize</code> (if no opt-out) or <code>Opted out</code>.</div>
+                        <div class="step-content">For eligible patients, <strong>track notification and opt-out periods</strong>. Status flow: <code>Deliver notification</code> &rarr; <code>Notified and waiting</code> (15 days) &rarr; <code>Assess eligibility for randomization</code> &rarr; <code>Ready to randomize in REDCap</code> (if no opt-out) or <code>Opted out</code>.</div>
                     </li>
                     <li>
                         <div class="step-badge">8</div>
-                        <div class="step-content">When a patient is ready to randomize, confirm eligibility again immediately before attaching a <strong>Study ID</strong> and setting <strong>Randomized = Yes</strong>. Then choose the allocation and mark <strong>Prescribed</strong> once therapy starts.</div>
+                        <div class="step-content">When a patient is ready to randomize in REDCap, confirm eligibility again immediately before assigning a <strong>Study ID</strong>. Confirming eligibility here does not randomize the patient. Randomize the patient in REDCap, then set <strong>Randomized in REDCap = Yes</strong> in the tracker, choose the allocation, and mark <strong>Prescribed</strong> once therapy starts.</div>
                     </li>
                     <li>
                         <div class="step-badge">9</div>
@@ -244,9 +244,10 @@
                             </div>
                         </div>
                         <div class="workflow-row manual-entry" id="workflow-export-summary-row">
-                            <div class="manual-title">Recruitment summary</div>
+                            <div class="manual-title">Exports</div>
                             <button id="export-recruitment-summary-btn" class="secondary" disabled>Export recruitment summary (.csv)</button>
-                            <div class="manual-note">Exports counts and percentages for key recruitment outcomes.</div>
+                            <button id="export-randomized-allocations-btn" class="secondary" disabled>Export randomized allocations (.csv)</button>
+                            <div class="manual-note">Exports recruitment counts or randomized allocation checks.</div>
                         </div>
                     </div>
                 </div>
@@ -345,7 +346,7 @@
                     <div class="stage-count" id="count-final">0</div>
                 </div>
                 <div class="stage-segment stage-ready" id="show-ready-btn" tabindex="0" role="button">
-                    <div class="stage-label">Ready to randomize</div>
+                    <div class="stage-label">Ready to randomize in REDCap</div>
                     <div class="stage-count" id="count-ready">0</div>
                 </div>
                 <div class="stage-segment stage-randomized-np" id="show-randomized-np-btn" tabindex="0" role="button">
@@ -485,7 +486,10 @@
                 <form id="date-prompt-form">
                     <div>
                         <label id="date-prompt-label" for="date-prompt-input">Date</label>
-                        <input type="text" id="date-prompt-input" class="modal-input" placeholder="DD/MM/YYYY" title="DD/MM/YYYY or YYYY-MM-DD" inputmode="numeric" autocomplete="off" spellcheck="false" data-date-entry="true" required>
+                        <span class="date-entry-mask-wrap date-entry-mask-wrap-modal">
+                            <input type="text" id="date-prompt-input" class="modal-input" placeholder="YYYY-MM-DD" title="YYYY-MM-DD" inputmode="numeric" autocomplete="off" spellcheck="false" data-date-entry="true" required>
+                            <span class="date-entry-mask hidden" aria-hidden="true"><span class="date-entry-mask-prefix"></span><span class="date-entry-mask-suffix"></span></span>
+                        </span>
                     </div>
                     <p id="date-prompt-error" class="form-error hidden" role="alert"></p>
                     <div class="modal-footer">
@@ -501,7 +505,7 @@
     <div id="randomization-confirmation-modal" class="patient-modal" role="dialog" aria-modal="true" aria-labelledby="randomization-confirmation-title" aria-describedby="randomization-confirmation-message">
         <div class="modal-content randomization-confirmation-content">
             <div class="modal-header">
-                <h2 id="randomization-confirmation-title">Confirm eligibility before randomization</h2>
+                <h2 id="randomization-confirmation-title">Confirm eligibility to randomize</h2>
                 <span id="randomization-confirmation-close" class="close" role="button" tabindex="0" aria-label="Close eligibility confirmation dialog">&times;</span>
             </div>
             <div class="modal-body">
@@ -511,12 +515,12 @@
                     <p id="randomization-confirmation-state" class="modal-banner hidden"></p>
                     <label class="confirmation-attestation">
                         <input type="checkbox" id="randomization-confirmation-checkbox">
-                        <span>I confirm that all eligibility criteria remain satisfied and the vital-status checks have been completed.</span>
+                        <span>I confirm that all eligibility criteria remain satisfied, the vital-status checks have been completed, and I am ready to randomize this patient in REDCap.</span>
                     </label>
                     <p id="randomization-confirmation-error" class="form-error hidden" role="alert"></p>
                     <div class="modal-footer">
-                        <button type="button" class="secondary" id="randomization-confirmation-cancel-btn">Cancel</button>
-                        <button type="submit" id="randomization-confirmation-submit-btn">Confirm</button>
+                        <button type="button" class="secondary" id="randomization-confirmation-cancel-btn">Not ready to randomize this patient now</button>
+                        <button type="submit" id="randomization-confirmation-submit-btn" disabled>I am going to randomize this patient in REDCap now</button>
                     </div>
                 </form>
             </div>
