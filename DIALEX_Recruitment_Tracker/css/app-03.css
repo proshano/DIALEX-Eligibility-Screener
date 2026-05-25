@@ -160,6 +160,7 @@
 #login-modal { z-index: 1200; }
 #admin-setup-modal { z-index: 1200; }
 #import-backup-modal { z-index: 1200; }
+#date-prompt-modal { z-index: 1300; }
 #acknowledge-modal {
     z-index: 1300;
     align-items: center;

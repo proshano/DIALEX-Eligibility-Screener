@@ -303,6 +303,7 @@ function updateHealthCardProvince(index, value) {
 const RANDOMIZATION_NOT_READY_LABEL = 'Not ready to randomize this patient now';
 const RANDOMIZATION_REDCAP_BUTTON_LABEL = 'I am going to randomize this patient in REDCap now';
 const RANDOMIZATION_REDCAP_DONE_LABEL = 'Patient has been randomized in REDCap';
+const RANDOMIZATION_INELIGIBLE_BUTTON_LABEL = 'I confirm this patient is not eligible';
 
 function updateInlineNotes(index, value) {
     const patient = patientsData[index];
@@ -699,6 +700,11 @@ function isRandomizationConfirmationDraftEligible(draft) {
         && !hasAnyConfirmationDraftExclusion(draft);
 }
 
+function isRandomizationConfirmationIneligible(patient, draft) {
+    return !isRandomizationConfirmationDraftEligible(draft)
+        || (patient && patient.opt_out_status === OPT_OUT_STATUS.OPTED_OUT);
+}
+
 function getRandomizationConfirmationReadinessIssue(patient, draft) {
     if (!patient || !isRandomizationConfirmationDraftEligible(draft)) return '';
     const hcnEligibilityError = getPatientHealthCardEligibilityError(patient);
@@ -853,18 +859,19 @@ function promptRandomizationEligibilityConfirmation(patient) {
 
         const renderState = () => {
             const currentPatient = getCurrentModalPatient();
-            const isEligible = isRandomizationConfirmationDraftEligible(draft);
+            const isIneligible = isRandomizationConfirmationIneligible(currentPatient, draft);
             const readinessIssue = getRandomizationConfirmationReadinessIssue(currentPatient, draft);
             if (attestationEl) {
-                attestationEl.classList.toggle('hidden', !isEligible || Boolean(readinessIssue));
+                attestationEl.classList.toggle('hidden', isIneligible || Boolean(readinessIssue));
             }
-            checkbox.disabled = !isEligible || Boolean(readinessIssue);
-            if (!isEligible) {
+            checkbox.disabled = isIneligible || Boolean(readinessIssue);
+            cancelBtn.classList.toggle('hidden', isIneligible);
+            if (isIneligible) {
                 checkbox.checked = false;
                 stateEl.textContent = 'Patient does not meet criteria for randomization. Save the criteria to stop this action.';
                 stateEl.classList.remove('hidden');
                 submitBtn.disabled = false;
-                submitBtn.textContent = 'Save criteria';
+                submitBtn.textContent = RANDOMIZATION_INELIGIBLE_BUTTON_LABEL;
                 return;
             }
             if (readinessIssue) {
@@ -892,6 +899,7 @@ function promptRandomizationEligibilityConfirmation(patient) {
             const index = getCurrentModalPatient()._index;
             if (!Number.isInteger(index)) return;
             if (field === 'notification_date') {
+                updateInlineNotification(index, target.value);
                 modalPatient = patientsData[index] || modalPatient;
                 rerenderSummary();
                 return;
@@ -931,12 +939,13 @@ function promptRandomizationEligibilityConfirmation(patient) {
         const onSubmit = (event) => {
             event.preventDefault();
             clearError();
-            if (!isRandomizationConfirmationDraftEligible(draft)) {
+            const currentPatient = getCurrentModalPatient();
+            if (isRandomizationConfirmationIneligible(currentPatient, draft)) {
                 const criteria = getRandomizationConfirmationCriteriaSnapshot(draft);
                 cleanup({ status: RANDOMIZATION_CONFIRMATION_STATUS.INELIGIBLE, criteria });
                 return;
             }
-            const readinessIssue = getRandomizationConfirmationReadinessIssue(getCurrentModalPatient(), draft);
+            const readinessIssue = getRandomizationConfirmationReadinessIssue(currentPatient, draft);
             if (readinessIssue) {
                 showError(readinessIssue);
                 renderState();
@@ -1030,8 +1039,8 @@ function buildRandomizationRedcapHandoff(patient) {
             <div class="confirmation-section full-width">
                 <h3>REDCap randomization</h3>
                 ${buildRedcapCopyBlock('Study ID', patient.study_id || '', 'Paste this Study ID into REDCap.')}
-                ${buildRedcapCopyBlock('Date notified', notificationDateDisplay, 'Paste this date notified into REDCap.', notificationDateRedcap)}
                 ${buildRedcapCopyBlock('Health card number', patient.health_card || '', 'Paste this health card number into REDCap.')}
+                ${buildRedcapCopyBlock('Date notified', notificationDateDisplay, 'Paste this date notified into REDCap.', notificationDateRedcap)}
             </div>
         </div>
     `;
@@ -1461,6 +1470,13 @@ async function assignStudyId(index) {
         return;
     }
     const currentPatient = patientsData[index] || patient;
+    const finalCriteria = confirmation.criteria || buildRandomizationConfirmationDraft(currentPatient);
+    const finalReadinessIssue = getRandomizationConfirmationReadinessIssue(currentPatient, finalCriteria);
+    if (finalReadinessIssue) {
+        showRecordWarning(finalReadinessIssue, 'error');
+        renderPatientTable();
+        return;
+    }
     const confirmedSiteCode = getPatientRandomizationCode(currentPatient);
     if (!confirmedSiteCode) {
         showRecordWarning('Select a dialysis unit at randomization before assigning a Study ID.', 'error');
